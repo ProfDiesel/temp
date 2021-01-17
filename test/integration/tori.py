@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import asyncio
 from asyncio.subprocess import PIPE
 
@@ -14,12 +13,14 @@ from collections import defaultdict
 import logging
 import os
 
+import up
+
 INSTRUMENT = 42
 
-up_snapshot_addr = ('127.0.0.1', 4000)
-up_updates_addr = ('239.255.0.1', 4000)
-down_stream_addr = ('127.0.0.1', 9998)
-down_datagram_addr = ('127.0.0.1', 9999)
+up_snapshot_addr: Address = ('127.0.0.1', 4000)
+up_updates_addr: Address = ('239.255.0.1', 4000)
+down_stream_addr: Address = ('127.0.0.1', 9998)
+down_datagram_addr: Address = ('127.0.0.1', 9999)
 
 config = f'''
 config.feed <- 'feed';
@@ -41,87 +42,12 @@ subscription.datagram <- '{{datagram_payload}}';
 send.fd <- {{down_fd}};
 '''
 
-quit_command = '''
-entrypoint.type <- 'quit';
-
-'''
-
-class up:
-    native.feed_server
-    native.instrument_state
-
-    (INST, SEQ, B0, BQ0, O0, OQ0) = ('inst', 'seq', 'b0', 'bq0', 'o0', 'oq0')
-
-    async def open(self, loop):
-        self.snapshot_server = await asyncio.start_server(self.handle_snapshot_request, '127.0.0.1', 4000)
-        self.updates_transport, _ = await loop.create_datagram_endpoint(asyncio.DatagramProtocol, local_addr=('239.255.0.1', 4000))
-        self.states = defaultdict(lambda: {self.SEQ: 1})
-
-    async def run(self):
-        await self.snapshot_server.serve_forever()
-
-    async def close(self):
-        self.updates_transport.close()
-
-    async def publish_update(self, timestamp, instrument, update):
-        state = self.states[instrument]
-        state.update(update, seq=state[self.SEQ] + 1)
-        self.updates_transport.send_to(';'.join('{field}: {value}' for field, value in ((self.INST, instrument), *state.items())) + '\n')
-
-    async def handle_snapshot_request(self, reader, writer):
-        data = await reader.read()
-        writer.write(data)
-        await writer.drain()
-        writer.close()
-
-
-class down_stream_protocol(asyncio.StreamReaderProtocol):
+class Tori:
     def __init__(self):
-        self.reader = asyncio.StreamReader()
-        super().__init__(reader)
-
-    def connection_made(self, transport):
-        super().connection_made(transport)
-        self.transport = transport
-        self.writer = asyncio.StreamWriter(transport, self, self.reader)
-
-    def connection_lost(self, exc):
-        super().connection_lost(exc)
-        self.transport = transport
-
-    def eof_received(self):
-        super().eof_recieved()
-        pass
-
-
-class down_datagram_protocol(asyncio.DatagramProtocol):
-    def datagram_received(self, datagram, addr):
-        self.transport.sendto(datagram, addr)
-
-    def error_received(self, exc):
-        pass
-
-
-client_connection = namedtuple('client_connection', ('name', 'stream_reader', 'stream_writer', 'datagram_address')
-
-class down:
-    def __init__(self):
-        self.connections = []
-
-    async def open(self, loop):
-        self.stream_socket = socket.create_server(('127.0.0.1', 9998))
-        self.stream_server = await loop.create_server(down_stream_protocol, sock=self.stream_socket)
-        self.datagram_transport, self.datagram_protocol = await loop.create_datagram_endpoint(down_datagram_protocol, local_addr=('127.0.0.1', 9999))
-
-    @property
-    def stream_fd(self):
-        return self.stream_socket.fileno()
-
-    async def wait_for_datagram(self):
-        pass
-
-    async def wait_for_datagram(self):
-        pass
+        self.__down = Down()
+        self.__up = Up()
+        await down.open(down_stream_addr, down_datagram_addr)
+        self.__up.start()
 
 
 class Uke:
@@ -129,28 +55,15 @@ class Uke:
         self.__fairy = Fairy()
 
     async def setup(self, loop, config):
-        self.process = await asyncio.create_subprocess_shell('build/debug/ppf', stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=False)
-        loop.create_task(self.stderr_reader(loop))
-        logging.info(config)
-        self.process.stdin.write(config.encode())
-        await self.process.stdin.drain()
-
-    async def quit(self):
-        self.process.stdin.write(quit_command.encode())
-        await self.process.stdin.drain()
-        return_code = await self.process.wait()
-        logging.info(return_code)
-
-    async def stderr_reader(self, loop):
-        async for line in self.process.stderr:
-            logging.info(line)
+        self.process = await asyncio.create_subprocess_shell('ppf/ppf', stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=False)
 
 
 async def scenario_0(up):
-    await up.publish_update(1000, INSTRUMENT, {up.B0:10, up.BQ0:1})
-    await up.publish_update(1000, INSTRUMENT, {up.B0:20})
+    up.update(1000, INSTRUMENT_0, b0 = 10, bq0 = 5)
+    up.flush()
+    up.update(1001, INSTRUMENT_0, b0 = 11, bq0 = 1)
+    up.flush()
     datagram = await down.wait_for_datagram()
-
 
 async def main(argv=None):
     parser = argparse.ArgumentParser()
