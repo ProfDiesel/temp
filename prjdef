@@ -1,0 +1,62 @@
+# vim: set filetype=python
+thirdparties = tuple(ThirdParty(thirdparty) for thirdparty in ('asio_nortti', 'boost_nortti', 'doctest', 'fmt', 'frozen_nortti', 'gsl', 'leaf_nortti_nothreads', 'observer-ptr-lite', 'outcome', 'rangeless', 'robin_hood', 'stdfunc_nortti'))
+Apply(IncludeDir('include'), CxxDef('__USE_PRECOMPILED_HEADER__'), (thirdparty.FLAGS for thirdparty in thirdparties))
+
+Apply(CxxDef('LINUX'))
+
+Apply(CxxDef('LEAN_AND_MEAN'))
+Apply(CxxDef('LOGGER_FMT_COMPILE'))
+#Apply(CxxDef('BOOST_SPIRIT_X3_DEBUG'))
+
+#pch = GeneratedPch('precompiled_header', sources=('src/main.cpp',), pch_gen_project=Prjdef('../precompiled_header_generator'))
+pch = Pch('precompiled_header')
+
+Copy(Cxx('src/feed/feed.hpp', pch=pch, preprocess_only=True), 'preprocessed/feed/feed.hpp') 
+Copy(Cxx('src/main.cpp', pch=pch, preprocess_only=True), 'preprocessed/main.i') 
+Copy(Cxx('src/main.cpp', pch=pch, compile_only=True), 'preprocessed/main.s') 
+main_exe = Executable('ppf', objects=(Cxx('src/main.cpp', pch=pch),))
+
+Default(main_exe)
+
+with env('benchmark'):
+    Apply(ThirdParty('benchmark').FLAGS)
+
+    with env('integration'):
+        Apply(IncludeDir('src'))
+        traversal_benchmark_exe = Executable('traversal_benchmark', objects=(Cxx('traversal.cpp', pch=pch),))
+    
+    with env('unit'):
+        Apply(IncludeDir('src'))
+        string_dispatch_benchmark_exe = Executable('string_dispatch_benchmark', objects=(Cxx('string_dispatch.cpp', pch=pch),))
+
+#Alias('benchmark', (traversal_benchmark_exe, string_dispatch_benchmark_exe))
+Alias('benchmark', (traversal_benchmark_exe,))
+
+
+with env('test/unit'):
+    Apply(IncludeDir('src'))
+    test_exe = Executable('tests', objects=(Cxx('starter.cpp', pch=pch),))
+
+with env('test/properties'):
+    Apply(IncludeDir('src'), CxxDef('BACKTEST_HARNESS'), CxxDef('SAFE_LQ2'))
+    config_properties_fuzzable_exe = Executable('config_properties', objects=(Cxx('config_properties.cpp', pch=pch),))
+    fuzzable_exe = Executable('fuzzable', objects=(Cxx('fuzzed.cpp', pch=pch),))
+
+#Alias('test', (test_exe,fuzzable_exe))
+Alias('test', (test_exe,))
+
+
+with env('scripts/smartbulb'):
+    smartbulb_lib = SharedObject('smartbulb', objects=(Cxx('smartbulb.cpp', pch=pch, pic=True),))
+
+with env('scripts/mlockall'):
+    mlockall_lib = SharedObject('mlockall', objects=(Cxx('mlockall.cpp', pch=pch, pic=True),))
+
+Alias('scripts', (smartbulb_lib,mlockall_lib))
+
+
+with env('playground'):
+    writev = Executable('writev', objects=(Cxx('writev.cpp', pch=pch),))
+
+Alias('playground', (writev,))
+
