@@ -25,7 +25,7 @@ auto check_opportunity(const trigger_dispatcher<std::tuple<std::tuple<std::tuple
   return fn::any(histo % fn::transform L(feed::visit_update(hanndle_update, _.second)));
 }
 
-struct invariant
+struct checker 
 {
   std::unordered_map<instrument_id_type, histo_type> histo_by_instrument;
 

@@ -31,14 +31,14 @@ namespace detail
 {
 struct packet final
 {
-  const std::uint8_t nb_messages = 0;
-  const struct message message = {};
+  std::uint8_t nb_messages = 0;
+  struct message message = {};
 } __attribute__((packed));
 static_assert(sizeof(packet) == 13); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
 struct snapshot_request final
 {
-  const endian::big_uint16_buf_t instrument {};
+  endian::big_uint16_buf_t instrument {};
 };
 static_assert(sizeof(snapshot_request) == 2); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
@@ -114,6 +114,53 @@ template<typename message_header_handler_type, typename update_handler_type>
     std::for_each_n(&message->update, message->nb_updates, [&](auto &update) { update_handler(timestamp, update, instrument_closure); });
   }
 }
+
+template<typename update_sanitizer_type>
+asio::mutable_buffer sanitize(update_sanitizer_type &&update_sanitizer, asio::mutable_buffer &&buffer) noexcept
+{
+  if(buffer.size() < sizeof(packet))
+    return {};
+
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  auto *const buffer_end = reinterpret_cast<std::byte *>(buffer.data()) + buffer.size();
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  auto *packet = reinterpret_cast<struct packet *>(buffer.data());
+  const auto advance = [](message *&message)
+  {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    return message
+           = reinterpret_cast<struct message *>(reinterpret_cast<std::byte *>(message) + sizeof(message) + message->nb_updates * sizeof(update));
+  };
+
+  std::byte *current = nullptr;
+  for(auto [i, message] = std::tuple {0, &packet->message}; i < packet->nb_messages; ++i, current = advance(message))
+  {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    if(current = reinterpret_cast<std::byte *>(message); current > buffer_end)
+    {
+      packet->nb_messages = i;
+      return asio::buffer(current, static_cast<std::byte*>(buffer.data()) + buffer.size() - current);
+    }
+
+    for(auto [j, update] = std::tuple {0, &message->update}; j < message->nb_updates; ++j, ++update)
+    {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      if(current = reinterpret_cast<std::byte *>(update); current > buffer_end)
+      {
+        message->nb_updates = j;
+        return asio::buffer(current, static_cast<std::byte*>(buffer.data()) + buffer.size() - current);
+      }
+
+      if(std::find(all_fields.begin(), all_fields.end(), static_cast<feed::field>(update->field)) == all_fields.end())
+        update->field = static_cast<std::uint8_t>(all_fields[update->field % all_fields.size()]);
+      update->value = visit_update([&](auto field, auto value) {
+        return encode_value(update_sanitizer(field, value)); }, *update);
+    }
+  }
+
+  return asio::buffer(current, static_cast<std::byte*>(buffer.data()) + buffer.size() - current);
+}
+
 
 } // namespace detail
 

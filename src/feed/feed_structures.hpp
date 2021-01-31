@@ -54,15 +54,15 @@ namespace literals
 
 struct update final
 {
-  const std::uint8_t field = 0;
-  const std::uint32_t value = 0;
+  std::uint8_t field = 0;
+  std::uint32_t value = 0;
 } __attribute__((packed));
 static_assert(sizeof(update) == 5); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
 struct message final
 {
-  const endian::big_uint16_buf_t instrument {};
-  const endian::big_uint32_buf_t sequence_id {};
+  endian::big_uint16_buf_t instrument {};
+  endian::big_uint32_buf_t sequence_id {};
 
   std::uint8_t nb_updates = 0;
   struct update update = {};
@@ -99,6 +99,12 @@ enum struct field_index
   BOOST_PP_SEQ_FOR_EACH(DECLARE_ENUM_INDEX, _, FEED_FIELDS)
 #undef DECLARE_ENUM_INDEX
   _count
+};
+
+constexpr std::array all_fields = {
+#define DECLARE_ENUM_INDEX(r, data, elem) field::BOOST_PP_TUPLE_ELEM(0, elem),
+  BOOST_PP_SEQ_FOR_EACH(DECLARE_ENUM_INDEX, _, FEED_FIELDS)
+#undef DECLARE_ENUM_INDEX
 };
 
 namespace detail
