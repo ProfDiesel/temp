@@ -24,30 +24,32 @@ struct trigger_dispatcher
   explicit trigger_dispatcher(trigger_map_type &&triggers) noexcept: triggers(std::move(triggers)) {}
 
   template<typename continuation_type, typename... args_types>
-  auto operator()(continuation_type &continuation, const clock::time_point &timestamp, const feed::update &update, args_types &&...args) noexcept
+  bool operator()(continuation_type &continuation, const clock::time_point &timestamp, const feed::update &update, args_types &&...args) noexcept
   {
     return feed::visit_update(
       [&](auto field, const auto &value) { return (*this)(continuation, timestamp, field, value, std::forward<decltype(args)>(args)...); }, update);
   }
 
   template<typename continuation_type, typename field_constant_type, typename value_type, typename... args_types>
-  auto operator()(continuation_type &continuation, const clock::time_point &timestamp, field_constant_type field, const value_type &value,
+  bool operator()(continuation_type &continuation, const clock::time_point &timestamp, field_constant_type field, const value_type &value,
                   args_types &&...args) noexcept requires std::is_same_v<typename field_constant_type::value_type, feed::field>
   {
-    const auto apply = [&](auto &trigger_map_value) {
+    const auto apply = [&](auto &trigger_map_value)
+    {
       auto &[fields, trigger] = trigger_map_value;
       if constexpr(b::tuple_contains_type_v<decltype(field), decltype(fields)>)
         return trigger(continuation, timestamp, value, std::forward<args_types>(args)..., std::true_type());
       else
         return false;
     };
-    return std::apply([&](auto &...triggers) { LIKELY((apply(triggers) || ...)) || continuation(timestamp, std::forward<args_types>(args)..., std::false_type()); },
+    return std::apply([&](auto &...triggers) { return LIKELY((apply(triggers) || ...)) || continuation(timestamp, std::forward<args_types>(args)..., std::false_type()); },
                       triggers);
   }
 
   void reset(const feed::instrument_state &state) noexcept
   {
-    const auto apply = [&](auto field, auto &trigger_map_value, const auto &value) {
+    const auto apply = [&](auto field, auto &trigger_map_value, const auto &value)
+    {
       auto &[fields, trigger] = trigger_map_value;
       if constexpr(b::tuple_contains_type_v<decltype(field), decltype(fields)>)
         trigger.reset(value);
@@ -70,30 +72,31 @@ struct polymorphic_trigger_dispatcher
 
   std::aligned_storage_t<16> storage = {};
 
-  /*const*/ std::function<void(void *, continuation_type &, const clock::time_point &, const feed::update &, instrument_closure)> call_thunk
-    = []([[maybe_unused]] auto...) {};
-  /*const*/ std::function<void(void *, const feed::instrument_state &)> reset_thunk = []([[maybe_unused]] auto...) {};
-  /*const*/ std::function<void(void *)> warm_up_thunk = []([[maybe_unused]] auto...) {};
+  /*const*/ func::function<bool(void *, const continuation_type &, const clock::time_point &, const feed::update &, instrument_closure)> call_thunk
+    = []([[maybe_unused]] auto...) { return false; };
+  /*const*/ func::function<void(void *, const feed::instrument_state &)> reset_thunk = []([[maybe_unused]] auto...) {};
+  /*const*/ func::function<void(void *)> warm_up_thunk = []([[maybe_unused]] auto...) {};
 
   template<typename upstream_dispatcher_type, typename... args_types>
-  static polymorphic_trigger_dispatcher &&
+  static polymorphic_trigger_dispatcher
   make(args_types &&...args) noexcept /*requires(sizeof(upstream_dispatcher_type) <= sizeof(std::declval<polymorphic_trigger_dispatcher>().storage)) */
   {
     auto result = polymorphic_trigger_dispatcher {
-      .call_thunk =
-        [](void *thiz, continuation_type &continuation, const clock::time_point &timestamp, const feed::update &update, instrument_closure instrument) {
-          auto blank_dispatcher = [&](const auto &timestamp, auto closure, auto blank) { return continuation(timestamp, closure, blank()); };
-          (*reinterpret_cast<upstream_dispatcher_type *>(thiz))(blank_dispatcher, timestamp, update, instrument);
+      .call_thunk = [](void *thiz, const continuation_type &continuation, const clock::time_point &timestamp, const feed::update &update,
+                       instrument_closure instrument) -> bool
+      {
+        auto blank_dispatcher = [&](const auto &timestamp, auto closure, auto blank) -> bool { return continuation(timestamp, closure, blank()); };
+        return (*reinterpret_cast<upstream_dispatcher_type *>(thiz))(blank_dispatcher, timestamp, update, instrument);
         },
       .reset_thunk = [](void *thiz, const feed::instrument_state &state) { reinterpret_cast<upstream_dispatcher_type *>(thiz)->reset(state); },
       .warm_up_thunk = [](void *thiz) { reinterpret_cast<upstream_dispatcher_type *>(thiz)->warm_up(); }};
     new(&result.storage) upstream_dispatcher_type(std::forward<args_types>(args)...);
-    return std::move(result);
+    return result;
   }
 
-  void operator()(continuation_type &continuation, const clock::time_point &timestamp, const feed::update &update, instrument_closure instrument) noexcept
+  bool operator()(const continuation_type &continuation, const clock::time_point &timestamp, const feed::update &update, instrument_closure instrument) noexcept
   {
-    call_thunk(&storage, continuation, timestamp, update, instrument);
+    return call_thunk(&storage, continuation, timestamp, update, instrument);
   }
   void reset(const feed::instrument_state &state) noexcept { reset_thunk(&storage, state); }
   void warm_up() noexcept { warm_up_thunk(&storage); }
@@ -110,9 +113,13 @@ auto with_trigger(const config::properties::walker &config, boilerplate::not_nul
 {
   using namespace config::literals;
 
+  using result_type = std::invoke_result_t<decltype(continuation), trigger_dispatcher<std::tuple<>>>;
+  static_assert(boost::leaf::is_result_type<result_type>::value);
+
   // Look HN ! Monoid !
-  const auto null_trigger = [](auto &&continuation) noexcept { return continuation(std::tuple {}); };
-  const auto add_trigger = [](auto &&triggers, auto &&field_set, auto &&trigger) noexcept {
+  const auto null_trigger = [](auto &&continuation) noexcept -> result_type { return continuation(std::tuple {}); };
+  const auto add_trigger = [](auto &&triggers, auto &&field_set, auto &&trigger) noexcept
+  {
     return std::tuple_cat(std::forward<decltype(triggers)>(triggers),
                           std::make_tuple(std::tuple(std::forward<decltype(field_set)>(field_set), std::forward<decltype(trigger)>(trigger))));
   };
@@ -123,7 +130,8 @@ auto with_trigger(const config::properties::walker &config, boilerplate::not_nul
 #endif // !defined(LEAN_AND_MEAN)
   const auto default_price = feed::price_t {};
 
-  auto decode_instant_move_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> leaf::result<void> {
+  auto decode_instant_move_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> result_type
+  {
     const auto instant_threshold = config["instant_threshold"_hs];
     return instant_threshold ? continuation(add_trigger(std::forward<decltype(triggers)>(triggers), price_fields,
                                                         instant_move_trigger<feed::price_t>(default_price, (feed::price_t)from_walker(instant_threshold))))
@@ -131,7 +139,8 @@ auto with_trigger(const config::properties::walker &config, boilerplate::not_nul
   };
 
 #if !defined(LEAN_AND_MEAN)
-  auto decode_move_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> leaf::result<void> {
+  auto decode_move_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> result_type
+  {
     const auto threshold = config["threshold"_hs];
     const auto period = config["period"_hs];
     const auto base = config["base"_hs];
@@ -153,14 +162,16 @@ auto with_trigger(const config::properties::walker &config, boilerplate::not_nul
       return continuation(std::forward<decltype(triggers)>(triggers));
   };
 
-  auto decode_min_size_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> leaf::result<void> {
+  auto decode_min_size_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> result_type
+  {
     const auto min_size = config["min_size"_hs];
     return min_size ? continuation(add_trigger(std::forward<decltype(triggers)>(triggers), quantity_fields, min_value_trigger<feed::quantity_t>(min_size)))
                     : continuation(std::forward<decltype(triggers)>(triggers));
   };
 #endif // !defined(LEAN_AND_MEAN)
 
-  auto check_has_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> leaf::result<void> {
+  auto check_has_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> result_type
+  {
     if constexpr(std::tuple_size_v<std::decay_t<decltype(triggers)>> != 0)
     {
 #if !defined(LEAN_AND_MEAN)
@@ -181,39 +192,46 @@ auto with_trigger(const config::properties::walker &config, boilerplate::not_nul
          |= check_has_trigger |= std::forward<continuation_type>(continuation);
 }
 
+
+inline auto make_polymorphic_trigger(const config::properties::walker &config, boilerplate::not_null_observer_ptr<logger::logger> logger) noexcept
+{
+  return with_trigger(config, logger, [&](auto &&trigger_dispatcher) -> boost::leaf::result<polymorphic_trigger_dispatcher> { return polymorphic_trigger_dispatcher::make<std::decay_t<decltype(trigger_dispatcher)>>(trigger_dispatcher); })();
+}
+
+
 #if defined(DOCTEST_LIBRARY_INCLUDED)
 // GCOVR_EXCL_START
 
 TEST_SUITE("trigger_dispatcher")
 {
-  template<typename value_type>
-  struct dummy_trigger
+  TEST_CASE("polymorphic_trigger_dispatcher")
   {
-    void reset(const value_type &) noexcept {}
-    void warm_up() noexcept {}
+    using namespace config::literals;
+    using namespace std::string_view_literals;
 
-    template<typename continuation_type, typename... args_types>
-    auto operator()(continuation_type &continuation, const clock::time_point &timestamp, const value_type &value, args_types &&...args) noexcept
-  {
+    const auto config = "\n\
+entrypoint.instant_threshold <- 2;\n\
+entrypoint.threshold <- 3;\n\
+entrypoint.period <- 10;"sv;
+
+  logger::printer printer;
+  logger::logger logger(boilerplate::make_strict_not_null(&printer));
+
+  boost::leaf::try_handle_all(
+      [&]() -> boost::leaf::result<void> {
+        const auto props = BOOST_LEAF_TRYX(config::properties::create(config));
+        auto trigger = BOOST_LEAF_TRYX(make_polymorphic_trigger(props["entrypoint"_hs], boilerplate::make_strict_not_null(&logger)));
+        feed::update update;
+        auto send = [&](std::int64_t timestamp, feed::price_t price) {
+          feed::detail::encode_update(feed::field::b0, price, update);
+          return trigger([](clock::time_point timestamp, void *closure, bool for_real){ return for_real; }, clock::time_point(clock::duration(timestamp)), update, nullptr);
+        };
+        CHECK(!send(10, 0));
+        CHECK(send(13, 20));
+        return {};
+      },
+      [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
   }
-  };
-
-  auto trigger_map = std::make_tuple(std::make_tuple(std::tuple<feed::b0_c, feed::o0_c>(), dummy_trigger<feed::price_t>()),
-                                     std::make_tuple(std::tuple<feed::bq0_c, feed::oq0_c>(), dummy_trigger<feed::quantity_t>()));
-
-  /*
-  auto make<trigger_dispatcher<decltype(trigger_map)>>() { return {trigger_map}; }
-  auto make<polymorphic_trigger_dispatcher>() { return
-  polymorphic_trigger_dispatcher::make<trigger_dispatcher<std::decay_t<decltype(trigger_map)>>>(std::forward<decltype(trigger_map)>(trigger_map)); }
-
-  TEST_CASE_TEMPLATE("dispatcher", T, trigger_dispatcher<decltype(trigger_map)>, polymorphic_trigger_dispatcher)
-  {
-    T trigger = make<T>();
-
-    SUBCASE("dispatch") {}
-    SUBCASE("reset/warm_up") {}
-  }
-  */
 }
 
 // GCOVR_EXCL_STOP

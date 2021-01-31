@@ -58,9 +58,9 @@ struct payload final
 };
 
 template<bool send_datagram>
-leaf::result<payload<send_datagram>> decode_payload(const config::properties::walker &walker) noexcept
+boost::leaf::result<payload<send_datagram>> decode_payload(const config::properties::walker &walker) noexcept
 {
-  const auto base64 = [&](/*TODO: std::string_view s*/ const std::string &s) noexcept -> leaf::result<detail::owning_aligned_buffer> {
+  const auto base64 = [&](/*TODO: std::string_view s*/ const std::string &s) noexcept -> boost::leaf::result<detail::owning_aligned_buffer> {
     constexpr std::array lookup_table = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //
                                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //
                                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63, //
@@ -118,8 +118,8 @@ TEST_SUITE("payload")
 
   TEST_CASE("decode")
   {
-    leaf::try_handle_all(
-      [&]() -> leaf::result<void> {
+    boost::leaf::try_handle_all(
+      [&]() -> boost::leaf::result<void> {
         const auto properties = BOOST_LEAF_TRYX(config::properties::create("\
 payloads.message <- 'c3RyZWFtX3BheWxvYWQ=';\
 payloads.datagram <- 'ZGF0YWdyYW1fcGF5bG9hZA==';"sv));
@@ -140,7 +140,7 @@ payloads.datagram <- 'ZGF0YWdyYW1fcGF5bG9hZA==';"sv));
 
         return {};
       },
-      [&]([[maybe_unused]] const leaf::error_info &unmatched) { CHECK(false); });
+      [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
   }
 }
 

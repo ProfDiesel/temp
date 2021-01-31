@@ -8,6 +8,7 @@
 #endif // !defined(LEAN_AND_MEAN)
 
 #include <boost/endian/buffers.hpp>
+#include <boost/endian/conversion.hpp>
 
 #include <boost/preprocessor/facilities/expand.hpp>
 #include <boost/preprocessor/facilities/identity.hpp>
@@ -22,6 +23,9 @@
 #endif // defined(__clang__)
 #endif // !defined(LEAN_AND_MEAN)
 
+#include <bitset>
+#include <variant>
+
 namespace feed
 {
 namespace endian = boost::endian;
@@ -29,7 +33,7 @@ namespace endian = boost::endian;
 #if defined(LEAN_AND_MEAN)
 using price_t = float;
 #elif defined(__clang__) // defined(LEAN_AND_MEAN)
-using price_t = float;
+using price_t = units::make_quantity_type<struct price_dimension, float>;
 #else  // defined(__clang__)
 using price_t = units::make_quantity_type<struct price_dimension, std::decimal::decimal32>;
 #endif // defined(__clang__)
@@ -42,9 +46,9 @@ namespace literals
 #if defined(LEAN_AND_MEAN)
   inline price_t operator""_p(long double value) { return static_cast<price_t>(value); };
 #elif defined(__clang__) // defined(LEAN_AND_MEAN)
-  inline price_t operator""_p(long double value) { return {value}; };
+  inline price_t operator""_p(long double value) { return price_t(static_cast<float>(value)); };
 #else  // defined(__clang__)
-  inline price_t operator""_p(long double value) { return {reinterpret_cast<std::decimal::decimal32::__decfloat32 &>(value)}; };
+  inline price_t operator""_p(long double value) { return price_t(reinterpret_cast<std::decimal::decimal32::__decfloat32 &>(value)); };
 #endif // defined(__clang__)
 }
 
@@ -80,12 +84,14 @@ BOOST_PP_SEQ_FOR_EACH(DECLARE_CONSTANT, _, FEED_FIELDS)
 template<field>
 struct field_type;
 
-#define DECLARE_CONSTANT(r, data, elem) template<> struct field_type<field::BOOST_PP_TUPLE_ELEM(0, elem)> { using type = BOOST_PP_TUPLE_ELEM(2, elem); };
-BOOST_PP_SEQ_FOR_EACH(DECLARE_CONSTANT, _, FEED_FIELDS)
-#undef DECLARE_CONSTANT
+#define DECLARE_FIELD(r, data, elem) template<> struct field_type<field::BOOST_PP_TUPLE_ELEM(0, elem)> { using type = BOOST_PP_TUPLE_ELEM(2, elem); };
+BOOST_PP_SEQ_FOR_EACH(DECLARE_FIELD, _, FEED_FIELDS)
+#undef DECLARE_FIELD
 
 template<field value>
 using field_type_t = typename field_type<value>::type;
+
+using value_variant = std::variant<std::monostate, price_t, quantity_t>;
 
 enum struct field_index
 {
@@ -139,19 +145,19 @@ inline void encode_update(enum field field, const price_t &value, struct update 
 } // namespace detail
 
 template<typename continuation_type>
-[[using gnu : always_inline, flatten, hot]] void visit_update(continuation_type &&continuation, const struct update &update)
+[[using gnu : always_inline, flatten, hot]] auto visit_update(continuation_type &&continuation, const struct update &update)
 {
   switch(field{update.field})
   {
     // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
   case field::BOOST_PP_TUPLE_ELEM(0, elem): \
-    continuation(BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c){}, detail::read_value<field_type_t<field::BOOST_PP_TUPLE_ELEM(0, elem)>>(update)); \
-    break;
+    return continuation(BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c){}, detail::read_value<BOOST_PP_TUPLE_ELEM(2, elem)>(update));
   BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
 #undef HANDLE_FIELD
     // clang-format on
   }
+  return std::invoke_result_t<decltype(continuation), b0_c, price_t>();
 }
 
 struct instrument_state final
@@ -163,15 +169,29 @@ struct instrument_state final
   sequence_id_type sequence_id = 0;
 };
 
-template<typename value_type>
-[[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, field field, value_type &&value) noexcept
+template<typename field_type, typename value_type>
+[[using gnu : always_inline, flatten, hot]] void update_state(instrument_state &state, field_type field, value_type &&value) noexcept 
+{
+  // clang-format off
+#define HANDLE_FIELD(r, _, elem) \
+  if constexpr(field() == field::BOOST_PP_TUPLE_ELEM(0, elem)) \
+  { \
+    state.BOOST_PP_TUPLE_ELEM(0, elem) = value; \
+    state.updates.set(static_cast<std::size_t>(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
+  }
+  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
+#undef HANDLE_FIELD
+  // clang-format on
+}
+
+[[using gnu : always_inline, flatten, hot]] inline void update_state_poly(instrument_state &state, field field, value_variant &&value) noexcept
 {
   switch(field)
   {
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
   case field::BOOST_PP_TUPLE_ELEM(0, elem): \
-    state.BOOST_PP_TUPLE_ELEM(0, elem) = value; \
+    state.BOOST_PP_TUPLE_ELEM(0, elem) = std::get<field_type_t<field::BOOST_PP_TUPLE_ELEM(0, elem)>>(value); \
     state.updates.set(static_cast<std::size_t>(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
     break;
   BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)

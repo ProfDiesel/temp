@@ -1,9 +1,11 @@
 import asyncio
-from typing import Tuple, List, Callable
+from typing import Dict, Tuple, List, Callable
 from dataclasses import dataclass
+from datetime import timedelta
 import json
 
 Address = Tuple[str, int]
+
 
 @dataclass
 class Handshake:
@@ -11,10 +13,12 @@ class Handshake:
     credentials: bytes
     datagram_address: Address
 
+
 @dataclass
 class HandshakeResponse:
     ok: bool
     message: str
+
 
 @dataclass
 class Message:
@@ -39,17 +43,20 @@ class _ClientConnection:
     stream_writer: asyncio.StreamWriter
     datagram_address: Address
 
-ConditionCallable = Callable[[_ClientConnection, bytes, bool], bool]
+
+ConditionCallable = Callable[[_ClientConnection, Message, bool], bool]
+
 
 class Down:
     def __init__(self):
         self.connections = []
         self.__awaiting_futures: List[Tuple[ConditionCallable, asyncio.Future]] = []
+        self.__connections_by_udp_address: Dict[Address, _ClientConnection] = {}
 
-    async def open(self, stream_address:Address, datagram_address:Address, *, loop=None):
+    async def open(self, stream_address: Address, datagram_address: Address, *, loop=None):
         if not loop:
             loop = asyncio.get_event_loop()
-        self.stream_server = await loop.start_server(self.on_new_connection, *stream_address)
+        self.stream_server = await asyncio.start_server(self.on_new_connection, *stream_address, loop=loop)
         self.datagram_transport, self.datagram_protocol = await loop.create_datagram_endpoint(lambda: _DatagramBumper(self), local_addr=datagram_address)
 
     @staticmethod
@@ -61,11 +68,12 @@ class Down:
         return json.dumps(message).encode()
 
     async def on_new_connection(self, reader, writer):
-        handshake = self.__decode(await reader.readuntil(b'\n\n'), Handshake)
+        handshake = self.__decode(await reader.readuntil(b"\n\n"), Handshake)
         connection = _ClientConnection(reader, writer, handshake.datagram_address)
-        writer.write(self.__encode(HandshakeResponse(ok=True, message='ok')) + b'\n\n')
+        self.__connections_by_udp_address[handshake.datagram_address] = connection
+        writer.write(self.__encode(HandshakeResponse(ok=True, message="ok")) + b"\n\n")
         await writer.drain()
-        while data := await reader.readuntil('\n\n'):
+        while data := await reader.readuntil("\n\n"):
             message = self.__decode(data)
             self.__notify_message(connection, message)
 
@@ -76,18 +84,17 @@ class Down:
         message = self.__decode(datagram)
         self.__notify_message(connection, message, True)
 
-    async def wait_for_message(self, condition: ConditionCallable):
+    async def wait_for_message(self, condition: ConditionCallable, time: timedelta) -> Message:
         future = asyncio.Future()
         self.__awaiting_futures.append((condition, future))
-        await future
+        return await future
 
-    def __notify_message(connection: _ClientConnection, message: bytes, as_datagram = False):
+    def __notify_message(self, connection: _ClientConnection, message: Message, as_datagram=False):
         for i, (condition, future) in enumerate(self.__awaiting_futures):
             try:
                 if condition(connection, message, as_datagram):
-                     future.set_result()
-                     del self.__awaiting_futures[i]
+                    future.set_result(message)
+                    del self.__awaiting_futures[i]
             except Exception as exception:
                 future.set_exception(exception)
                 del self.__awaiting_futures[i]
-

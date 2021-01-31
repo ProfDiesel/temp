@@ -140,7 +140,7 @@ public:
 
   template<typename continuation_type>
   [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation) noexcept
-    -> out::result<typename std::invoke_result_t<continuation_type, clock::time_point, asio::const_buffer &&>>
+    -> out::result<bool>
   {
 #if defined(USE_TCPDIRECT)
     ::zf_reactor_perform(stack);
@@ -185,8 +185,11 @@ public:
     };
 
     const auto timestamp = get_timestamp(&msgvec_[0].msg_hdr);
-    for(auto i = 0; i < nb_messages_read; ++i)
-      continuation(timestamp, asio::const_buffer(reinterpret_cast<const std::byte *>(buffers_[i].data()), msgvec_[i].msg_len));
+    auto result = continuation(timestamp, asio::const_buffer(reinterpret_cast<const std::byte *>(buffers_[0].data()), msgvec_[0].msg_len));
+
+    for(auto i = 1; i < nb_messages_read; ++i)
+      result |= continuation(timestamp, asio::const_buffer(reinterpret_cast<const std::byte *>(buffers_[i].data()), msgvec_[i].msg_len));
+
     return out::success();
 #else  // defined(LINUX)
     asio::const_buffer buffer(buffer_.data(), buffer_size);

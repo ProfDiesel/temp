@@ -79,15 +79,15 @@ auto main() -> int
     service.stop();
   });
 
-  return leaf::try_handle_all(
-    [&]() -> leaf::result<int> {
+  return boost::leaf::try_handle_all(
+    [&]() -> boost::leaf::result<int> {
       using namespace config::literals;
 
       std::string command_buffer;
       BOOST_LEAF_EC_TRY(asio::read_until(command_input, asio::dynamic_buffer(command_buffer), "\n\n", _));
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(command_buffer));
 
-      const auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, logger, [&](auto fast_path) -> leaf::result<void> {
+      const auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, logger, [&](auto fast_path) -> boost::leaf::result<void> {
         while(!service.stopped())
           [[likely]]
           {
@@ -101,20 +101,20 @@ auto main() -> int
       BOOST_LEAF_CHECK(run());
       return 0;
     },
-    [&](const config::parse_error &error, const leaf::e_source_location &location) {
+    [&](const config::parse_error &error, const boost::leaf::e_source_location &location) {
       logger->log(logger::critical, "{}: At char {}-{}, expected a '{}' expression, got \"{}\"."_format, location, error.indices.first, error.indices.second,
                   error.which, error.snippet);
       return 1;
     },
-    [&](const leaf::error_info &unmatched, const std::error_code &error_code, const leaf::e_source_location &location) {
+    [&](const boost::leaf::error_info &unmatched, const std::error_code &error_code, const boost::leaf::e_source_location &location) {
       logger->log(logger::critical, "{}: error code {} - {}"_format, location, error_code, fmt::to_string(unmatched));
       return 2;
     },
-    [&](const leaf::error_info &unmatched, const leaf::e_source_location &location) {
+    [&](const boost::leaf::error_info &unmatched, const boost::leaf::e_source_location &location) {
       logger->log(logger::critical, "{}: {}"_format, location, fmt::to_string(unmatched));
       return 3;
     },
-    [&](const leaf::error_info &unmatched) {
+    [&](const boost::leaf::error_info &unmatched) {
       logger->log(logger::critical, fmt::to_string(unmatched));
       return 4;
     });

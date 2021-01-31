@@ -48,7 +48,7 @@
 namespace backtest
 {
 using snapshot_requester_type = std::function<asio::awaitable<out::result<feed::instrument_state>>(feed::instrument_id_type)>;
-using update_source_type = std::function<leaf::result<void>(std::function<void(clock::time_point, const asio::const_buffer &)>)>;
+using update_source_type = std::function<boost::leaf::result<void>(std::function<void(clock::time_point, const asio::const_buffer &)>)>;
 using send_stream_type = std::function<void(const asio::const_buffer &)>;
 
 snapshot_requester_type make_snapshot_requester();
@@ -57,15 +57,13 @@ send_stream_type make_stream_send();
 } // namespace backtest
 #endif // defined(BACKTEST_HARNESS)
 
-namespace hof = boost::hof;
-namespace b = boilerplate;
 
 template<typename command_input_stream_type, typename command_output_stream_type, typename continuation_type, typename dynamic_subscription_type,
          typename trigger_type, typename handle_packet_loss_type, typename send_datagram_type>
 [[using gnu: flatten]] auto run(const config::properties::walker &config, asio::io_context &service, command_input_stream_type &command_input,
          command_output_stream_type &command_output, boilerplate::not_null_observer_ptr<logger::logger> logger, continuation_type &&continuation,
          dynamic_subscription_type dynamic_subscription, trigger_type &&trigger, handle_packet_loss_type handle_packet_loss,
-         send_datagram_type send_datagram) noexcept -> leaf::result<void>
+         send_datagram_type send_datagram) noexcept -> boost::leaf::result<void>
 {
   using namespace config::literals;
 
@@ -142,7 +140,7 @@ template<typename command_input_stream_type, typename command_output_stream_type
   // AUTOMATA
   //
 
-  automata_type automata = BOOST_LEAF_TRYX([&]() noexcept -> leaf::result<automata_type> {
+  automata_type automata = BOOST_LEAF_TRYX([&]() noexcept -> boost::leaf::result<automata_type> {
     if constexpr(!dynamic_subscription())
     {
       auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription));
@@ -170,7 +168,7 @@ template<typename command_input_stream_type, typename command_output_stream_type
     std::string command_buffer;
     command_buffer.clear();
 
-    auto handlers = std::make_tuple([&](const leaf::error_info &unmatched) { return std::make_error_code(std::errc::not_supported); });
+    auto handlers = std::make_tuple([&](const boost::leaf::error_info &unmatched) { return std::make_error_code(std::errc::not_supported); });
 
     for(;;)
     {
@@ -290,7 +288,7 @@ template<typename command_input_stream_type, typename command_output_stream_type
 #endif // defined(USE_TCPDIRECT)
       }
       else
-        return leaf::result<b::empty> {};
+        return boost::leaf::result<boilerplate::empty> {};
     }());
 #if defined(BACKTEST_HARNESS)
     auto stream_send = backtest::make_stream_send();
@@ -368,6 +366,7 @@ request.instrument = {}\n\n");
     with_mca_markers(std::ref(receive) |= decode |= trigger_ |= std::ref(send_));
   });
 }
+
 
 template<typename continuation_type, typename command_input_stream_type, typename command_output_stream_type>
 auto with_trigger_path(const config::properties::walker &config, asio::io_context &service, command_input_stream_type &command_input,

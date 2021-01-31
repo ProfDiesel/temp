@@ -42,6 +42,12 @@ with env('test/properties'):
     config_properties_fuzzable_exe = Executable('config_properties', objects=(Cxx('config_properties.cpp', pch=pch),))
     fuzzable_exe = Executable('fuzzable', objects=(Cxx('fuzzed.cpp', pch=pch),))
 
+with env('notebook'):
+    Apply(IncludeDir('src'))
+    trigger_helper_lib = SharedObject('trigger_helper', objects=(Cxx('trigger_helper.cpp', pch=pch, pic=True),))
+Alias('notebook', (trigger_helper_lib,))
+
+
 #Alias('test', (test_exe,fuzzable_exe))
 Alias('test', (test_exe,))
 

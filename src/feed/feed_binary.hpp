@@ -148,3 +148,18 @@ constexpr auto packet_0 = make_packet(0x01,                   // packet.nb_messa
 
 } // namespace feed
 
+#if defined(DOCTEST_LIBRARY_INCLUDED)
+// GCOVR_EXCL_START
+
+TEST_SUITE("feed_binary")
+{
+  TEST_CASE("decode")
+  {
+    //  decode([](feed:instrument_instrument_id_type instrument, feed::sequence_id_type sequence_id){ CHECK(instrument == 1); CHECK(sequence_id == 0); return 0;}, 
+    //        [](clock::time_point timestamp, const feed::update &update, int instrument_closure){ CHECK(timestamp == 0); CHECK(instrument_closure == 0); }, 0, packet_0); 
+  }
+}
+
+// GCOVR_EXCL_STOP
+#endif // defined(DOCTEST_LIBRARY_INCLUDED)
+

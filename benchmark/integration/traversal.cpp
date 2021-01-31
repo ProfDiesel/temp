@@ -76,7 +76,7 @@ struct feeder
     co_return out::success(server.snapshot(instrument));
   }
 
-  [[using gnu : always_inline, flatten, hot]] leaf::result<void> on_update_poll(std::function<void(clock::time_point, const asio::const_buffer&)> continuation) noexcept
+  [[using gnu : always_inline, flatten, hot]] boost::leaf::result<void> on_update_poll(std::function<void(clock::time_point, const asio::const_buffer&)> continuation) noexcept
   {
     timestamp += clock::duration(1);
     if(!canned_updates.empty())
@@ -120,7 +120,7 @@ struct stream_send
 namespace backtest
 {
 using snapshot_requester_type = std::function<asio::awaitable<out::result<feed::instrument_state>>(feed::instrument_id_type)>;
-using update_source_type = std::function<leaf::result<void>(std::function<void(clock::time_point, const asio::const_buffer &)>)>;
+using update_source_type = std::function<boost::leaf::result<void>(std::function<void(clock::time_point, const asio::const_buffer &)>)>;
 using send_stream_type = std::function<void(const asio::const_buffer &)>;
 
 snapshot_requester_type make_snapshot_requester() { return bench::feeder::instance->make_snapshot_requester(); }
@@ -157,12 +157,12 @@ subscription.message <- 'bWVzc2FnZQo=';\n\
   logger::logger logger {boilerplate::make_strict_not_null(&printer)};
 
   auto error_handlers
-    = std::make_tuple([&](const leaf::error_info &unmatched, const std::error_code &error_code,
-                          const leaf::e_source_location &location) { std::clog << location << error_code << unmatched << std::endl; },
-                      [&](const leaf::error_info &unmatched, const leaf::e_source_location &location) { std::clog << location << unmatched << std::endl; },
-                      [&](const leaf::error_info &unmatched) { std::clog << unmatched << std::endl; });
+    = std::make_tuple([&](const boost::leaf::error_info &unmatched, const std::error_code &error_code,
+                          const boost::leaf::e_source_location &location) { std::clog << location << error_code << unmatched << std::endl; },
+                      [&](const boost::leaf::error_info &unmatched, const boost::leaf::e_source_location &location) { std::clog << location << unmatched << std::endl; },
+                      [&](const boost::leaf::error_info &unmatched) { std::clog << unmatched << std::endl; });
 
-  std::shared_ptr<leaf::polymorphic_context> ctx = leaf::make_shared_context(error_handlers);
+  std::shared_ptr<boost::leaf::polymorphic_context> ctx = boost::leaf::make_shared_context(error_handlers);
 
   using namespace feed::literals;
 
@@ -172,14 +172,14 @@ subscription.message <- 'bWVzc2FnZQo=';\n\
   bench::feeder::instance->reset(42, feed::instrument_state {.b0 = 95.0_p, .bq0 = 10, .o0 = 105.0_p, .oq0 = 10});
   bench::feeder::instance->push_updates({std::nullopt, std::make_optional<bench::message>({.instrument = 42, .state = feed::instrument_state {.b0 = 95.0_p, .bq0 = 10, .o0 = 105.0_p, .oq0 = 10}})});
 
-  leaf::try_handle_all(
-    [&]() -> leaf::result<void> {
+  boost::leaf::try_handle_all(
+    [&]() -> boost::leaf::result<void> {
       using namespace config::literals;
 
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(initial_config));
 
       const auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
-                                         [&](auto fast_path) -> leaf::result<void> {
+                                         [&](auto fast_path) -> boost::leaf::result<void> {
                                            // warm up with for a few cycles
                                            for(auto n = 0; n < 10; ++n)
                                            {

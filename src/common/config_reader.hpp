@@ -32,9 +32,6 @@
 #include <string_view>
 #include <variant>
 
-namespace leaf = boost::leaf;
-namespace b = boilerplate;
-
 template<>
 struct robin_hood::hash<frozen::string>
 {
@@ -73,7 +70,7 @@ struct parse_error
 };
 
 template<typename continuation_type, typename iterator_type>
-static leaf::result<bool> parse(const continuation_type &continuation, iterator_type first, iterator_type last)
+static boost::leaf::result<bool> parse(const continuation_type &continuation, iterator_type first, iterator_type last)
 {
   namespace x3 = boost::spirit::x3;
   using namespace x3_ext;
@@ -99,13 +96,13 @@ static leaf::result<bool> parse(const continuation_type &continuation, iterator_
     continuation(object, field, std::move(value));
   })]);
 
-  return leaf::try_handle_some(
+  return boost::leaf::try_handle_some(
     [&]() {
-      leaf::error_monitor monitor;
+      boost::leaf::error_monitor monitor;
       auto it = first;
-      return (x3::phrase_parse(it, last, grammar, discard) && (it == last)) ? leaf::result<bool> {true} : monitor.check();
+      return (x3::phrase_parse(it, last, grammar, discard) && (it == last)) ? boost::leaf::result<bool> {true} : monitor.check();
     },
-    [&](const expectation_failure<iterator_type> &error /*, const leaf::e_source_location &location*/) {
+    [&](const expectation_failure<iterator_type> &error /*, const boost::leaf::e_source_location &location*/) {
       std::string snippet;
       const auto where = error.where.begin();
       std::copy_n(where, std::min(10, static_cast<int>(std::distance(where, last))), std::back_inserter(snippet));
@@ -126,8 +123,8 @@ template<typename continuation_type, typename from_type>
 auto parse(continuation_type &&continuation, from_type &&from)
 {
   using from_type_ = std::decay_t<from_type>;
-  using char_type = b::detected_or_t<char, char_t, from_type_>;
-  using traits_type = b::detected_or_t<std::char_traits<char_type>, traits_t, from_type_>;
+  using char_type = boilerplate::detected_or_t<char, char_t, from_type_>;
+  using traits_type = boilerplate::detected_or_t<std::char_traits<char_type>, traits_t, from_type_>;
   if constexpr(std::is_base_of_v<std::basic_istream<char_type, traits_type>, from_type_>)
   {
     boost::spirit::basic_istream_iterator<char_type, traits_type> begin {std::forward<from_type>(from)}, end;
@@ -248,7 +245,7 @@ struct properties final
   };
 
   template<typename input_type>
-  static leaf::result<properties> create(input_type &&input) noexcept
+  static boost::leaf::result<properties> create(input_type &&input) noexcept
   {
     auto data = std::make_shared<world_type>();
     BOOST_LEAF_CHECK(config::parse(
@@ -308,8 +305,8 @@ a.a <- 'string';\n\
 a.b <- 42;\n\
 a.c <- ['string', 'list'];\n\
 a.d <- [0, 1, 2, 3, 4];\n\n"sv;
-      leaf::try_handle_all(
-        [&]() -> leaf::result<void> {
+      boost::leaf::try_handle_all(
+        [&]() -> boost::leaf::result<void> {
           const auto result = BOOST_LEAF_TRYX(config::properties::create(config_str));
           const auto a = result["a"_hs];
           CHECK(a);
@@ -319,15 +316,15 @@ a.d <- [0, 1, 2, 3, 4];\n\n"sv;
           CHECK(a["d"_hs].get() == config::value_type {std::vector {0.0, 1.0, 2.0, 3.0, 4.0}});
           return {};
         },
-        [&]([[maybe_unused]] const leaf::error_info &unmatched) { CHECK(false); });
+        [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
     }
     SUBCASE("failure")
     {
       const auto config_str = "\
 parsing.fails <- here;\n\n"sv;
       bool success = false;
-      leaf::try_handle_all(
-        [&]() -> leaf::result<void> {
+      boost::leaf::try_handle_all(
+        [&]() -> boost::leaf::result<void> {
           BOOST_LEAF_CHECK(config::properties::create(config_str));
           return {};
         },
@@ -336,7 +333,7 @@ parsing.fails <- here;\n\n"sv;
           CHECK(error.which == "value");
           success = true;
         },
-        [&]([[maybe_unused]] const leaf::error_info &unmatched) { CHECK(false); });
+        [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
       CHECK(success);
     }
     SUBCASE("walker")
@@ -347,8 +344,8 @@ a.value <- 1;\n\
 b.next <- 'c';\n\
 b.value <- 'string';\n\
 c.next <- ['a', 'b'];\n\n"sv;
-      leaf::try_handle_all(
-        [&]() -> leaf::result<void> {
+      boost::leaf::try_handle_all(
+        [&]() -> boost::leaf::result<void> {
           const auto result = BOOST_LEAF_TRYX(config::properties::create(config_str));
           const auto a = result["a"_hs];
           CHECK(a);
@@ -370,7 +367,7 @@ c.next <- ['a', 'b'];\n\n"sv;
 
           return {};
         },
-        [&]([[maybe_unused]] const leaf::error_info &unmatched) { CHECK(false); });
+        [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
     }
   }
 }

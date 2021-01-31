@@ -98,6 +98,8 @@ public:
     decltype(continuation(timestamp, std::forward<args_types>(args)...)) result {};
     decltype(last_bucket) current_bucket = static_cast<decltype(last_bucket)>(timestamp.time_since_epoch().count() >> timestamp_to_bucket_rshift);
 
+    assert(((value - threshold) == static_cast<value_type>(value - threshold)) && ((value + threshold) == static_cast<value_type>(value + threshold)));
+
     if(LIKELY((current_bucket - last_bucket) <= nb_buckets))
     {
       for(; last_bucket < current_bucket; ++last_bucket)
@@ -111,8 +113,9 @@ public:
       }
       auto &bucket = bounds[last_bucket & (nb_buckets - 1)];
       const auto &[last_lower, last_upper] = bucket;
-      bucket = current_bucket == last_bucket ? std::tuple(std::max(last_lower, value - threshold), std::min(last_upper, value + threshold))
-                                             : std::tuple(value - threshold, value + threshold);
+      const auto [lower, upper] = std::tuple(static_cast<value_type>(value - threshold), static_cast<value_type>(value + threshold));
+      bucket = current_bucket == last_bucket ? std::tuple(std::max(last_lower, lower), std::min(last_upper, upper))
+                                             : std::tuple(lower, upper);
     }
     else
     {
@@ -140,11 +143,12 @@ struct fmt::formatter<move_trigger<value_type>, char> : default_formatter<move_t
 {
 };
 
-template<typename value_type, typename base_type, typename tick_size_type, typename normalized_value_type = std::uint16_t>
+template<typename value_type, typename base_integral_type, typename tick_size_ratio_type, typename normalized_value_type = std::uint16_t>
 class normalized_move_trigger
 {
 public:
   static constexpr auto nb_buckets = std::hardware_destructive_interference_size / sizeof(value_type) / 2;
+  static constexpr auto inv_tick = static_cast<value_type>(tick_size_ratio_type::den) / tick_size_ratio_type::num;
 
   move_trigger<normalized_value_type, nb_buckets> upstream;
 
@@ -152,6 +156,8 @@ public:
     upstream(normalize(initial_value), normalize_difference(threshold), period)
   {
   }
+
+  constexpr auto actual_period() const noexcept { return upstream.actual_period(); }
 
   void reset(const value_type &initial_value) noexcept { upstream.reset(normalize(initial_value)); }
 
@@ -163,8 +169,8 @@ public:
     return upstream(continuation, timestamp, normalize(value), std::forward<args_types>(args)...);
   }
 
-  static constexpr normalized_value_type normalize_difference(const value_type &value) noexcept { return value / tick_size_type::value; }
-  static constexpr normalized_value_type normalize(const value_type &value) noexcept { return normalize_difference(value - base_type::value); }
+  static constexpr normalized_value_type normalize_difference(const value_type &value) noexcept { return value * inv_tick; }
+  static constexpr normalized_value_type normalize(const value_type &value) noexcept { return normalize_difference(value - base_integral_type::value); }
 
   static_assert(sizeof(upstream) <= std::hardware_destructive_interference_size);
 };
@@ -265,26 +271,26 @@ TEST_SUITE("trigger")
     CHECK(trigger(continuation, timestamp, 14));
   }
 
-  TEST_CASE_TEMPLATE("move_trigger", T, move_trigger<int>, reference_implementation::move_trigger<int>)
+  TEST_CASE_TEMPLATE("move_trigger", T, move_trigger<float>, normalized_move_trigger<float, std::integral_constant<int, 8>, std::ratio<5, 10>>, reference_implementation::move_trigger<float>)
   {
-    T trigger(10, 2, 10ms);
+    T trigger(10.0, 1.0, 10ms);
 
     SUBCASE("inside_period")
     {
       auto timestamp = clock::epoch();
-      CHECK(!trigger(continuation, timestamp, 9));
+      CHECK(!trigger(continuation, timestamp, 9.5));
       timestamp += 1ms;
-      CHECK(!trigger(continuation, timestamp, 10));
+      CHECK(!trigger(continuation, timestamp, 10.0));
       timestamp += 1ms;
-      CHECK(!trigger(continuation, timestamp, 11));
+      CHECK(!trigger(continuation, timestamp, 10.5));
       timestamp += 1ms;
-      CHECK(trigger(continuation, timestamp, 12));
+      CHECK(trigger(continuation, timestamp, 11.0));
       timestamp += 1ms;
-      CHECK(trigger(continuation, timestamp, 8));
+      CHECK(trigger(continuation, timestamp, 9.0));
       timestamp += trigger.actual_period();
-      CHECK(!trigger(continuation, timestamp, 12));
+      CHECK(!trigger(continuation, timestamp, 11.0));
       timestamp += trigger.actual_period() + 1ms;
-      CHECK(!trigger(continuation, timestamp, 8));
+      CHECK(!trigger(continuation, timestamp, 9.0));
     }
   }
 
