@@ -65,8 +65,8 @@ async def main(argv=None):
 
     loop = asyncio.get_running_loop()
 
-    config = walker(parse((Path(__file__).parent / "integration.conf").read_text()), "ppf")
-    async with randori(config) as (uke, tori):
+    config = walker(parse((Path(__file__).parent / 'integration.conf').read_text()), "ppf")
+    async with randori(config) as uke, tori:
         await scenario_0(uke, tori)
 
 

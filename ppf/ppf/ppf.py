@@ -34,7 +34,6 @@ class Fairy:
 {name}.datagram <- {encode(datagram)};
 '''
 
-
     async def setup(self, *, loop=None):
         self.process = await asyncio.create_subprocess_shell(
             str(self.__config.executable),
@@ -60,7 +59,7 @@ send.fd <- {down_fd};"""
 
         if subscription := self.__config.subscription:
             def print_object(object_):
-                self.process.stdin.write(
+                self.process.stdin.write()
             subscription.walk(print_object)
             self.process.stdin.write(self._get_payload(str(subscription), subscription.instrument))
             self.process.stdin.write(
@@ -76,30 +75,21 @@ config.subscription <- {subscription}';
 
     async def send_payload(self, instrument):
         self.process.stdin.write(
-            write_config(
-                {
-                    "entrypoint",
-                    {
-                        "type": "payload",
-                        "instrument": instrument,
-                        "stream_payload": stream_payload,
-                        "datagram_payload": datagram_payload,
-                    },
-                }
-            ).encode()
-            + b"\n\n"
-        )
+            """\
+entrypoint.type <- 'payload';""")
+        self.process.stdin.write(self._get_payload('entrypoint', instrument))
         await self.process.stdin.drain()
 
     async def send_subscribe(self, instrument: int, **kwargs):
         self.process.stdin.write(
+            """\
+entrypoint.type <- 'subscribe';""")
+        self.process.stdin.write(self._get_payload('entrypoint', instrument))
+        await self.process.stdin.drain()
+        self.process.stdin.write(
             write_config(
                 {
                     "entrypoint": {
-                        "type": "subscribe",
-                        "instrument": instrument,
-                        "stream_payload": stream_payload,
-                        "datagram_payload": datagram_payload,
                         **kwargs,
                     }
                 }
