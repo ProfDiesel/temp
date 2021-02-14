@@ -5,6 +5,7 @@
 #include <boilerplate/outcome.hpp>
 #include <boilerplate/pointers.hpp>
 
+#include <asio/awaitable.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/buffer.hpp>
 
@@ -56,17 +57,21 @@ struct server
 
   void reset(instrument_id_type instrument, instrument_state state = {}) { states[instrument] = {state, state.updates}; }
 
-  asio::awaitable<void> update(std::vector<message> &messages)
+  asio::awaitable<void> update(const std::vector<std::tuple<instrument_id_type, instrument_state>> &states)
   {
-    std::vector<char> buffer;
-    for(auto &&message: messages)
+    std::aligned_storage_t<detail::packet_max_size, alignof(detail::packet)> storage;
+    auto packet = new (&storage) detail::packet {static_cast<std::uint8_t>(states.size()), {}};
+    asio::mutable_buffer buffer(&packet->message, sizeof(storage) - offsetof(detail::packet, message));
+
+    for(auto &&[instrument, new_state]: states)
     {
-      auto &[state, accumulated_updates] = states[message.instrument.value()];
-      update_state(state, message);
-      state.sequence_id = message.sequence_id.value();
-      visit_state([](auto field, auto value) { /*buffer.encode_value()*/ }, state);
+      auto &[state, accumulated_updates] = this->states[instrument];
+      visit_state([&state=state](auto field, auto value) { update_state(state, field, value); }, new_state);
+      state.sequence_id = new_state.sequence_id;
+      buffer += detail::encode_message(instrument, state, buffer);
       accumulated_updates |= std::exchange(state.updates, {});
     }
+
     co_await updates_socket.async_send_to(asio::buffer(buffer), updates_endpoint, asio::use_awaitable);
   }
 
@@ -82,22 +87,19 @@ struct server
 
   asio::awaitable<out::result<void>> accept() noexcept
   {
-    for(;;)
-    {
-      asio::ip::tcp::socket socket(service);
-      OUTCOME_CO_TRY(co_await snapshot_acceptor.async_accept(socket, as_result(asio::use_awaitable)));
-      auto session_ptr = std::make_shared<session>(std::move(socket), boilerplate::make_strict_not_null(this));
-      asio::co_spawn(service, [&]() noexcept -> asio::awaitable<void> { 
-          auto result = co_await (*session_ptr)();
+    asio::ip::tcp::socket socket(service);
+    OUTCOME_CO_TRY(co_await snapshot_acceptor.async_accept(socket, as_result(asio::use_awaitable)));
+    auto session_ptr = std::make_shared<session>(std::move(socket), boilerplate::make_strict_not_null(this));
+    asio::co_spawn(service, [&]() noexcept -> asio::awaitable<void> { 
+      auto result = co_await (*session_ptr)();
+      if(!result)
+      {
+        using namespace logger::literals;
+        // logger->log(logger::critical, "{}."_format, result.assume_error());
+      }
+    }, asio::detached);
 
-        if(!result)
-        {
-          using namespace logger::literals;
-          // logger->log(logger::critical, "{}."_format, result.assume_error());
-        }
-
-          }, asio::detached);
-    }
+    co_return out::success();
   }
 };
 

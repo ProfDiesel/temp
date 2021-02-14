@@ -6,6 +6,7 @@
 #include <boilerplate/chrono.hpp>
 #include <boilerplate/outcome.hpp>
 
+#include <asio/awaitable.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read.hpp>
 #include <asio/use_awaitable.hpp>
@@ -18,6 +19,7 @@
 
 #include <std_function/function.h>
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <cstdint>
@@ -43,20 +45,19 @@ struct snapshot_request final
 static_assert(sizeof(snapshot_request) == 2); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
 
+constexpr std::size_t packet_max_size = 65'536;
 constexpr std::size_t message_max_size = sizeof(message) + (static_cast<int>(field_index::_count) - 1) * sizeof(update);
 
 inline auto encode_message(instrument_id_type instrument, const instrument_state &state, const asio::mutable_buffer &buffer) noexcept
 {
-  using struct_update = struct update;
-  using struct_message = struct message;
   const auto nb_updates = static_cast<uint8_t>(state.updates.count());
-  const auto needed_bytes = sizeof(struct_message) + sizeof(update) * (nb_updates - 1);
+  const auto needed_bytes = sizeof(message) + sizeof(update) * (nb_updates - 1);
   if(buffer.size() >= needed_bytes) 
   {
-  auto *message = new(buffer.data()) struct_message {.instrument = endian::big_uint16_buf_t(instrument),
+  auto *message = new(buffer.data()) (struct message) {.instrument = endian::big_uint16_buf_t(instrument),
                                               .sequence_id = endian::big_uint32_buf_t(state.sequence_id),
                                               .nb_updates = nb_updates};
-  visit_state([update = std::ref(message->update)]( auto field, auto value) mutable { detail::encode_update(field, value, update); }, state);
+  visit_state([&update = message->update]( auto field, auto value) mutable { update = encode_update(field, value); }, state);
   }
 
   return needed_bytes;
@@ -68,24 +69,21 @@ inline asio::awaitable<out::result<instrument_state>> request_snapshot(asio::ip:
   if(OUTCOME_CO_TRYX(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), as_result(asio::use_awaitable))) != sizeof(request))
     co_return out::failure(std::make_error_code(std::errc::io_error)); // TODO
 
-  std::aligned_storage_t<message_max_size, alignof(message)> buffer;
-  auto *current_message = reinterpret_cast<message *>(&buffer);
-  if(OUTCOME_CO_TRYX(co_await asio::async_read(socket, asio::buffer(current_message, sizeof(message)), as_result(asio::use_awaitable))) != sizeof(message))
+  std::aligned_storage_t<message_max_size, alignof(struct message)> buffer;
+  auto *const message = reinterpret_cast<struct message *>(&buffer);
+  if(OUTCOME_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message, sizeof(struct message)), as_result(asio::use_awaitable))) != sizeof(struct message))
     co_return out::failure(std::make_error_code(std::errc::io_error)); // TODO
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  const auto remaining = (current_message->nb_updates - 1) * sizeof(update);
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  if(OUTCOME_CO_TRYX(co_await asio::async_read(socket, asio::buffer(current_message + 1, remaining), as_result(asio::use_awaitable))) != remaining)
+  const auto remaining = (message->nb_updates - 1) * sizeof(update); // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  if(OUTCOME_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message + 1, remaining), as_result(asio::use_awaitable))) != remaining) // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     co_return out::failure(std::make_error_code(std::errc::io_error)); // TODO
 
-  instrument_state state {.sequence_id = current_message->sequence_id.value()};
-  update_state(state, *current_message);
+  instrument_state state {.sequence_id = message->sequence_id.value()};
+  update_state(state, *message);
 
   co_return state;
 }
 
-template<typename message_header_handler_type, typename update_handler_type>
-[[using gnu : always_inline, flatten, hot]] void decode(message_header_handler_type &&message_header_handler, update_handler_type &&update_handler, const clock::time_point &timestamp,
+[[using gnu : always_inline, flatten, hot]] void decode(auto &&message_header_handler, auto &&update_handler, const network_clock::time_point &timestamp,
                     asio::const_buffer &&buffer) noexcept
 {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -115,31 +113,30 @@ template<typename message_header_handler_type, typename update_handler_type>
   }
 }
 
-template<typename update_sanitizer_type>
-asio::mutable_buffer sanitize(update_sanitizer_type &&update_sanitizer, asio::mutable_buffer &&buffer) noexcept
+std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer) noexcept
 {
   if(buffer.size() < sizeof(packet))
-    return {};
+    return 0;
 
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  auto *const buffer_end = reinterpret_cast<std::byte *>(buffer.data()) + buffer.size();
+  auto *const buffer_begin = reinterpret_cast<std::byte *>(buffer.data()),
+       *const buffer_end = buffer_begin + buffer.size();
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-  auto *packet = reinterpret_cast<struct packet *>(buffer.data());
+  auto *const packet = reinterpret_cast<struct packet *>(buffer_begin);
   const auto advance = [](message *&message)
   {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    return message
-           = reinterpret_cast<struct message *>(reinterpret_cast<std::byte *>(message) + sizeof(message) + message->nb_updates * sizeof(update));
+    return message = reinterpret_cast<struct message *>(reinterpret_cast<std::byte *>(message) + sizeof(message) + message->nb_updates * sizeof(update));
   };
 
-  std::byte *current = nullptr;
-  for(auto [i, message] = std::tuple {0, &packet->message}; i < packet->nb_messages; ++i, current = advance(message))
+  const std::byte *current = nullptr;
+  for(auto [i, message] = std::tuple {0, &packet->message}; i < packet->nb_messages; ++i, message = advance(message))
   {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     if(current = reinterpret_cast<std::byte *>(message); current > buffer_end)
     {
       packet->nb_messages = i;
-      return asio::buffer(current, static_cast<std::byte*>(buffer.data()) + buffer.size() - current);
+      return current - buffer_begin;
     }
 
     for(auto [j, update] = std::tuple {0, &message->update}; j < message->nb_updates; ++j, ++update)
@@ -148,17 +145,16 @@ asio::mutable_buffer sanitize(update_sanitizer_type &&update_sanitizer, asio::mu
       if(current = reinterpret_cast<std::byte *>(update); current > buffer_end)
       {
         message->nb_updates = j;
-        return asio::buffer(current, static_cast<std::byte*>(buffer.data()) + buffer.size() - current);
+        return current - buffer_begin;
       }
 
       if(std::find(all_fields.begin(), all_fields.end(), static_cast<feed::field>(update->field)) == all_fields.end())
         update->field = static_cast<std::uint8_t>(all_fields[update->field % all_fields.size()]);
-      update->value = visit_update([&](auto field, auto value) {
-        return encode_value(update_sanitizer(field, value)); }, *update);
+      *update = visit_update([&](auto field, auto value) { return encode_update(field, value_sanitizer(field, value)); }, *update);
     }
   }
 
-  return asio::buffer(current, static_cast<std::byte*>(buffer.data()) + buffer.size() - current);
+  return current - buffer_begin;
 }
 
 
@@ -176,11 +172,7 @@ struct alignas(feed::detail::packet) aligned_byte_array : public std::array<std:
 {
 };
 
-template<typename... args_types>
-constexpr aligned_byte_array<sizeof...(args_types)> make_packet(args_types &&...args) noexcept
-{
-  return {std::byte(std::forward<args_types>(args))...};
-}
+constexpr auto make_packet(auto &&...args) noexcept -> aligned_byte_array<sizeof...(args)> { return {std::byte(std::forward<decltype(args)>(args))...}; }
 
 constexpr auto packet_0 = make_packet(0x01,                   // packet.nb_messages
                                       0x00, 0x01,             // message0.instrument
@@ -203,7 +195,7 @@ TEST_SUITE("feed_binary")
   TEST_CASE("decode")
   {
     //  decode([](feed:instrument_instrument_id_type instrument, feed::sequence_id_type sequence_id){ CHECK(instrument == 1); CHECK(sequence_id == 0); return 0;}, 
-    //        [](clock::time_point timestamp, const feed::update &update, int instrument_closure){ CHECK(timestamp == 0); CHECK(instrument_closure == 0); }, 0, packet_0); 
+    //        [](network_clock::time_point timestamp, const feed::update &update, int instrument_closure){ CHECK(timestamp == 0); CHECK(instrument_closure == 0); }, 0, packet_0); 
   }
 }
 

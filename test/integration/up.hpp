@@ -1,34 +1,39 @@
 #include "feed/feed_structures.hpp"
-#include "boilerplate/pointers.hpp"
 
-#include <asio/io_context.hpp>
+#include <memory>
+#include <string_view>
+#include <vector>
 
-#include <mutex>
-#include <variant>
+struct up_server;
 
-namespace feed
+struct up_update_state
 {
-
-class wrapped_server : public std::enable_shared_from_this<wrapped_server>
-{
-public:
-  // serves snapshot requests
-  auto run_forever()
-  {
-    auto thread = std::make_shared<std::thread>([thiz_ = shared_from_this()]() { thiz_->context->run(); });
-    // lower the priority of the thread
-    return thread;
-  }
-
-  // sync publication
-  void push_update(const std::vector<boilerplate::observer_ptr<instrument_state>> &states) { std::lock_guard _(mutex); }
-
-private:
-  std::mutex mutex;
-  std::shared_ptr<asio::io_context> context;
+  feed::instrument_id_type instrument;
+  feed::instrument_state state;
 };
 
-inline auto make_wrapped_server() { return std::make_shared<wrapped_server>(); }
+extern "C" up_server *up_server_new(const char *snapshot_address, const char *updates_address);
+extern "C" void up_server_free(up_server *self);
+extern "C" std::size_t up_server_poll(up_server *self);
+extern "C" void up_server_push_update(up_server *self, const up_update_state *states, std::size_t nb_states);
 
-} // namespace feed
+// Hide coroutine code to Cling
+namespace up 
+{
 
+struct deleter
+{
+  void operator()(up_server *ptr) noexcept { up_server_free(ptr); }
+};
+
+class server
+{
+public:
+  server(std::string_view snapshot_address, std::string_view updates_address) noexcept : self(up_server_new(snapshot_address.data(), updates_address.data())) {}
+  std::size_t poll() noexcept { return up_server_poll(self.get()); }
+  void push_update(const std::vector<up_update_state> &states) noexcept { up_server_push_update(self.get(), states.data(), states.size()); }
+
+private:
+    std::unique_ptr<up_server, deleter> self;
+};
+}

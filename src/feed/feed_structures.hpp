@@ -2,7 +2,6 @@
 
 #include "feed_fields.hpp"
 
-#include <boilerplate/boilerplate.hpp>
 #if !defined(LEAN_AND_MEAN)
 #include <boilerplate/units.hpp>
 #endif // !defined(LEAN_AND_MEAN)
@@ -127,15 +126,31 @@ inline price_t read_value<price_t>(const struct update &update) noexcept
 #endif // !defined(LEAN_AND_MEAN) && !defined(__clang__)
 }
 
+} // namespace detail
+
 template<typename value_type>
-void encode_update(enum field field, const value_type &value, struct update &update) noexcept
+inline update encode_update(enum field field, const value_type &value) noexcept
 {
-  using struct_update = struct update;
-  new(&update) struct_update {.field = static_cast<uint8_t>(field), .value = endian::native_to_big(value)};
+  switch(field)
+  {
+    // clang-format off
+#define HANDLE_FIELD(r, _, elem) \
+  case field::BOOST_PP_TUPLE_ELEM(0, elem): \
+    return encode_update(field, static_cast<BOOST_PP_TUPLE_ELEM(2, elem)>(value));
+  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
+#undef HANDLE_FIELD
+    // clang-format on
+  }
 }
 
 template<>
-inline void encode_update(enum field field, const price_t &value, struct update &update) noexcept
+update encode_update(enum field field, const quantity_t &value) noexcept
+{
+  return update {.field = static_cast<uint8_t>(field), .value = endian::native_to_big(value)};
+}
+
+template<>
+inline update encode_update(enum field field, const price_t &value) noexcept
 {
   std::uint32_t result;
 #if defined(LEAN_AND_MEAN)
@@ -145,10 +160,8 @@ inline void encode_update(enum field field, const price_t &value, struct update 
 #else  // defined(__clang__)
   reinterpret_cast<std::decimal::decimal32::__decfloat32 &>(result) = const_cast<std::decimal::decimal32 &>(value.get()).__getval();
 #endif // defined(__clang__)
-  encode_update(field, result, update);
+  return update {.field = static_cast<uint8_t>(field), .value = endian::native_to_big(result)};
 }
-
-} // namespace detail
 
 template<typename continuation_type>
 [[using gnu : always_inline, flatten, hot]] auto visit_update(continuation_type &&continuation, const struct update &update)

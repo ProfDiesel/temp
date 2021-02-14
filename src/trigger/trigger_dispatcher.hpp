@@ -1,9 +1,9 @@
 #pragma once
 
+#include <boilerplate/boilerplate.hpp>
 #include <boilerplate/chrono.hpp>
 #include <boilerplate/piped_continuation.hpp>
 #include <boilerplate/pointers.hpp>
-#include <boilerplate/type_traits.hpp>
 
 #include "../common/config_reader.hpp"
 #include "../common/walker.hpp"
@@ -13,8 +13,6 @@
 
 #include <tuple>
 
-namespace b = boilerplate;
-
 template<typename trigger_map_type>
 struct trigger_dispatcher
 {
@@ -23,26 +21,25 @@ struct trigger_dispatcher
   trigger_dispatcher() noexcept = default;
   explicit trigger_dispatcher(trigger_map_type &&triggers) noexcept: triggers(std::move(triggers)) {}
 
-  template<typename continuation_type, typename... args_types>
-  bool operator()(continuation_type &continuation, const clock::time_point &timestamp, const feed::update &update, args_types &&...args) noexcept
+  bool operator()(auto &continuation, const auto &timestamp, const feed::update &update, auto &&...args) noexcept
   {
     return feed::visit_update(
       [&](auto field, const auto &value) { return (*this)(continuation, timestamp, field, value, std::forward<decltype(args)>(args)...); }, update);
   }
 
-  template<typename continuation_type, typename field_constant_type, typename value_type, typename... args_types>
-  bool operator()(continuation_type &continuation, const clock::time_point &timestamp, field_constant_type field, const value_type &value,
+  template<typename continuation_type, typename field_constant_type, typename value_type, typename timestamp_type, typename... args_types>
+  bool operator()(continuation_type &continuation, const timestamp_type &timestamp, field_constant_type field, const value_type &value,
                   args_types &&...args) noexcept requires std::is_same_v<typename field_constant_type::value_type, feed::field>
   {
     const auto apply = [&](auto &trigger_map_value)
     {
       auto &[fields, trigger] = trigger_map_value;
-      if constexpr(b::tuple_contains_type_v<decltype(field), decltype(fields)>)
-        return trigger(continuation, timestamp, value, std::forward<args_types>(args)..., std::true_type());
+      if constexpr(boilerplate::tuple_contains_type_v<decltype(field), decltype(fields)>)
+        return trigger(continuation, timestamp, value, std::forward<decltype(args)>(args)..., std::true_type());
       else
         return false;
     };
-    return std::apply([&](auto &...triggers) { return LIKELY((apply(triggers) || ...)) || continuation(timestamp, std::forward<args_types>(args)..., std::false_type()); },
+    return std::apply([&](auto &...triggers) { return LIKELY((apply(triggers) || ...)) || continuation(timestamp, std::forward<decltype(args)>(args)..., std::false_type()); },
                       triggers);
   }
 
@@ -51,7 +48,7 @@ struct trigger_dispatcher
     const auto apply = [&](auto field, auto &trigger_map_value, const auto &value)
     {
       auto &[fields, trigger] = trigger_map_value;
-      if constexpr(b::tuple_contains_type_v<decltype(field), decltype(fields)>)
+      if constexpr(boilerplate::tuple_contains_type_v<decltype(field), decltype(fields)>)
         trigger.reset(value);
     };
     feed::visit_state([&](auto field, const auto &value) { std::apply([&](auto &...triggers) { (apply(field, triggers, value), ...); }, triggers); },
@@ -68,11 +65,12 @@ struct polymorphic_trigger_dispatcher
 {
   using instrument_closure = void *;
 
-  using continuation_type = func::function<bool(const clock::time_point &, instrument_closure, bool)>;
+  using clock_type = std::chrono::steady_clock;
+  using continuation_type = func::function<bool(const clock_type::time_point &, instrument_closure, bool)>;
 
   std::aligned_storage_t<16> storage = {};
 
-  /*const*/ func::function<bool(void *, const continuation_type &, const clock::time_point &, const feed::update &, instrument_closure)> call_thunk
+  /*const*/ func::function<bool(void *, const continuation_type &, const clock_type::time_point &, const feed::update &, instrument_closure)> call_thunk
     = []([[maybe_unused]] auto...) { return false; };
   /*const*/ func::function<void(void *, const feed::instrument_state &)> reset_thunk = []([[maybe_unused]] auto...) {};
   /*const*/ func::function<void(void *)> warm_up_thunk = []([[maybe_unused]] auto...) {};
@@ -82,7 +80,7 @@ struct polymorphic_trigger_dispatcher
   make(args_types &&...args) noexcept /*requires(sizeof(upstream_dispatcher_type) <= sizeof(std::declval<polymorphic_trigger_dispatcher>().storage)) */
   {
     auto result = polymorphic_trigger_dispatcher {
-      .call_thunk = [](void *thiz, const continuation_type &continuation, const clock::time_point &timestamp, const feed::update &update,
+      .call_thunk = [](void *thiz, const continuation_type &continuation, const clock_type::time_point &timestamp, const feed::update &update,
                        instrument_closure instrument) -> bool
       {
         auto blank_dispatcher = [&](const auto &timestamp, auto closure, auto blank) -> bool { return continuation(timestamp, closure, blank()); };
@@ -94,7 +92,7 @@ struct polymorphic_trigger_dispatcher
     return result;
   }
 
-  bool operator()(const continuation_type &continuation, const clock::time_point &timestamp, const feed::update &update, instrument_closure instrument) noexcept
+  bool operator()(const continuation_type &continuation, const clock_type::time_point &timestamp, const feed::update &update, instrument_closure instrument) noexcept
   {
     return call_thunk(&storage, continuation, timestamp, update, instrument);
   }
@@ -108,7 +106,7 @@ struct invalid_trigger_config
 };
 
 template<typename continuation_type>
-auto with_trigger(const config::properties::walker &config, boilerplate::not_null_observer_ptr<logger::logger> logger,
+auto with_trigger(const config::properties::walker &config, boilerplate::observer_ptr<logger::logger> logger,
                   continuation_type &&continuation) noexcept
 {
   using namespace config::literals;
@@ -175,7 +173,8 @@ auto with_trigger(const config::properties::walker &config, boilerplate::not_nul
     if constexpr(std::tuple_size_v<std::decay_t<decltype(triggers)>> != 0)
     {
 #if !defined(LEAN_AND_MEAN)
-      logger->log(logger::info, triggers);
+      if(logger)
+        logger->log(logger::info, triggers);
 #endif // !defined(LEAN_AND_MEAN)
       return continuation(trigger_dispatcher<std::decay_t<decltype(triggers)>>(std::forward<decltype(triggers)>(triggers)));
     }
@@ -193,7 +192,7 @@ auto with_trigger(const config::properties::walker &config, boilerplate::not_nul
 }
 
 
-inline auto make_polymorphic_trigger(const config::properties::walker &config, boilerplate::not_null_observer_ptr<logger::logger> logger) noexcept
+inline auto make_polymorphic_trigger(const config::properties::walker &config, boilerplate::observer_ptr<logger::logger> logger = nullptr) noexcept
 {
   return with_trigger(config, logger, [&](auto &&trigger_dispatcher) -> boost::leaf::result<polymorphic_trigger_dispatcher> { return polymorphic_trigger_dispatcher::make<std::decay_t<decltype(trigger_dispatcher)>>(trigger_dispatcher); })();
 }
@@ -214,17 +213,12 @@ entrypoint.instant_threshold <- 2;\n\
 entrypoint.threshold <- 3;\n\
 entrypoint.period <- 10;"sv;
 
-  logger::printer printer;
-  logger::logger logger(boilerplate::make_strict_not_null(&printer));
-
   boost::leaf::try_handle_all(
       [&]() -> boost::leaf::result<void> {
         const auto props = BOOST_LEAF_TRYX(config::properties::create(config));
-        auto trigger = BOOST_LEAF_TRYX(make_polymorphic_trigger(props["entrypoint"_hs], boilerplate::make_strict_not_null(&logger)));
-        feed::update update;
+        auto trigger = BOOST_LEAF_TRYX(make_polymorphic_trigger(props["entrypoint"_hs]));
         auto send = [&](std::int64_t timestamp, feed::price_t price) {
-          feed::detail::encode_update(feed::field::b0, price, update);
-          return trigger([](clock::time_point timestamp, void *closure, bool for_real){ return for_real; }, clock::time_point(clock::duration(timestamp)), update, nullptr);
+          return trigger([](std::chrono::steady_clock::time_point timestamp, void *closure, bool for_real){ return for_real; }, std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(timestamp)), feed::encode_update(feed::field::b0, price), nullptr);
         };
         CHECK(!send(10, 0));
         CHECK(send(13, 20));

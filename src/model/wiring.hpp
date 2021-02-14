@@ -8,7 +8,7 @@
 #include "automata.hpp"
 #include "payload.hpp"
 
-#include <asio/buffer.hpp>
+
 #include <boilerplate/chrono.hpp>
 #include <boilerplate/leaf.hpp>
 #include <boilerplate/logger.hpp>
@@ -17,8 +17,12 @@
 #include <boilerplate/pointers.hpp>
 
 #include <asio/awaitable.hpp>
+#include <asio/buffer.hpp>
 #include <asio/co_spawn.hpp>
 #include <asio/connect.hpp>
+#if defined(BACKTEST_HARNESS)
+#include <asio/defer.hpp>
+#endif // defined(BACKTEST_HARNESS)
 #include <asio/detached.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
@@ -48,22 +52,22 @@
 namespace backtest
 {
 using snapshot_requester_type = std::function<asio::awaitable<out::result<feed::instrument_state>>(feed::instrument_id_type)>;
-using update_source_type = std::function<boost::leaf::result<void>(std::function<void(clock::time_point, const asio::const_buffer &)>)>;
+using update_source_type = std::function<boost::leaf::result<void>(std::function<void(network_clock::time_point, const asio::const_buffer &)>)>;
 using send_stream_type = std::function<void(const asio::const_buffer &)>;
 
 snapshot_requester_type make_snapshot_requester();
 update_source_type make_update_source();
 send_stream_type make_stream_send();
+
+void delay(std::chrono::steady_clock::duration, std::function<void(void)>);
 } // namespace backtest
 #endif // defined(BACKTEST_HARNESS)
 
 
-template<typename command_input_stream_type, typename command_output_stream_type, typename continuation_type, typename dynamic_subscription_type,
-         typename trigger_type, typename handle_packet_loss_type, typename send_datagram_type>
-[[using gnu: flatten]] auto run(const config::properties::walker &config, asio::io_context &service, command_input_stream_type &command_input,
-         command_output_stream_type &command_output, boilerplate::not_null_observer_ptr<logger::logger> logger, continuation_type &&continuation,
-         dynamic_subscription_type dynamic_subscription, trigger_type &&trigger, handle_packet_loss_type handle_packet_loss,
-         send_datagram_type send_datagram) noexcept -> boost::leaf::result<void>
+[[using gnu: flatten]] auto run(const config::properties::walker &config, asio::io_context &service, auto &command_input,
+         auto &command_output, boilerplate::not_null_observer_ptr<logger::logger> logger, auto &&continuation,
+         auto dynamic_subscription, auto &&trigger, auto handle_packet_loss,
+         auto send_datagram) noexcept -> boost::leaf::result<void>
 {
   using namespace config::literals;
 
@@ -257,7 +261,7 @@ template<typename command_input_stream_type, typename command_output_stream_type
     };
 
     //hof::partial(feed::decode)(decode_header);
-    [&decode_header](auto &&continuation, const clock::time_point &timestamp, const asio::const_buffer &buffer) noexcept {
+    [&decode_header](auto &&continuation, const network_clock::time_point &timestamp, const asio::const_buffer &buffer) noexcept {
       return feed::decode(decode_header, continuation, timestamp, buffer);
     };
   });
@@ -267,7 +271,7 @@ template<typename command_input_stream_type, typename command_output_stream_type
   // TRIGGER
   //
 
-  const auto trigger_ = [](auto &&continuation, const clock::time_point &feed_timestamp, feed::update &&update, typename automata_type::automaton *automaton) noexcept {
+  const auto trigger_ = [](auto &&continuation, const network_clock::time_point &feed_timestamp, feed::update &&update, typename automata_type::automaton *automaton) noexcept {
     return (automaton->trigger)(continuation, feed_timestamp, std::forward<decltype(update)>(update), automaton);
   };
 
@@ -298,11 +302,11 @@ template<typename command_input_stream_type, typename command_output_stream_type
 #endif // defined(BACKTEST_HARNESS)
 
     const bool disposable_payload = send["disposable_payload"_hs];
-    const clock::duration cooldown = from_walker(send["cooldown"_hs]);
+    const std::chrono::steady_clock::duration cooldown = from_walker(send["cooldown"_hs]);
 
-    [&, send_socket = std::move(send_socket), stream_send = std::move(stream_send), disposable_payload, cooldown](const clock::time_point &feed_timestamp, typename automata_type::automaton *instrument,
+    [&, send_socket = std::move(send_socket), stream_send = std::move(stream_send), disposable_payload, cooldown](const network_clock::time_point &feed_timestamp, typename automata_type::automaton *instrument,
                                                                                                                   auto send_for_real) mutable noexcept {
-      clock::time_point send_timestamp {};
+      network_clock::time_point send_timestamp {};
       if constexpr(send_datagram())
       {
         if constexpr(!send_for_real())
@@ -316,7 +320,7 @@ template<typename command_input_stream_type, typename command_output_stream_type
       stream_send(asio::const_buffer(instrument->payload.stream_payload));
 
       using namespace logger::literals;
-      logger->log(logger::info, "Sent {} {} {}"_format, instrument->instrument_id, to_timespec(feed_timestamp), to_timespec(send_timestamp));
+      logger->log(logger::info, "Sent instrument:{} in:{} out:{}"_format, instrument->instrument_id, to_timespec(feed_timestamp), to_timespec(send_timestamp));
 
       if(disposable_payload)
       {
@@ -335,7 +339,13 @@ request.instrument = {}\n\n");
         });
       }
 
-      automata.enter_cooldown(service, cooldown, instrument);
+      auto leave_cooldown_token = automata.enter_cooldown(instrument);
+      // whatever the value of error_code, get out of the cooldown state
+#if defined(BACKTEST_HARNESS)
+      backtest::delay(cooldown, [=, &service]() { asio::defer(service, leave_cooldown_token); });
+#else // defined(BACKTEST_HARNESS)
+      asio::steady_timer(service, cooldown).async_wait([=]([[maybe_unused]] auto error_code) { leave_cooldown_token(); });
+#endif // defined(BACKTEST_HARNESS)
       return true;
     };
   });
@@ -345,7 +355,7 @@ request.instrument = {}\n\n");
   // WARM-UP
   //
 
-  const auto warm_up = [&]() noexcept { automata.warm_up([&](typename automata_type::automaton *automaton) { send_(clock::time_point {}, automaton, std::false_type {}); }); };
+  const auto warm_up = [&]() noexcept { automata.warm_up([&](typename automata_type::automaton *automaton) { send_(network_clock::time_point {}, automaton, std::false_type {}); }); };
 
   //
   //
@@ -368,10 +378,9 @@ request.instrument = {}\n\n");
 }
 
 
-template<typename continuation_type, typename command_input_stream_type, typename command_output_stream_type>
-auto with_trigger_path(const config::properties::walker &config, asio::io_context &service, command_input_stream_type &command_input,
-                       command_output_stream_type &command_output, boilerplate::not_null_observer_ptr<logger::logger> logger,
-                       continuation_type continuation) noexcept
+auto with_trigger_path(const config::properties::walker &config, asio::io_context &service, auto &command_input,
+                       auto &command_output, boilerplate::not_null_observer_ptr<logger::logger> logger,
+                       auto continuation) noexcept
 {
   using namespace config::literals;
 

@@ -48,16 +48,15 @@ ConditionCallable = Callable[[_ClientConnection, Message, bool], bool]
 
 
 class Down:
-    def __init__(self):
+    async def __init__(self, stream_address: Address, datagram_address: Address, *, loop=None):
         self.connections = []
         self.__awaiting_futures: List[Tuple[ConditionCallable, asyncio.Future]] = []
         self.__connections_by_udp_address: Dict[Address, _ClientConnection] = {}
 
-    async def open(self, stream_address: Address, datagram_address: Address, *, loop=None):
         if not loop:
             loop = asyncio.get_event_loop()
-        self.stream_server = await asyncio.start_server(self.on_new_connection, *stream_address, loop=loop)
-        self.datagram_transport, self.datagram_protocol = await loop.create_datagram_endpoint(lambda: _DatagramBumper(self), local_addr=datagram_address)
+        self.__stream_server = await asyncio.start_server(self.on_new_connection, *stream_address, loop=loop)
+        self.__datagram_transport, self.__datagram_protocol = await loop.create_datagram_endpoint(lambda: _DatagramBumper(self), local_addr=datagram_address)
 
     @staticmethod
     def __decode(data, message_class=Message):

@@ -4,25 +4,29 @@
 
 #include <asio/buffer.hpp>
 
+#include <boost/noncopyable.hpp>
 #include <boost/leaf/result.hpp>
 
 #include <limits>
 #include <random>
-#include <type_traits>
 
 void bad_test() { ::exit(0); }
 void failed_test() { ::abort(); }
 
 namespace fuzz
 {
-struct fd_generator
+
+class generator : public boost::noncopyable
 {
+public:
   using result_type = unsigned int;
 
-  constexpr result_type min() const noexcept { return std::numeric_limits<result_type>::min(); }
-  constexpr result_type max() const noexcept { return std::numeric_limits<result_type>::max(); }
+  explicit generator(std::string_view path = "/dev/urandom") noexcept: fd(::open(path.data(), 0)), is_owner(true) {}
+  explicit generator(int fd, bool is_owner = false) noexcept: fd(fd), is_owner(is_owner) {}
+  ~generator() noexcept { ::close(fd); }
 
-  int fd {};
+  static constexpr result_type min() noexcept { return std::numeric_limits<result_type>::min(); }
+  static constexpr result_type max() noexcept { return std::numeric_limits<result_type>::max(); }
 
   auto operator()() noexcept
   {
@@ -31,21 +35,22 @@ struct fd_generator
       bad_test();
     return result;
   }
+
+  auto fill(const asio::mutable_buffer &buffer) noexcept
+  {
+    const auto nb_read = ::read(fd, buffer.data(), buffer.size());
+    if(nb_read < 0)
+      bad_test();
+    return asio::buffer(buffer.data(), nb_read);
+  }
+
+private:
+  const int fd = STDIN_FILENO; 
+  const bool is_owner = false;
 };
 
-struct update_source
-{
-  std::aligned_storage_t<65'536, alignof(feed::details::packet)> buffer_ {};
-  fd_generator gen {.fd = STDIN_FILENO}; // TODO default to ::open('/dev/urandom') ?
-
-  clock::time_point timestamp {};
-
-  std::vector<feed::instrument_state> states;
-
-  template<typename continuation_type>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation) noexcept
-    -> leaf::result<typename std::invoke_result_t<continuation_type, clock::time_point, asio::const_buffer &&>::value_type>
-  {
+}
+/*
     auto random_duration = [&]() {
       std::uniform_int_distribution<clock::rep> distribution(0, 1'000'000'000);
       return clock::duration {distribution(gen)};
@@ -67,53 +72,4 @@ struct update_source
       std::uniform_int_distribution<std::size_t> distribution;
       return distribution(gen);
     };
-
-    timestamp += random_duration();
-
-    auto result = new(&buffer_) feed::details::packet {.nb_messages = random_size(states.size())};
-    for(auto &&[message_index, message_addr] = {0, &result->message}; message_index < result->nb_messages; ++message_index)
-    {
-      auto instrument = random_size(states.size());
-      auto nb_updates = random_size(5);
-      auto &state = states[instrument];
-
-      for(auto update_index = 0, nb_updates = random_size(5); update_index < nb_updates; ++update_index)
-      {
-        const std::array functions {std::function {[&]() { return feed::details::update_state(state, feed::b0_c {}, random_price()); }},
-                                    std::function {[&]() { return feed::details::update_state(state, feed::bq0_c {}, random_quantity()); }},
-                                    std::function {[&]() { return feed::details::update_state(state, feed::o0_c {}, random_price()); }},
-                                    std::function {[&]() { return feed::details::update_state(state, feed::oq0_c {}, random_quantity()); }}};
-        std::uniform_int_distribution<std::size_t> distribution(0, functions.size());
-        functions[distribution(gen)]();
-      }
-
-      message_addr = encode_message(instrument, state, message_addr);
-    }
-    generate_packet();
-    bool triggered = continuation(timestamp, asio::const_buffer(buffer_));
-    return triggered;
-  }
-};
-
-struct stream_send
-{
-  auto operator()(const asio::const_buffer &buffer) noexcept {}
-};
-} // namespace fuzz
-
-#define BACKTEST_HARNESS
-
-namespace backtest
-{
-auto make_update_source() { return fuzz::update_source {}; }
-auto make_stream_send() { return fuzz::stream_send {}; }
-
-} // namespace backtest
-
-namespace invariant
-{
-// triggers
-// jamais dans le buffer de situation de trigger (ou automaton en cooldown)
-
-// cooldown doit etre résistant aux souscriptions dynamiques
-} // namespace invariant
+*/

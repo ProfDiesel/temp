@@ -1,10 +1,10 @@
 #pragma once
 
 #include <boilerplate/boilerplate.hpp>
-#include <boilerplate/chrono.hpp>
 #include <boilerplate/fmt.hpp>
 #include <boilerplate/std.hpp>
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -19,8 +19,8 @@ public:
 
   void warm_up() noexcept { ::__builtin_prefetch(&threshold, 1, 1); }
 
-  template<typename continuation_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const clock::time_point &timestamp, const value_type &value, args_types &&...args) noexcept
+  template<typename continuation_type, typename timestamp_type, typename... args_types>
+  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     if(value < threshold)
       return continuation(timestamp, std::forward<args_types>(args)...);
@@ -50,8 +50,8 @@ public:
 
   void warm_up() noexcept { ::__builtin_prefetch(&bounds, 1, 1); }
 
-  template<typename continuation_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const clock::time_point &timestamp, const value_type &value, args_types &&...args) noexcept
+  template<typename continuation_type, typename timestamp_type, typename... args_types>
+  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     const auto &[lower, upper] = bounds;
     decltype(continuation(timestamp, std::forward<args_types>(args)...)) result {};
@@ -72,28 +72,28 @@ struct fmt::formatter<instant_move_trigger<value_type>, char> : default_formatte
 {
 };
 
-template<typename value_type, std::size_t nb_buckets = 8>
+template<typename value_type, typename period_type = std::chrono::nanoseconds, std::size_t nb_buckets = 8>
 class move_trigger
 {
 public:
-  move_trigger(const value_type &initial_value, const value_type &threshold, const clock::duration &period) noexcept:
+  move_trigger(const value_type &initial_value, const value_type &threshold, const period_type &period) noexcept:
     threshold(threshold), timestamp_to_bucket_rshift(boilerplate::required_bits(period.count() / nb_buckets))
   {
     reset(initial_value);
   }
 
-  constexpr auto actual_period() const noexcept { return nb_buckets * clock::duration(1U << timestamp_to_bucket_rshift); }
+  constexpr auto actual_period() const noexcept { return nb_buckets * period_type(1U << timestamp_to_bucket_rshift); }
   constexpr auto bucket_overflow_period() const noexcept
   {
-    return clock::duration(static_cast<std::make_unsigned_t<clock::rep>>(clock::duration::max().count()) >> timestamp_to_bucket_rshift);
+    return period_type(static_cast<std::make_unsigned_t<typename period_type::rep>>(period_type::max().count()) >> timestamp_to_bucket_rshift);
   }
 
   void reset(const value_type &initial_value) noexcept { bounds.fill(std::tuple(initial_value - threshold, initial_value + threshold)); }
 
   void warm_up() noexcept { ::__builtin_prefetch(&bounds, 1, 1); }
 
-  template<typename continuation_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const clock::time_point &timestamp, const value_type &value, args_types &&...args) noexcept
+  template<typename continuation_type, typename timestamp_type, typename... args_types>
+  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     decltype(continuation(timestamp, std::forward<args_types>(args)...)) result {};
     decltype(last_bucket) current_bucket = static_cast<decltype(last_bucket)>(timestamp.time_since_epoch().count() >> timestamp_to_bucket_rshift);
@@ -143,16 +143,16 @@ struct fmt::formatter<move_trigger<value_type>, char> : default_formatter<move_t
 {
 };
 
-template<typename value_type, typename base_integral_type, typename tick_size_ratio_type, typename normalized_value_type = std::uint16_t>
+template<typename value_type, typename base_integral_type, typename tick_size_ratio_type, typename normalized_value_type = std::uint16_t, typename period_type=std::chrono::nanoseconds>
 class normalized_move_trigger
 {
 public:
   static constexpr auto nb_buckets = std::hardware_destructive_interference_size / sizeof(value_type) / 2;
   static constexpr auto inv_tick = static_cast<value_type>(tick_size_ratio_type::den) / tick_size_ratio_type::num;
 
-  move_trigger<normalized_value_type, nb_buckets> upstream;
+  move_trigger<normalized_value_type, period_type, nb_buckets> upstream;
 
-  normalized_move_trigger(const value_type &initial_value, const value_type &threshold, const clock::duration &period) noexcept:
+  normalized_move_trigger(const value_type &initial_value, const value_type &threshold, const period_type &period) noexcept:
     upstream(normalize(initial_value), normalize_difference(threshold), period)
   {
   }
@@ -163,8 +163,8 @@ public:
 
   void warm_up() noexcept { upstream.warm_up(); }
 
-  template<typename continuation_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const clock::time_point &timestamp, const value_type &value, args_types &&...args) noexcept
+  template<typename continuation_type, typename timestamp_type, typename... args_types>
+  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     return upstream(continuation, timestamp, normalize(value), std::forward<args_types>(args)...);
   }
@@ -177,11 +177,11 @@ public:
 
 namespace reference_implementation
 {
-template<typename value_type>
+template<typename value_type, typename period_type=std::chrono::nanoseconds>
 class move_trigger
 {
 public:
-  move_trigger(const value_type &initial_value, const value_type &threshold, const clock::duration &period) noexcept: threshold(threshold), period(period)
+  move_trigger(const value_type &initial_value, const value_type &threshold, const period_type &period) noexcept: threshold(threshold), period(period)
   {
     reset(initial_value);
   }
@@ -194,14 +194,14 @@ public:
     histo.clear();
   }
 
-  template<typename continuation_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const clock::time_point &timestamp, const value_type &value, args_types &&...args) noexcept
+  template<typename continuation_type, typename timestamp_type, typename... args_types>
+  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     decltype(continuation(timestamp, std::forward<args_types>(args)...)) result {};
 
     const auto check = [&](const value_type &histo_value) { return (histo_value >= value - threshold) && (histo_value <= value + threshold); };
 
-    const auto it = std::find_if(histo.begin(), histo.end(), [&](const auto &entry) { return std::get<0>(entry) <= timestamp - period; });
+    const auto it = std::find_if(histo.begin(), histo.end(), [&](const auto &entry) { return std::get<0>(entry) <= timestamp.time_since_epoch() - period; });
     if(it != histo.end())
       histo.erase(it, histo.end());
 
@@ -222,23 +222,23 @@ public:
       }
     }
 
-    histo.push_front(std::tuple {timestamp, value});
+    histo.push_front(std::tuple {timestamp.time_since_epoch(), value});
 
     return result;
   }
 
 private:
   std::optional<value_type> initial_value {};
-  std::deque<std::tuple<clock::time_point, value_type>> histo {};
+  std::deque<std::tuple<period_type, value_type>> histo {};
   const value_type threshold {};
-  const clock::duration period {};
+  const period_type period {};
 };
 } // namespace reference_implementation
 
 #if defined(DOCTEST_LIBRARY_INCLUDED)
 // GCOVR_EXCL_START
 TYPE_TO_STRING(move_trigger<int>);
-TYPE_TO_STRING(reference_implementation::move_trigger<int>);
+TYPE_TO_STRING(reference_implementation::move_trigger<int, std::chrono::high_resolution_clock::duration>);
 
 TEST_SUITE("trigger")
 {
@@ -250,7 +250,7 @@ TEST_SUITE("trigger")
   {
     min_value_trigger<int> trigger(10);
 
-    auto timestamp = clock::epoch();
+    std::chrono::high_resolution_clock::time_point timestamp;
     CHECK(trigger(continuation, timestamp, 9));
     CHECK(!trigger(continuation, timestamp, 10));
     CHECK(!trigger(continuation, timestamp, 11));
@@ -260,7 +260,7 @@ TEST_SUITE("trigger")
   {
     instant_move_trigger<int> trigger(10, 2);
 
-    auto timestamp = clock::epoch();
+    std::chrono::high_resolution_clock::time_point timestamp;
     CHECK(!trigger(continuation, timestamp, 9));
     CHECK(!trigger(continuation, timestamp, 8));
 
@@ -271,13 +271,13 @@ TEST_SUITE("trigger")
     CHECK(trigger(continuation, timestamp, 14));
   }
 
-  TEST_CASE_TEMPLATE("move_trigger", T, move_trigger<float>, normalized_move_trigger<float, std::integral_constant<int, 8>, std::ratio<5, 10>>, reference_implementation::move_trigger<float>)
+  TEST_CASE_TEMPLATE("move_trigger", T, move_trigger<float, std::chrono::high_resolution_clock::duration>, normalized_move_trigger<float, std::integral_constant<int, 8>, std::ratio<5, 10>>, reference_implementation::move_trigger<float, std::chrono::high_resolution_clock::duration>)
   {
     T trigger(10.0, 1.0, 10ms);
 
     SUBCASE("inside_period")
     {
-      auto timestamp = clock::epoch();
+      std::chrono::high_resolution_clock::time_point timestamp;
       CHECK(!trigger(continuation, timestamp, 9.5));
       timestamp += 1ms;
       CHECK(!trigger(continuation, timestamp, 10.0));
@@ -296,12 +296,12 @@ TEST_SUITE("trigger")
 
   TEST_CASE("move_trigger ext")
   {
-    move_trigger<int> trigger(10, 2, 10ms);
+    move_trigger<int, std::chrono::high_resolution_clock::duration> trigger(10, 2, 10ms);
 
     // known limitation (but defined behavior): no trigger at the edge of the bucket_overflow_period
     SUBCASE("bucket_overflow_period")
     {
-      auto timestamp = clock::epoch() + trigger.bucket_overflow_period() - 1ms;
+      std::chrono::high_resolution_clock::time_point timestamp(trigger.bucket_overflow_period() - 1ms);
       CHECK(!trigger(continuation, timestamp, 10));
       timestamp += 1ms;
       CHECK(!trigger(continuation, timestamp, 7));

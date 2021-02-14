@@ -52,9 +52,9 @@ struct from_walker_t final
 inline from_walker_t from_walker(const properties::walker &w) { return from_walker_t {w}; }
 
 template<>
-struct from_walker_impl<clock::duration>
+struct from_walker_impl<std::chrono::nanoseconds>
 {
-  auto operator()(const properties::walker &w) { return clock::duration((std::int64_t)std::get<config::numeric_type>(w.get())); }
+  auto operator()(const properties::walker &w) { return std::chrono::nanoseconds((std::int64_t)std::get<config::numeric_type>(w.get())); }
 };
 
 struct address

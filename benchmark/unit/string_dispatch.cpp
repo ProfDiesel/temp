@@ -1,5 +1,3 @@
-#include <boilerplate/type_traits.hpp>
-
 #include <benchmark/benchmark.h>
 
 #include <boost/preprocessor/facilities/expand.hpp>

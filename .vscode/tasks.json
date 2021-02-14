@@ -1,0 +1,81 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "target",
+            "description": "target",
+            "type": "pickString",
+            "default": "",
+            "options": [
+                "benchmark",
+                "contrib",
+                "test",
+            ],
+        },
+        {
+            "id": "variant",
+            "description": "variant",
+            "type": "pickString",
+            "default": "debug",
+            "options": [
+                "debug",
+                "default"
+            ],
+        }
+    ],
+    "tasks": [
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "ninja",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "focus": false,
+                "panel": "dedicated",
+                "clear": true,
+                "group": "ninja"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "env": {
+                    "PIPO": "false"
+                },
+                "shell": {
+                    "executable": "/usr/bin/fish",
+                    "args": [
+                        "-l",
+                        "-c"
+                    ]
+                }
+            },
+            "args": [
+                "${input:target}:${input:variant}"
+            ]
+        },
+        {
+            "label": "prebuild",
+            "type": "shell",
+            "command": "${workspaceRoot}/prebuild.fish",
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true,
+                "group": "prebuild"
+            },
+        }
+    ]
+}

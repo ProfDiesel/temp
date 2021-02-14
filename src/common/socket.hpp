@@ -97,7 +97,7 @@ public:
 #else
 #  if defined(LINUX)
   static out::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port,
-                                                  const clock::duration &spin_duration) noexcept
+                                                  const std::chrono::nanoseconds &spin_duration) noexcept
 #  else  // defined(LINUX)
   static out::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
 #  endif // defined(LINUX)
@@ -116,7 +116,7 @@ public:
 
     const auto cpu = ::sched_getcpu();
 
-    OUTCOME_EC_TRYV(socket.set_option(busy_poll(int(std::chrono::duration_cast<std::chrono::microseconds>(spin_duration).count())), _));
+
     OUTCOME_EC_TRYV(socket.set_option(incoming_cpu(cpu), _));
     // TODO : make configuration dependant
     if(false)
@@ -138,8 +138,7 @@ public:
   }
 #endif   // defined(USE_TCPDIRECT)
 
-  template<typename continuation_type>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation) noexcept
+  [[using gnu : always_inline, flatten, hot]] auto operator()(auto &continuation) noexcept
     -> out::result<bool>
   {
 #if defined(USE_TCPDIRECT)
@@ -178,10 +177,10 @@ public:
         switch(cmsg->cmsg_type)
         {
         case SO_TIMESTAMPNS:
-        case SO_TIMESTAMPING: return to_time_point(*reinterpret_cast<const std::timespec *>(CMSG_DATA(cmsg)));
+        case SO_TIMESTAMPING: return to_time_point<network_clock>(*reinterpret_cast<const std::timespec *>(CMSG_DATA(cmsg)));
         }
       }
-      return clock::time_point {};
+      return network_clock::time_point {};
     };
 
     const auto timestamp = get_timestamp(&msgvec_[0].msg_hdr);
@@ -223,7 +222,7 @@ private:
   }
   std::array<mmsghdr, nb_messages> msgvec_ = make_msgvec(iovecs_, std::make_index_sequence<nb_messages>());
 
-  multicast_udp_reader(asio::ip::udp::socket &&socket, const clock::duration &spin_duration):
+  multicast_udp_reader(asio::ip::udp::socket &&socket, const std::chrono::nanoseconds &spin_duration):
     asio::ip::udp::socket(std::move(socket)), spin_duration_(to_timespec(spin_duration))
   {
   }
@@ -267,23 +266,23 @@ public:
 #endif
 
 #if defined(USE_TCPDIRECT)
-  [[using gnu : always_inline, flatten, hot]] out::result<clock::time_point> send(const asio::const_buffer &buffer) noexcept
+  [[using gnu : always_inline, flatten, hot]] out::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
   {
     ::zfut_send_single(*zock_, buffer.data, buffer.size);
     return ::zfut_timestamp();
   }
-  [[using gnu : noinline, cold]] out::result<clock::time_point> send_blank(const asio::const_buffer &buffer) noexcept
+  [[using gnu : noinline, cold]] out::result<network_clock::time_point> send_blank(const asio::const_buffer &buffer) noexcept
   {
     ::zfut_send_single_warm(*zock_, buffer.data, buffer.size);
     return {};
   }
 #else  // defined(USE_TCPDIRECT)
-  [[using gnu : always_inline, flatten, hot]] out::result<clock::time_point> send(const asio::const_buffer &buffer) noexcept
+  [[using gnu : always_inline, flatten, hot]] out::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
   {
     OUTCOME_EC_TRYV(asio::ip::udp::socket::send(buffer, 0, _));
-    return clock::now();
+    return network_clock::now();
   }
-  [[using gnu : noinline, cold]] out::result<clock::time_point> send_blank([[maybe_unused]] const asio::const_buffer &) noexcept { return clock::now(); }
+  [[using gnu : noinline, cold]] out::result<network_clock::time_point> send_blank([[maybe_unused]] const asio::const_buffer &) noexcept { return network_clock::now(); }
 #endif // defined(USE_TCPDIRECT)
 
 private:

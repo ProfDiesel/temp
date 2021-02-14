@@ -6,7 +6,6 @@
 #include <boilerplate/logger.hpp>
 #include <boilerplate/pointers.hpp>
 #include <boilerplate/std.hpp>
-#include <boilerplate/type_traits.hpp>
 #include <boilerplate/x3.hpp>
 
 #include <boost/fusion/include/std_tuple.hpp>
@@ -19,11 +18,11 @@
 
 #include <frozen/string.h>
 
-#if defined(_DEBUG)
+#if defined(DEBUG)
 #  include <unordered_map>
 #else
 #  include <robin_hood.h>
-#endif // defined(_DEBUG)
+#endif // defined(DEBUG)
 
 #include <functional>
 #include <istream>
@@ -32,11 +31,13 @@
 #include <string_view>
 #include <variant>
 
+#if !defined(DEBUG)
 template<>
 struct robin_hood::hash<frozen::string>
 {
   size_t operator()(const frozen::string &s) const noexcept { return hash_bytes(s.data(), s.size()); }
 };
+#endif // !defined(DEBUG)
 
 namespace config
 {
@@ -119,19 +120,18 @@ using char_t = typename value_type::char_type;
 template<typename value_type>
 using traits_t = typename value_type::traits_type;
 
-template<typename continuation_type, typename from_type>
-auto parse(continuation_type &&continuation, from_type &&from)
+auto parse(auto &&continuation, auto &&from)
 {
-  using from_type_ = std::decay_t<from_type>;
-  using char_type = boilerplate::detected_or_t<char, char_t, from_type_>;
-  using traits_type = boilerplate::detected_or_t<std::char_traits<char_type>, traits_t, from_type_>;
+  using from_type_ = std::decay_t<decltype(from)>;
+  using char_type = std::detected_or_t<char, char_t, from_type_>;
+  using traits_type = std::detected_or_t<std::char_traits<char_type>, traits_t, from_type_>;
   if constexpr(std::is_base_of_v<std::basic_istream<char_type, traits_type>, from_type_>)
   {
-    boost::spirit::basic_istream_iterator<char_type, traits_type> begin {std::forward<from_type>(from)}, end;
-    return parse(std::forward<continuation_type>(continuation), begin, end);
+    boost::spirit::basic_istream_iterator<char_type, traits_type> begin {std::forward<decltype(from)>(from)}, end;
+    return parse(std::forward<decltype(continuation)>(continuation), begin, end);
   }
   else
-    return parse(std::forward<continuation_type>(continuation), from.begin(), from.end());
+    return parse(std::forward<decltype(continuation)>(continuation), from.begin(), from.end());
 }
 
 struct properties final
@@ -154,7 +154,7 @@ struct properties final
       hash_combine(seed, std::size_t(tolower(c)));
     return seed;
   };
-#if defined(_DEBUG)
+#if defined(DEBUG)
   template<typename key_type, typename mapped_type>
   using map_type = std::unordered_map<key_type, mapped_type, decltype(hash), decltype(equals_to)>;
 #else  // defined(_DEBUG)

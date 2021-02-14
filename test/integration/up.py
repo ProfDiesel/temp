@@ -4,30 +4,32 @@ from collections import defaultdict
 import cppyy
 
 
-root = Path(__file__).parent / "../.."
-dependencies = Path("/home/jonathan/dev/pipo/dependencies")
+root = Path(__file__).parent / '../..'
+dependencies = Path('/home/jonathan/dev/pipo/dependencies')
 
-cppyy.cppdef('#define __LITTLE_ENDIAN__ 1"')
+cppyy.cppdef('#define __LITTLE_ENDIAN__ 1')
 
-for path in ("asio/asio/include", "GSL/include", "observer-ptr-lite/include"):
+for path in ('.', 'asio/asio/include', 'fmt/include', 'GSL/include', 'observer-ptr-lite/include', 'outcome/single-header', 'outcome_extra'):
     cppyy.add_include_path(str(dependencies / path))
-for path in ("include", "src", "test/integration"):
+for path in ('include', 'src', 'test/integration'):
     cppyy.add_include_path(str(root / path))
 cppyy.cppdef('#include "up.hpp"')
 
 
 from cppyy.gbl import feed  # pylint: disable=import-error
 
+from cppyy.ll import set_signals_as_exception
+set_signals_as_exception(True)
+import os
+os.environ['EXTRA_CLING_ARGS'] = '-g -ggdb3 -O0'
+
 
 class Up:
-    def __init__(self):
-        self.__server = feed.make_wrapped_server()
-        self.__server_thread = None
+    def __init__(self, snapshot_address, updates_address):
+        self.__server = feed.wrapped_server(snapshot_address, updates_address)
+        self.__server_thread = self.__server.run_forever()
         self.__states = defaultdict(lambda: feed.instrument_state())
         self.__to_flush = cppyy.gbl.std.vector[cppyy.gbl.boilerplate.observer_ptr[feed.instrument_state]]()
-
-    def start(self):
-        self.__server_thread = self.__server.run_forever()
 
     def update(self, timestamp, instrument, **fields):
         state = self.__states[instrument]

@@ -13,6 +13,7 @@
 #include <boost/core/noncopyable.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <memory>
 #include <type_traits>
@@ -64,7 +65,7 @@ struct automata final /*: boost::noncopyable*/
 
   automata(automata &&) noexcept = default;
 
-  [[using gnu : always_inline, flatten, hot]] automaton *instrument(feed::instrument_id_type instrument_id) noexcept
+  [[using gnu: always_inline, flatten, hot]] automaton *instrument(feed::instrument_id_type instrument_id) noexcept
   {
     const auto it = std::find(instrument_ids.begin(), instrument_ids.end(), instrument_id);
     return LIKELY(it != instrument_ids.end()) ? &data[it - instrument_ids.begin()] : nullptr;
@@ -99,20 +100,16 @@ struct automata final /*: boost::noncopyable*/
       automaton->payload = std::move(payload);
   }
 
-  void enter_cooldown(asio::io_context &service, const clock::duration &duration, automaton *instrument) noexcept
+  auto enter_cooldown(automaton *instrument) noexcept
   {
     instrument_ids[std::size_t(instrument - &data[0])] = INVALID_INSTRUMENT;
-    asio::steady_timer(service, duration)
-      .async_wait(
-        [&, instrument_id = instrument->instrument_id]([[maybe_unused]] auto error_code) { // whatever the value of error_code, get out of the cooldown state
-          if(const auto *automaton = instrument_maybe_disabled(instrument_id); automaton)
-            [[likely]] // some subscriptions/unsubscriptions may have happened in the interval
-            instrument_ids[std::size_t(automaton - &data[0])] = instrument_id;
-        });
+    return [&, instrument_id = instrument->instrument_id]() { // capture the id, some subscriptions/unsubscriptions may have happened in the interval
+      if(const auto *automaton = instrument_maybe_disabled(instrument_id); automaton) [[likely]]
+        instrument_ids[std::size_t(automaton - &data[0])] = instrument_id;
+    };
   }
 
-  template<typename continuation_type>
-  void warm_up(continuation_type &&continuation) noexcept
+  void warm_up(auto &&continuation) noexcept
   {
     for(std::size_t i = 0; i < instrument_ids.size(); ++i)
       if(instrument_ids[i])
@@ -170,4 +167,3 @@ TEST_SUITE("automata")
   */
 }
 #endif // defined(DOCTEST_LIBRARY_INCLUDED)
-

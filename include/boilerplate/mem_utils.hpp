@@ -7,8 +7,6 @@
 #include <regex>
 #include <system_error>
 
-namespace bct = boost::container;
-
 auto prefault_stack(std::size_t prefault_size) noexcept
 {
   // pre-fault the stack
@@ -80,6 +78,6 @@ public:
   }
 
 private:
-  bct::flat_map<const void *, const void *> segments {};
+  boost::container::flat_map<const void *, const void *> segments {};
 };
 

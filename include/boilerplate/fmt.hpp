@@ -1,7 +1,5 @@
 #pragma once
 
-#include <boilerplate/type_traits.hpp> // needed for is_variant_v
-
 #include <boost/type_index.hpp>
 
 #include <fmt/chrono.h>
@@ -68,7 +66,7 @@ struct fmt::formatter<std::filesystem::path, char_type> : fmt::formatter<const c
 };
 
 template<typename variant_type, typename char_type>
-struct fmt::formatter<variant_type, char_type, typename std::enable_if_t<boilerplate::is_variant_v<variant_type>>> : fmt::dynamic_formatter<char_type>
+struct fmt::formatter<variant_type, char_type, std::variant_alternative_t<0, variant_type>> : fmt::dynamic_formatter<char_type>
 {
   template<typename format_context_type>
   auto format(const variant_type &variant, format_context_type &ctx)

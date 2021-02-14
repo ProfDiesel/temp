@@ -5,3 +5,4 @@ precompiled_header
 compile_commands.json
 .eggs/
 *.egg-info/
+.cache/

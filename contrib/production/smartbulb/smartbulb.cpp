@@ -15,7 +15,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#if !defined(__clang__)
 #include <ext/stdio_filebuf.h>
+#endif // !defined(__clang__)
 
 namespace
 {
@@ -36,7 +38,9 @@ bool verbose = false;
 #  define SMARTBULB_LOG()
 #endif // defined(DEBUG)
 
+#if !defined(__clang__)
 __gnu_cxx::stdio_filebuf<char> log_filebuf;
+#endif // !defined(__clang__)
 
 std::optional<std::regex> stack_re = {};
 std::optional<std::regex> address_re = {};
@@ -57,12 +61,14 @@ void init() noexcept
   verbose = boost::lexical_cast<int>(safe_getenv("SMARTBULB_VERBOSE"));
 #endif // defined(DEBUG)
 
+#if !defined(__clang__)
   const auto log_fd = boost::lexical_cast<int>(safe_getenv("SMARTBULB_SMARTBULB_LOG_FD"));
   if(log_fd)
   {
     log_filebuf = __gnu_cxx::stdio_filebuf<char>(log_fd, std::ios::out);
     std::clog.rdbuf(&log_filebuf);
   }
+#endif // !defined(__clang__)
 
   try
   {
