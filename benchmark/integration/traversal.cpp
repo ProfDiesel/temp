@@ -52,22 +52,29 @@ void throw_exception(const exception_type &exception)
 
 namespace bench
 {
-  struct message 
-  {
-    feed::instrument_id_type instrument;
-    feed::instrument_state state;
-  };
+struct message
+{
+  feed::instrument_id_type instrument;
+  feed::instrument_state state;
+};
 
 struct feeder
 {
   feed::server server;
-  clock::time_point timestamp {};
+  network_clock::time_point timestamp {};
   std::vector<std::optional<std::vector<char>>> canned_updates {};
 
   static std::unique_ptr<feeder> instance;
 
-  auto make_snapshot_requester() noexcept { return [this](feed::instrument_id_type instrument) noexcept { return on_snapshot_request(instrument); };}
-  auto make_update_source() noexcept { return [this](std::function<void(clock::time_point, const asio::const_buffer&)> continuation) noexcept { return on_update_poll(continuation); };}
+  auto make_snapshot_requester() noexcept
+  {
+    return [this](feed::instrument_id_type instrument) noexcept { return on_snapshot_request(instrument); };
+  }
+
+  auto make_update_source() noexcept
+  {
+    return [this](std::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept { return on_update_poll(continuation); };
+  }
 
   asio::awaitable<out::result<feed::instrument_state>> on_snapshot_request(feed::instrument_id_type instrument) noexcept
   {
@@ -76,19 +83,17 @@ struct feeder
     co_return out::success(server.snapshot(instrument));
   }
 
-  [[using gnu : always_inline, flatten, hot]] boost::leaf::result<void> on_update_poll(std::function<void(clock::time_point, const asio::const_buffer&)> continuation) noexcept
+  [[using gnu: always_inline, flatten, hot]] boost::leaf::result<void>
+  on_update_poll(std::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept
   {
-    timestamp += clock::duration(1);
+    timestamp += network_clock::duration(1);
     if(!canned_updates.empty())
       if(const auto &update = canned_updates[timestamp.time_since_epoch().count() % canned_updates.size()]; update)
         continuation(timestamp, asio::buffer(*update));
     return {};
   }
 
-  void reset(feed::instrument_id_type instrument, const feed::instrument_state &state) noexcept
-  {
-    server.reset(instrument, state);
-  }
+  void reset(feed::instrument_id_type instrument, const feed::instrument_state &state) noexcept { server.reset(instrument, state); }
 
   void push_updates(std::initializer_list<std::optional<message>> messages)
   {
@@ -96,9 +101,9 @@ struct feeder
     {
       if(message)
       {
-      std::vector<char> buffer(64);
-      feed::detail::encode_message(message->instrument, message->state, asio::buffer(buffer.data(), buffer.size()));
-        canned_updates.push_back(std::make_optional(buffer)); 
+        std::vector<char> buffer(64);
+        feed::detail::encode_message(message->instrument, message->state, asio::buffer(buffer.data(), buffer.size()));
+        canned_updates.push_back(std::make_optional(buffer));
       }
       else
         canned_updates.push_back(std::nullopt);
@@ -112,7 +117,7 @@ struct stream_send
   auto operator()(const asio::const_buffer &buffer) noexcept
   {
     benchmark::DoNotOptimize(buffer);
-    return out::success(clock::time_point {});
+    return out::success(network_clock::time_point {});
   }
 };
 } // namespace bench
@@ -120,13 +125,15 @@ struct stream_send
 namespace backtest
 {
 using snapshot_requester_type = std::function<asio::awaitable<out::result<feed::instrument_state>>(feed::instrument_id_type)>;
-using update_source_type = std::function<boost::leaf::result<void>(std::function<void(clock::time_point, const asio::const_buffer &)>)>;
+using update_source_type = std::function<boost::leaf::result<void>(std::function<void(network_clock::time_point, const asio::const_buffer &)>)>;
 using send_stream_type = std::function<void(const asio::const_buffer &)>;
 
 snapshot_requester_type make_snapshot_requester() { return bench::feeder::instance->make_snapshot_requester(); }
 update_source_type make_update_source() { return bench::feeder::instance->make_update_source(); }
 send_stream_type make_stream_send() { return bench::stream_send {}; }
 
+using delayed_action = std::function<void(void)>;
+void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady_clock::duration &delay, delayed_action action) { asio::steady_timer(service, delay).async_wait([=]([[maybe_unused]] auto error_code) { action(); }); }
 } // namespace backtest
 
 static void traversal(benchmark::State &state) noexcept
@@ -156,30 +163,35 @@ subscription.message <- 'bWVzc2FnZQo=';\n\
   logger::printer printer {};
   logger::logger logger {boilerplate::make_strict_not_null(&printer)};
 
-  auto error_handlers
-    = std::make_tuple([&](const boost::leaf::error_info &unmatched, const std::error_code &error_code,
-                          const boost::leaf::e_source_location &location) { std::clog << location << error_code << unmatched << std::endl; },
-                      [&](const boost::leaf::error_info &unmatched, const boost::leaf::e_source_location &location) { std::clog << location << unmatched << std::endl; },
-                      [&](const boost::leaf::error_info &unmatched) { std::clog << unmatched << std::endl; });
+  auto error_handlers = std::make_tuple(
+    [&](const boost::leaf::error_info &unmatched, const std::error_code &error_code, const boost::leaf::e_source_location &location)
+    { std::clog << location << error_code << unmatched << std::endl; },
+    [&](const boost::leaf::error_info &unmatched, const boost::leaf::e_source_location &location) { std::clog << location << unmatched << std::endl; },
+    [&](const boost::leaf::error_info &unmatched) { std::clog << unmatched << std::endl; });
 
   std::shared_ptr<boost::leaf::polymorphic_context> ctx = boost::leaf::make_shared_context(error_handlers);
 
   using namespace feed::literals;
 
-  bench::feeder::instance.reset(new bench::feeder{feed::server(service, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 3287), asio::ip::udp::endpoint(asio::ip::make_address("239.255.0.1"), 3288))});
+  bench::feeder::instance.reset(new bench::feeder {feed::server(service, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 3287),
+                                                                asio::ip::udp::endpoint(asio::ip::make_address("239.255.0.1"), 3288))});
   const auto _ = gsl::finally([&]() { bench::feeder::instance.reset(); });
 
   bench::feeder::instance->reset(42, feed::instrument_state {.b0 = 95.0_p, .bq0 = 10, .o0 = 105.0_p, .oq0 = 10});
-  bench::feeder::instance->push_updates({std::nullopt, std::make_optional<bench::message>({.instrument = 42, .state = feed::instrument_state {.b0 = 95.0_p, .bq0 = 10, .o0 = 105.0_p, .oq0 = 10}})});
+  bench::feeder::instance->push_updates(
+    {std::nullopt,
+     std::make_optional<bench::message>({.instrument = 42, .state = feed::instrument_state {.b0 = 95.0_p, .bq0 = 10, .o0 = 105.0_p, .oq0 = 10}})});
 
   boost::leaf::try_handle_all(
-    [&]() -> boost::leaf::result<void> {
+    [&]() -> boost::leaf::result<void>
+    {
       using namespace config::literals;
 
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(initial_config));
 
       const auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
-                                         [&](auto fast_path) -> boost::leaf::result<void> {
+                                         [&](auto fast_path) -> boost::leaf::result<void>
+                                         {
                                            // warm up with for a few cycles
                                            for(auto n = 0; n < 10; ++n)
                                            {
@@ -207,4 +219,3 @@ subscription.message <- 'bWVzc2FnZQo=';\n\
 BENCHMARK(traversal);
 
 BENCHMARK_MAIN();
-

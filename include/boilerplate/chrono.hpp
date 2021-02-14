@@ -28,11 +28,15 @@ struct incomplete_nano_clock
 
 struct nano_clock : public incomplete_nano_clock
 {
-  static time_point now() { return time_point(std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch())); }
+#if defined(BACKTEST_HARNESS)
+  static time_point &now() noexcept { static time_point now; return now; }
+#else
+  static time_point now() noexcept { return time_point(std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch())); }
+#endif // !defined(BACKTEST_HARNESS)
 };
 
 #if defined(USE_TCPDIRECT)
-using network_clock = fantasy_nano_clock;
+using network_clock = incomplete_nano_clock;
 #else // defined(USE_TCPDIRECT)
 using network_clock = nano_clock;
 #endif // defined(USE_TCPDIRECT)

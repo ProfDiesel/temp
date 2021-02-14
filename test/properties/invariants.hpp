@@ -8,6 +8,17 @@
    trigger_dispatcher::with_trigger : captures par valeur, probablement faire la meme chose pour wiring::with_trigger_dispatcher
                        doctest
  */
+
+
+
+namespace invariant
+{
+// triggers
+// jamais dans le buffer de situation de trigger (ou automaton en cooldown)
+
+// cooldown doit etre résistant aux souscriptions dynamiques
+} // namespace invariant
+
 namespace invariant
 {
 using histo_type = std::deque<std::tuple<clock::time_point, feed::update>>;

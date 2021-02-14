@@ -63,16 +63,17 @@ struct server
     auto packet = new (&storage) detail::packet {static_cast<std::uint8_t>(states.size()), {}};
     asio::mutable_buffer buffer(&packet->message, sizeof(storage) - offsetof(detail::packet, message));
 
+    auto current = buffer;
     for(auto &&[instrument, new_state]: states)
     {
       auto &[state, accumulated_updates] = this->states[instrument];
       visit_state([&state=state](auto field, auto value) { update_state(state, field, value); }, new_state);
       state.sequence_id = new_state.sequence_id;
-      buffer += detail::encode_message(instrument, state, buffer);
+      current += detail::encode_message(instrument, state, current);
       accumulated_updates |= std::exchange(state.updates, {});
     }
 
-    co_await updates_socket.async_send_to(asio::buffer(buffer), updates_endpoint, asio::use_awaitable);
+    co_await updates_socket.async_send_to(buffer, updates_endpoint, asio::use_awaitable);
   }
 
   instrument_state snapshot(instrument_id_type instrument) const noexcept

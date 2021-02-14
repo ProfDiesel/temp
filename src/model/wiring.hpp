@@ -59,7 +59,8 @@ snapshot_requester_type make_snapshot_requester();
 update_source_type make_update_source();
 send_stream_type make_stream_send();
 
-void delay(std::chrono::steady_clock::duration, std::function<void(void)>);
+using delayed_action = std::function<void(void)>;
+void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady_clock::duration &delay, delayed_action action);
 } // namespace backtest
 #endif // defined(BACKTEST_HARNESS)
 
@@ -342,7 +343,7 @@ request.instrument = {}\n\n");
       auto leave_cooldown_token = automata.enter_cooldown(instrument);
       // whatever the value of error_code, get out of the cooldown state
 #if defined(BACKTEST_HARNESS)
-      backtest::delay(cooldown, [=, &service]() { asio::defer(service, leave_cooldown_token); });
+      backtest::delay(service, cooldown, [=, &service]() { asio::defer(service, leave_cooldown_token); });
 #else // defined(BACKTEST_HARNESS)
       asio::steady_timer(service, cooldown).async_wait([=]([[maybe_unused]] auto error_code) { leave_cooldown_token(); });
 #endif // defined(BACKTEST_HARNESS)

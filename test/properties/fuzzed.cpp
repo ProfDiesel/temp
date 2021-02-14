@@ -37,44 +37,47 @@ void throw_exception(const exception_type &exception)
 
 using namespace std::chrono_literals;
 
-// ajouter un autre executor (deterministe) que l'on poll() avant le asio::io_context()
-// --> push les timers dedans
-// 1 tour de boucle = 100ns
-// -> poste (defer(... asio::detached)) l'action au bout de n boucle
-
-struct backtest_scheduler
+namespace fuzz
 {
-  using backtest_clock = nano_clock;
+// deterministic executor
+class executor
+{
+public:
   using action_type = std::function<void(void)>;
 
-  // disable by preproc every other way to get a clock
-  backtest_clock::time_point now() noexcept { return current_timestamp; }
+  static std::unique_ptr<executor> instance;
 
-  void add(const backtest_clock::duration &delay, const action_type &action) { actions.emplace(current_timestamp + delay, action); }
+  void add(const std::chrono::steady_clock::duration &delay, const action_type &action) { actions.emplace(nano_clock::now() + delay, action); }
 
   void poll()
   {
     if(actions.empty())
       return;
 
-    const auto first = actions.begin();
-    current_timestamp = first->first;
-    const auto last = actions.upper_bound(current_timestamp);
+    const auto first = actions.begin(), last = actions.upper_bound(nano_clock::now() = first->first);
     std::for_each(first, last, [&](const auto &value) { value.second(); });
     actions.erase(first, last);
   }
 
 private:
-  static constexpr backtest_clock::duration granularity = 1us;
-  backtest_clock::time_point current_timestamp {};
-  boost::container::flat_multimap<backtest_clock::time_point, action_type> actions;
+  static constexpr std::chrono::steady_clock::duration granularity = 1us;
+  boost::container::flat_multimap<nano_clock::time_point, action_type> actions;
 };
+
+std::unique_ptr<executor> executor::instance;
 
 struct feeder
 {
   fuzz::generator gen;
   network_clock::time_point current_timestamp;
   std::uniform_int_distribution<network_clock::rep> clock_distribution {0, 1'000'000'000};
+
+  static std::unique_ptr<feeder> instance;
+
+  asio::awaitable<out::result<feed::instrument_state>> on_snapshot_request(feed::instrument_id_type instrument) noexcept
+  {
+    co_return out::failure(std::make_error_code(std::errc::io_error)); // TODO
+  }
 
   boost::leaf::result<void> on_update_poll(std::function<void(network_clock::time_point, asio::const_buffer &&)> continuation) noexcept
   {
@@ -89,34 +92,53 @@ struct feeder
       current_timestamp += network_clock::duration(clock_distribution(gen));
 
       auto buffer = asio::buffer(first, last - first);
-      const auto sanitized = feed::detail::sanitize(
-        boilerplate::overloaded {
-          [&](auto field, feed::price_t value) { return value; },
-          [&](auto field, feed::quantity_t value) { return value; },
-        },
-        buffer);
+      const auto sanitized = feed::detail::sanitize(boilerplate::overloaded {
+                                                      [&](auto field, feed::price_t value) { return value; },
+                                                      [&](auto field, feed::quantity_t value) { return value; },
+                                                    },
+                                                    buffer);
       continuation(current_timestamp, buffer);
 
       last = std::copy(first + sanitized, last, first);
     }
   }
 
-  auto make_update_source() const noexcept { return std::bind(&feeder::on_update_poll, this); }
-
-  static auto &instance() noexcept
+  auto make_snapshot_requester() noexcept
   {
-    static feeder instance;
-    return instance;
+    return [this](feed::instrument_id_type instrument) noexcept { return on_snapshot_request(instrument); };
+  }
+
+  auto make_update_source() noexcept
+  {
+    return [this](std::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept { return on_update_poll(continuation); };
   }
 };
 
-namespace invariant
-{
-// triggers
-// jamais dans le buffer de situation de trigger (ou automaton en cooldown)
+std::unique_ptr<feeder> feeder::instance;
 
-// cooldown doit etre résistant aux souscriptions dynamiques
-} // namespace invariant
+struct stream_send
+{
+  auto operator()(const asio::const_buffer &buffer) noexcept
+  {
+    return out::success(network_clock::time_point {});
+  }
+};
+
+} // namespace fuzz
+
+namespace backtest
+{
+using snapshot_requester_type = std::function<asio::awaitable<out::result<feed::instrument_state>>(feed::instrument_id_type)>;
+using update_source_type = std::function<boost::leaf::result<void>(std::function<void(network_clock::time_point, const asio::const_buffer &)>)>;
+
+snapshot_requester_type make_snapshot_requester() { return fuzz::feeder::instance->make_snapshot_requester(); }
+update_source_type make_update_source() { return fuzz::feeder::instance->make_update_source(); }
+send_stream_type make_stream_send() { return fuzz::stream_send {}; }
+
+using delayed_action = std::function<void(void)>;
+void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady_clock::duration &delay, delayed_action action) { return fuzz::executor::instance->add(delay, action); }
+
+} // namespace backtest
 
 auto main() -> int
 {
@@ -126,28 +148,25 @@ auto main() -> int
   asio::io_context service(1);
   asio::posix::stream_descriptor command_input(service), command_output(service);
 
-  backtest_scheduler backtest_scheduler;
-
   logger::printer printer {};
   logger::logger logger {boilerplate::make_strict_not_null(&printer)};
 
   return boost::leaf::try_handle_all(
-    [&]() -> boost::leaf::result<int>
-    {
+    [&]() -> boost::leaf::result<int> {
       using namespace config::literals;
 
       const auto config = ""sv;
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(config));
 
       const auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
-                                         [&](auto fast_path) -> boost::leaf::result<void>
-                                         {
+                                         [&](auto fast_path) -> boost::leaf::result<void> {
                                            while(!service.stopped())
                                              [[likely]]
                                              {
                                                fast_path();
-                                               backtest_scheduler.poll();
-                                               service.poll();
+                                               fuzz::executor::instance->poll();
+                                               if(service.poll())
+                                                 bad_test(); // the non-deterministic executor is not supposed to be used
                                                logger.flush();
                                              }
                                            return {};

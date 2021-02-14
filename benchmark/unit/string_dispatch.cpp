@@ -370,7 +370,8 @@ static void frz_ptr_array(benchmark::State &state) noexcept
     return buckets.find(k) - buckets.begin();
   };
 
-  const auto id = [](const frozen::string &k) noexcept {
+  const auto id = [](const frozen::string &k) noexcept
+  {
 #define HANDLE_STRING(r, data, elem) BOOST_PP_TUPLE_ELEM(0, elem),
     static const frozen::unordered_set<frozen::string, strings.size()> buckets {{BOOST_PP_SEQ_FOR_EACH(HANDLE_STRING, _, PIPO_STRINGS)}};
 #undef HANDLE_STRING
