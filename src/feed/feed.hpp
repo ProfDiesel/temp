@@ -2,6 +2,10 @@
 
 #if !defined(__USE_PREPROCESSED_FEED__HPP__)
 
+#include <boost/preprocessor/seq/for_each.hpp>
+#include <boost/preprocessor/tuple/elem.hpp>
+#include <boost/preprocessor/stringize.hpp>
+
 #include <fmt/format.h>
 
 #include "feed_structures.hpp"

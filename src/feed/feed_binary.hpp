@@ -4,6 +4,7 @@
 
 #include <boilerplate/boilerplate.hpp>
 #include <boilerplate/chrono.hpp>
+#include <boilerplate/contracts.hpp>
 #include <boilerplate/outcome.hpp>
 
 #include <asio/awaitable.hpp>
@@ -13,9 +14,6 @@
 #include <asio/write.hpp>
 
 #include <boost/endian/conversion.hpp>
-
-#include <boost/hof/lazy.hpp>
-#include <boost/hof/lift.hpp>
 
 #include <std_function/function.h>
 
@@ -27,7 +25,6 @@
 namespace feed
 {
 namespace endian = boost::endian;
-namespace hof = boost::hof;
 
 namespace detail
 {
@@ -84,7 +81,7 @@ inline asio::awaitable<out::result<instrument_state>> request_snapshot(asio::ip:
 }
 
 [[using gnu : always_inline, flatten, hot]] void decode(auto &&message_header_handler, auto &&update_handler, const network_clock::time_point &timestamp,
-                    asio::const_buffer &&buffer) noexcept
+                    const asio::const_buffer &buffer) noexcept
 {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
   const auto *const buffer_end = reinterpret_cast<const std::byte *>(buffer.data()) + buffer.size();
@@ -105,7 +102,7 @@ inline asio::awaitable<out::result<instrument_state>> request_snapshot(asio::ip:
     if(reinterpret_cast<const std::byte *>(&message->update + message->nb_updates) > buffer_end)
       break;
 #endif // defined(SAFE_LQ2)
-    const auto instrument_closure = message_header_handler(message->instrument, message->sequence_id);
+    const auto instrument_closure = message_header_handler(message->instrument.value(), message->sequence_id.value());
     if(UNLIKELY(!instrument_closure))
       continue;
 
@@ -160,8 +157,7 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
 
 } // namespace detail
 
-constexpr auto decode = hof::lazy(BOOST_HOF_LIFT(detail::decode));
-
+using detail::decode;
 using detail::request_snapshot;
 
 namespace sample_packets
@@ -201,4 +197,3 @@ TEST_SUITE("feed_binary")
 
 // GCOVR_EXCL_STOP
 #endif // defined(DOCTEST_LIBRARY_INCLUDED)
-

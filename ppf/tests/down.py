@@ -1,11 +1,10 @@
 import asyncio
-from typing import Dict, Tuple, List, Callable
+from typing import Dict, Tuple, List, Callable, Awaitable, cast
 from dataclasses import dataclass
 from datetime import timedelta
 import json
 
-Address = Tuple[str, int]
-
+from common_types import Address
 
 @dataclass
 class Handshake:
@@ -48,15 +47,22 @@ ConditionCallable = Callable[[_ClientConnection, Message, bool], bool]
 
 
 class Down:
-    async def __init__(self, stream_address: Address, datagram_address: Address, *, loop=None):
+    def __init__(self):
         self.connections = []
-        self.__awaiting_futures: List[Tuple[ConditionCallable, asyncio.Future]] = []
+        self.__awaiting_futures: List[Tuple[ConditionCallable, 'asyncio.Future[Message]']] = []
         self.__connections_by_udp_address: Dict[Address, _ClientConnection] = {}
 
+    async def connect(self, stream_address: Address, datagram_address: Address, *, loop=None):
         if not loop:
             loop = asyncio.get_event_loop()
         self.__stream_server = await asyncio.start_server(self.on_new_connection, *stream_address, loop=loop)
         self.__datagram_transport, self.__datagram_protocol = await loop.create_datagram_endpoint(lambda: _DatagramBumper(self), local_addr=datagram_address)
+
+    @staticmethod
+    async def create(stream_address: Address, datagram_address: Address, *, loop=None):
+        result = Down()
+        await result.connect(stream_address, datagram_address, loop=loop)
+        return result
 
     @staticmethod
     def __decode(data, message_class=Message):
@@ -84,7 +90,7 @@ class Down:
         self.__notify_message(connection, message, True)
 
     async def wait_for_message(self, condition: ConditionCallable, time: timedelta) -> Message:
-        future = asyncio.Future()
+        future: 'asyncio.Future[Message]' = asyncio.Future()
         self.__awaiting_futures.append((condition, future))
         return await future
 

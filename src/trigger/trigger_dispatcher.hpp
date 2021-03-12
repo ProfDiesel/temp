@@ -102,11 +102,11 @@ struct polymorphic_trigger_dispatcher
 
 struct invalid_trigger_config
 {
-  const config::properties::walker &walker;
+  const config::walker &walker;
 };
 
 template<typename continuation_type>
-auto with_trigger(const config::properties::walker &config, boilerplate::observer_ptr<logger::logger> logger,
+auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger::logger> logger,
                   continuation_type &&continuation) noexcept
 {
   using namespace config::literals;
@@ -192,7 +192,7 @@ auto with_trigger(const config::properties::walker &config, boilerplate::observe
 }
 
 
-inline auto make_polymorphic_trigger(const config::properties::walker &config, boilerplate::observer_ptr<logger::logger> logger = nullptr) noexcept
+inline auto make_polymorphic_trigger(const config::walker &config, boilerplate::observer_ptr<logger::logger> logger = nullptr) noexcept
 {
   return with_trigger(config, logger, [&](auto &&trigger_dispatcher) -> boost::leaf::result<polymorphic_trigger_dispatcher> { return polymorphic_trigger_dispatcher::make<std::decay_t<decltype(trigger_dispatcher)>>(trigger_dispatcher); })();
 }

@@ -20,44 +20,75 @@
 #include <string_view>
 
 #if defined(USE_TCPDIRECT)
+#  include <etherfabric/pd.h>
+#  include <etherfabric/pio.h>
 #  include <etherfabric/vi.h>
 #  include <zf/zf.h>
 #endif // defined(USE_TCPDIRECT)
 
 #if defined(USE_TCPDIRECT)
 
-class deleters
+// TODO : use source_location, std::error_code
+#define TRY(x)                                                  \
+  do {                                                          \
+    if(auto rc = (x); rc < 0 ) {                                            \
+      std::clog << "At " << __FILE__ << ":" << __LINE__ << " TRY(" << #x << ") failed. (rc=" << rc << " errno=" << errno << "(" << ::strerror(errno) << ")";                    \
+      std::terminate();                                                  \
+    }                                                           \
+  } while(0)
+
+#define OUTCOME_ONLOAD_TRY(x) \
+  do {                                                          \
+    if(auto rc = (x); rc < 0 ) {                                            \
+	return out::failure(std::error_code(rc, std::system_category()));\
+    }                                                           \
+  } while(0)
+
+struct deleters
 {
-  static void operator()(zfur *ptr) { ::zfur_free(ptr); };
-  static void operator()(zfut *ptr) { ::zfut_free(ptr); };
-  static void operator()(zf_attr *ptr) { ::zf_attr_free(ptr); };
-  static void operator()(zf_stack *ptr) { ::zf_stack_free(ptr); };
+  void operator()(::zfur *ptr) { ::zfur_free(ptr); };
+  void operator()(::zfut *ptr) { ::zfut_free(ptr); };
+  void operator()(::zf_attr *ptr) { ::zf_attr_free(ptr); };
+  void operator()(::zf_stack *ptr) { ::zf_stack_free(ptr); };
 };
 
 struct static_stack
 {
+  std::unique_ptr<::zf_attr, deleters> attr;
+  std::unique_ptr<::zf_stack, deleters> stack;
+
+  ::ef_driver_handle dh;
+  ::ef_pd pd;
+  ::ef_vi vi;
+  ::ef_pio pio;
+
+  // set ZF_ATTR "interface=enp4s0f0;log_level=3:ctpio_mode=ct;rx_timestamping=1" 
   static_stack() noexcept
   {
     TRY(::zf_init());
 
-    zf_attr *attr = nullptr;
+    ::zf_attr *attr = nullptr;
     TRY(::zf_attr_alloc(&attr));
-    TRY(::zf_attr_set_str(attr, "interface", interface));
-    TRY(::zf_attr_set_str(attr, "ctpio_mode", "ct"));
-    TRY(::zf_attr_set_str(attr, "rx_timestamping", 1));
+    this->attr.reset(attr);
 
-    zf_stack *stack = nullptr;
+    ::zf_stack *stack = nullptr;
     TRY(::zf_stack_alloc(attr, &stack));
+    this->stack.reset(stack);
 
-    ef_driver_handle dh;
+    char *interface = nullptr;
+    TRY(::zf_attr_get_str(attr, "interface", &interface));
+
     TRY(::ef_driver_open(&dh));
-    ef_pd pd;
     TRY(::ef_pd_alloc_by_name(&pd, dh, interface, EF_PD_DEFAULT));
-    ef_vi vi;
     TRY(::ef_vi_alloc_from_pd(&vi, dh, &pd, dh, -1, 0, -1, nullptr, -1, EF_VI_FLAGS_DEFAULT));
-    ef_pio pio;
     TRY(::ef_pio_alloc(&pio, dh, &pd, -1, dh));
     TRY(::ef_pio_link_vi(&pio, dh, &vi, dh));
+  }
+
+  static const auto &instance() noexcept
+  {
+    static static_stack instance;
+    return instance; 
   }
 };
 
@@ -81,25 +112,24 @@ class multicast_udp_reader final : public asio::ip::udp::socket
 
 public:
 #if defined(USE_TCPDIRECT)
-  static out::result<multicast_udp_reader> create(asio::io_context &service, boilerplate::not_null_observer_ptr<zf_stack> stack, std::string_view address,
-                                                  std::string_view port) noexcept
+  static out::unchecked<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
   {
-    const auto addrinfo = OUTCOME_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _)).begin()->endpoint().data();
+    const asio::ip::udp::endpoint addr = OUTCOME_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _))->endpoint();
 
-    zfur zock_ {0};
-    OUTCOME_TRY(::zfur_alloc(&zock_, stack, attr));
+    ::zfur *zock_ = nullptr;
+    OUTCOME_ONLOAD_TRY(::zfur_alloc(&zock_, static_stack::instance().stack.get(), static_stack::instance().attr.get()));
     zock_ptr zock {zock_};
 
-    OUTCOME_TRY(::zfur_addr_bind(zock, addrinfo->ai_addr, addrinfo->ai_addrlen, nullptr, 0, 0));
+    OUTCOME_ONLOAD_TRY(::zfur_addr_bind(zock.get(), const_cast<sockaddr*>(addr.data()), sizeof(*addr.data()), nullptr, 0, 0));
 
-    return multicast_udp_reader {stack, std::move(zock)};
+    return multicast_udp_reader(std::move(zock));
   }
 #else
 #  if defined(LINUX)
-  static out::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port,
+  static out::unchecked<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port,
                                                   const std::chrono::nanoseconds &spin_duration) noexcept
 #  else  // defined(LINUX)
-  static out::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
+  static out::unchecked<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
 #  endif // defined(LINUX)
   {
     const auto endpoint = OUTCOME_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _)).begin()->endpoint();
@@ -116,14 +146,14 @@ public:
 
     const auto cpu = ::sched_getcpu();
 
-
+    OUTCOME_EC_TRYV(socket.set_option(busy_poll(int(std::chrono::duration_cast<std::chrono::microseconds>(spin_duration).count())), _));
     OUTCOME_EC_TRYV(socket.set_option(incoming_cpu(cpu), _));
     // TODO : make configuration dependant
     if(false)
       OUTCOME_EC_TRYV(socket.set_option(timestamping(true), _));
 
     auto as_timeval = to_timeval(spin_duration);
-    OUTCOME_TRY(out::result<void>(std::error_code(::setsockopt(socket.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &as_timeval, sizeof(as_timeval)),
+    OUTCOME_TRY(out::unchecked<void>(std::error_code(::setsockopt(socket.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &as_timeval, sizeof(as_timeval)),
                                                   std::generic_category()))); // recvmmsg timeout parameter is buggy
 #  endif // defined(LINUX)
 
@@ -139,10 +169,10 @@ public:
 #endif   // defined(USE_TCPDIRECT)
 
   [[using gnu : always_inline, flatten, hot]] auto operator()(auto &continuation) noexcept
-    -> out::result<bool>
+    -> out::unchecked<void>
   {
 #if defined(USE_TCPDIRECT)
-    ::zf_reactor_perform(stack);
+    ::zf_reactor_perform(static_stack::instance().stack.get());
 
     struct
     {
@@ -150,16 +180,16 @@ public:
       iovec iov[1];
     } msg;
 
-    ::zfur_zc_recv(zock.get(), &msg.msg, 0);
-    auto _ = gsl::finally([&]() { ::zfur_zc_recv_done(zock.get(), &msg.msg); });
+    ::zfur_zc_recv(zock_.get(), &msg.msg, 0);
+    auto _ = gsl::finally([&]() { ::zfur_zc_recv_done(zock_.get(), &msg.msg); });
     if(!msg.msg.iovcnt)
       return out::success();
 
     timespec timestamp;
     unsigned int timestamp_flags;
-    OUTCOME_TRY(::zfur_pkt_get_timestamp(zock.get(), &msg.msg, &timestamp, 0, &timestamp_flags));
+    OUTCOME_ONLOAD_TRY(::zfur_pkt_get_timestamp(zock_.get(), &msg.msg, &timestamp, 0, &timestamp_flags));
 
-    return continuation(timestamp, asio::const_buffer(reinterpret_cast<const std::byte *>(msg.msg.iov[0].iov_base, msg.msg.iov[0].iov_len)));
+    continuation(to_time_point<network_clock>(timestamp), asio::const_buffer(msg.msg.iov[0].iov_base, msg.msg.iov[0].iov_len));
 
 #elif defined(LINUX)
     auto spin_duration = spin_duration_;
@@ -184,25 +214,25 @@ public:
     };
 
     const auto timestamp = get_timestamp(&msgvec_[0].msg_hdr);
-    auto result = continuation(timestamp, asio::const_buffer(reinterpret_cast<const std::byte *>(buffers_[0].data()), msgvec_[0].msg_len));
+    for(auto i = 0; i < nb_messages_read; ++i)
+      continuation(timestamp, asio::const_buffer(buffers_[i].data(), msgvec_[i].msg_len));
 
-    for(auto i = 1; i < nb_messages_read; ++i)
-      result |= continuation(timestamp, asio::const_buffer(reinterpret_cast<const std::byte *>(buffers_[i].data()), msgvec_[i].msg_len));
-
-    return out::success();
 #else  // defined(LINUX)
     asio::const_buffer buffer(buffer_.data(), buffer_size);
     const auto msg_length = receive(buffer_);
-    return continuation({}, buffer_);
+    continuation({}, buffer_);
 #endif // defined(LINUX)
+
+    return out::success();
   }
 
 private:
 #if defined(USE_TCPDIRECT)
   using zock_ptr = std::unique_ptr<zfur, deleters>;
 
-  const boilerplate::not_null_observer_ptr<zf_stack> stack;
-  zock_ptr zock;
+  zock_ptr zock_;
+
+  explicit multicast_udp_reader(zock_ptr &&zock): zock_(std::move(zock)) {}
 #elif defined(LINUX)
   const std::timespec spin_duration_;
 
@@ -244,19 +274,19 @@ class udp_writer final : public asio::ip::udp::socket
 {
 public:
 #if defined(USE_TCPDIRECT)
-  static out::result<udp_writer> create(asio::io_context &service, boilerplate::not_null_observer_ptr<zf_stack> stack, std::string_view address,
-                                        std::string_view port) noexcept
+  static out::unchecked<udp_writer> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
   {
-    const auto addrinfo = OUTCOME_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _))->endpoint().data();
+    const asio::ip::udp::endpoint addr_local(asio::ip::udp::v4(), 0),
+                                  addr_remote = OUTCOME_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _))->endpoint();
 
-    zfut zock_ {0};
-    TRY(::zfut_alloc(&udp_sock, stack, INADDR_ANY, 0, addrinfo->ai_addr, addrinfo->ai_addrlen, 0, attr));
+    zfut *zock_ = nullptr;
+    OUTCOME_ONLOAD_TRY(::zfut_alloc(&zock_, static_stack::instance().stack.get(), addr_local.data(), sizeof(*addr_local.data()), const_cast<sockaddr*>(addr_remote.data()), sizeof(*addr_remote.data()), 0, static_stack::instance().attr.get()));
     zock_ptr zock {zock_};
 
-    return udp_writer {stack, std::move(zock)};
+    return udp_writer(std::move(zock));
   }
 #else // defined(USE_TCPDIRECT)
-  static out::result<udp_writer> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
+  static out::unchecked<udp_writer> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
   {
     const auto endpoint = OUTCOME_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _)).begin()->endpoint();
     asio::ip::udp::socket socket {service};
@@ -266,32 +296,35 @@ public:
 #endif
 
 #if defined(USE_TCPDIRECT)
-  [[using gnu : always_inline, flatten, hot]] out::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
+  [[using gnu : always_inline, flatten, hot]] out::unchecked<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
   {
-    ::zfut_send_single(*zock_, buffer.data, buffer.size);
-    return ::zfut_timestamp();
+    ::zfut_send_single(zock_.get(), buffer.data(), buffer.size());
+
+    ::zf_pkt_report reports[1];
+    int count = 1;
+    OUTCOME_ONLOAD_TRY(::zfut_get_tx_timestamps(zock_.get(), reports, &count));
+    return UNLIKELY(count > 0) ? to_time_point<network_clock>(reports[0].timestamp) : network_clock::time_point();
   }
-  [[using gnu : noinline, cold]] out::result<network_clock::time_point> send_blank(const asio::const_buffer &buffer) noexcept
+  [[using gnu : noinline, cold]] out::unchecked<network_clock::time_point> send_blank(const asio::const_buffer &buffer) noexcept
   {
-    ::zfut_send_single_warm(*zock_, buffer.data, buffer.size);
-    return {};
+    ::zfut_send_single_warm(zock_.get(), buffer.data(), buffer.size());
+    return network_clock::time_point();
   }
 #else  // defined(USE_TCPDIRECT)
-  [[using gnu : always_inline, flatten, hot]] out::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
+  [[using gnu : always_inline, flatten, hot]] out::unchecked<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
   {
     OUTCOME_EC_TRYV(asio::ip::udp::socket::send(buffer, 0, _));
     return network_clock::now();
   }
-  [[using gnu : noinline, cold]] out::result<network_clock::time_point> send_blank([[maybe_unused]] const asio::const_buffer &) noexcept { return network_clock::now(); }
+  [[using gnu : noinline, cold]] out::unchecked<network_clock::time_point> send_blank([[maybe_unused]] const asio::const_buffer &) noexcept { return network_clock::now(); }
 #endif // defined(USE_TCPDIRECT)
 
 private:
 #if defined(USE_TCPDIRECT)
   using zock_ptr = std::unique_ptr<zfut, deleters>;
 
-  const boilerplate::not_null_observer_ptr<zf_stack> stack_;
   zock_ptr zock_;
 
-  udp_writer(boilerplate::not_null_observer_ptr<zf_stack> stack, zock_ptr &&zock) noexcept: stack_(stack), zock_(std::move(zock)) {}
+  udp_writer(zock_ptr &&zock) noexcept: zock_(std::move(zock)) {}
 #endif // defined(USE_TCPDIRECT)
 };

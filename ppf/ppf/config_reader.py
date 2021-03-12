@@ -1,5 +1,5 @@
-from pyparsing import Group, Optional, Suppress, delimitedList, restOfLine, pyparsing_common, Dict, Char
-from typing import Union, Dict, Tuple, Generator, Set, Sequence
+from pyparsing import Group, Optional, Suppress, delimitedList, restOfLine, pyparsing_common, Char, ParserElement
+from typing import Union, Dict, Tuple, Set, Sequence, cast, List, Iterator, Type
 from dataclasses import dataclass
 from functools import singledispatchmethod
 
@@ -12,7 +12,7 @@ numeric = pyparsing_common.fnumber.copy()
 identifier = pyparsing_common.identifier.copy()
 
 
-def list_of(expr):
+def list_of(expr: ParserElement) -> str:
     return (Suppress('[') + delimitedList(expr) + Suppress(']')).setParseAction(tuple)
 
 
@@ -22,23 +22,29 @@ assignment = Group(key + Suppress('<-') + value + Suppress(';'))
 grammar = assignment[1, ...].ignore('#' + restOfLine)
 
 
-def parse(config: str):
-    result = {}
+def parse(config: str) -> Config:
+    result:Config  = {}
     for (name, field), value in grammar.parseString(config):
         result.setdefault(name, {})[field] = value
     return result
 
 
-def write(config: Config):
+def format_assignment(name: str, field: str, value: Value) -> str:
     def format_value(value: Value):
-        return f'\'{value}\'' if isinstance(value, str) else f'{value}' if isinstance(value, float) else f"[{','.join(value)}]"
+        return f'\'{value}\'' if isinstance(value, str) else f'{value}' if isinstance(value, float) else f"[{','.join(str(value))}]"
+
+    return f'{name}.{field} <- {format_value(value)};'
+
+
+def write(config: Config) -> str:
+    result = ""
 
     def walk():
         for name, object_ in sorted(config.items()):
             for field, value in sorted(object_.items()):
-                yield name, field, value
+                format_assignment(name, field, value)
 
-    return '\n'.join(f'{name}.{field} <- {format_value(value)};' for name, field, value in walk())
+    return result
 
 
 class Unresolved:
@@ -54,8 +60,8 @@ def make_walker(config: Config, value: Value, defer_resolution=False) -> WalkerR
     if isinstance(value, str):
         return Walker(config, value, defer_resolution=defer_resolution)
     if isinstance(value, tuple) and (len(value) > 1) and isinstance(value[0], str):
-        return WalkerSequence(config, value)
-    return value
+        return WalkerSequence(config, cast(List[str], value))
+    return cast(WalkerResult, value)
 
 
 @dataclass
@@ -79,12 +85,12 @@ class Walker:
     def value(self) -> Union[Object, str, None]:
         if self.__value is UNRESOLVED:
             self.__value = self.__config.get(self.__name, self.__name)
-        return self.__value
+        return cast(Union[Object, str, None], self.__value)
 
     @property
-    def fields(self) -> Set[str]:
+    def fields(self) -> Iterator[Tuple[str, WalkerResult]]:
         if isinstance(self.value, dict):
-            for key, value in self.value.keys():
+            for key, value in self.value.items():
                 yield key, make_walker(self.__config, value, defer_resolution=True)
 
     @singledispatchmethod
@@ -102,11 +108,11 @@ class Walker:
         return self.__field__(self.value, item)
 
     def __str__(self):
-        return self.value
+        return self.name
 
-    def walk(self) -> Generator[Tuple['Walker', str, Value], None, None]:
+    def walk(self) -> Iterator[Tuple['Walker', str, Value]]:
         for field, value in self.fields:
-            yield self, field, value
+            yield self, field, as_value(value)
             if isinstance(value, str):
                 yield from Walker(self.__config, value).walk()
             if isinstance(value, tuple) and (len(value) > 1) and isinstance(value[0], str):
@@ -114,7 +120,7 @@ class Walker:
 
 
 @dataclass
-class WalkerSequence:
+class WalkerSequence(Sequence[Walker]):
     __slots__ = ('__config', '__names')
 
     __config: Config
@@ -127,6 +133,42 @@ class WalkerSequence:
     def __getitem__(self, item: int) -> Walker:
         return Walker(self.__config, self.__names[item])
 
-    def walk(self) -> Generator[Tuple['Walker', str, Value], None, None]:
+    def __len__(self) -> int:
+        return len(self.__names)
+
+    def walk(self) -> Iterator[Tuple['Walker', str, Value]]:
         for name in self.__names:
             yield from Walker(self.__config, name).walk()
+
+
+def as_object(result: WalkerResult) -> Walker:
+    assert(isinstance(result, Walker))
+    return cast(Walker, result)
+
+def as_sequence(result: WalkerResult) -> WalkerSequence:
+    assert(isinstance(result, WalkerSequence))
+    return cast(WalkerSequence, result)
+
+def as_numeric(result: WalkerResult) -> float:
+    assert(isinstance(result, float))
+    return cast(float, result)
+
+def as_numeric_seq(result: WalkerResult) -> Tuple[float, ...]:
+    assert(isinstance(result, tuple))
+    return cast(Tuple[float, ...], result)
+
+def as_str(result: WalkerResult) -> str:
+    assert(isinstance(result, Walker))
+    return str(result)
+
+def as_value(result: WalkerResult) -> Value:
+    if isinstance(result, Walker):
+        return result.name
+    if isinstance(result, WalkerSequence):
+        return tuple(item.name for item in result)
+    return cast(Value, result)
+
+def as_int(result: WalkerResult) -> int:
+    value:float = as_numeric(result)
+    assert(value.is_integer())
+    return int(value)

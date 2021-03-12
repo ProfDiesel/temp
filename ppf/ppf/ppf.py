@@ -1,4 +1,5 @@
-from .config_reader import Config, parse, write as write_config, Walker
+from asyncio.streams import StreamWriter, StreamReader
+from .config_reader import parse, write as write_config, Walker, format_assignment, as_int, as_object, as_str
 from argparse import ArgumentParser
 import logging
 from pathlib import Path
@@ -8,120 +9,111 @@ import socket
 from base64 import b64encode
 import json
 from dataclasses import dataclass
-from typing import List
+from typing import Dict, cast
+
+
+LOGGER: logging.Logger = logging.getLogger('Fairy')
 
 
 @dataclass
 class Instrument:
-    __id: int
-    __serial: int = 0
+    _id: int
+    _serial: int = 0
 
 
 class Fairy:
     def __init__(self, config: Walker):
-        self.__config = config
-        self.__instruments: List[Instrument] = []
+        self.__config:Walker = config
+        self.__instruments: Dict[int, Instrument] = {}
+
+        if subscription := as_object(self.__config.subscription):
+            instrument:int = as_int(subscription.instrument)
+            self.__instruments[instrument] = Instrument(instrument)
 
     @staticmethod
-    def _get_payload(name: str, instrument: Instrument):
-        def encode(message):
-            return b64encode(json.dumps(message).encode())
+    def _get_payload(name: str, instrument: Instrument) -> str:
+        def encode(message) -> str:
+            return b64encode(json.dumps(message).encode()).decode()
 
-        message, datagram = {'instrument': instrument.id, 'content': f'hit #{instrument.serial}'}, {'instrument': instrument.id, 'content': f'datagram hit #{instrument.serial}'}
+        message, datagram = {'instrument': instrument._id, 'content': f'hit #{instrument._serial}'}, {'instrument': instrument._id, 'content': f'datagram hit #{instrument._serial}'}
         return f'''\
-{name}.instrument <- {instrument.id};
-{name}.message <- {encode(message)};
-{name}.datagram <- {encode(datagram)};
+{name}.instrument <- {instrument._id};
+{name}.message <- '{encode(message)}';
+{name}.datagram <- '{encode(datagram)}';
 '''
 
-    async def setup(self, *, loop=None):
+    async def __send(self, data: str) -> None:
+        out: StreamWriter = cast(StreamWriter, self.process.stdin)
+        LOGGER.debug('send="%s"', data.replace('"', '\\"'))
+        out.write(data.encode() + b'\n\n')
+        await out.drain()
+
+    async def setup(self, *, loop=None) -> None:
         self.process = await asyncio.create_subprocess_shell(
-            str(self.__config.executable),
+            'rr ' + as_str(self.__config.executable),
             stdin=PIPE,
             stdout=PIPE,
             stderr=PIPE,
             close_fds=False,
         )
+        LOGGER.info('pid=%d Subprocess launched', self.process.pid)
         loop = loop or asyncio.get_event_loop()
         loop.create_task(self.__command_reader())
         loop.create_task(self.__stderr_reader())
 
-        down_socket = socket.create_connection(str(self.__config.down_address).split(':', 1))
+        down_host, down_port = as_str(self.__config.down_address).split(':', 1)
+        down_socket = socket.create_connection((down_host, int(down_port)))
         down_reader, down_writer = await asyncio.open_connection(sock=down_socket)
 
-        self.process.stdin.write(
-            '''\
+        command = f'''\
 config.feed <- 'feed';
 config.send <- 'send';
 config.command_out_fd <- 1;
-send.fd <- {down_fd};'''
-        ).format(down_fd=down_socket.fileno())
-
-        if subscription := self.__config.subscription:
-
-            def print_object(object_):
-                self.process.stdin.write()
-
-            subscription.walk(print_object)
-            self.process.stdin.write(self._get_payload(str(subscription), subscription.instrument))
-            self.process.stdin.write(
-                f'''\
-config.subscription <- {subscription}';
+feed.snapshot <- '{as_str(self.__config.up_snapshot_address)}';
+feed.updates <- '{as_str(self.__config.up_updates_address)}';
+send.fd <- {down_socket.fileno()};
 '''
-            ).format()
 
-        self.process.stdin.write(self.__config)
-        self.process.stdin.write('\n\n')
-        await self.process.stdin.drain()
+        if subscription := as_object(self.__config.subscription):
+            instrument: int = as_int(subscription.instrument)
+            command += "\n".join(format_assignment(object_.name, field, value) for object_, field, value in subscription.walk()) + "\n"
+            command += self._get_payload(subscription.name, self.__instruments[instrument])
+            command += f'''\
+config.subscription <- '{subscription}';
+'''
+        await self.__send(command)
 
-    async def send_payload(self, instrument):
-        self.process.stdin.write(
-            '''\
-entrypoint.type <- 'payload';'''
-        )
-        self.process.stdin.write(self._get_payload('entrypoint', instrument))
-        await self.process.stdin.drain()
+    async def send_payload(self, instrument:int) -> None:
+        await self.__send('''\
+entrypoint.type <- 'payload';
+''' + self._get_payload('entrypoint', self.__instruments[instrument]))
 
-    async def send_subscribe(self, instrument: int, **kwargs):
-        self.process.stdin.write(
-            '''\
-entrypoint.type <- 'subscribe';'''
-        )
-        self.process.stdin.write(self._get_payload('entrypoint', instrument))
-        await self.process.stdin.drain()
-        self.process.stdin.write(
-            write_config(
-                {
-                    'entrypoint': {
-                        **kwargs,
-                    }
-                }
-            ).encode()
-            + b'\n\n'
-        )
-        await self.process.stdin.drain()
+    async def send_subscribe(self, instrument: int, **kwargs) -> None:
+        await self.__send('''\
+entrypoint.type <- 'subscribe';
+''' + self._get_payload('entrypoint', self.__instruments[instrument]) + write_config( { 'entrypoint': { **kwargs, } }))
 
-    async def send_unsubscribe(self, instrument: int):
-        self.process.stdin.write(write_config({'entrypoint': {'type': 'unsubscribe', 'instrument': instrument}}).encode() + b'\n\n')
-        await self.process.stdin.drain()
+    async def send_unsubscribe(self, instrument: int) -> None:
+        await self.__send(write_config({'entrypoint': {'type': 'unsubscribe', 'instrument': instrument}}))
 
-    async def quit(self):
-        self.process.stdin.write(write_config({'entrypoint': {'type': 'quit'}}).encode() + b'\n\n')
-        await self.process.stdin.drain()
-        return_code = await self.process.wait()
+    async def quit(self) -> None:
+        await self.__send(write_config({'entrypoint': {'type': 'quit'}}))
+        return_code:int = await self.process.wait()
         logging.info(return_code)
 
-    async def __command_reader(self):
+    async def __command_reader(self) -> None:
         while True:
-            command = await self.process.stdout.readuntil('\n\n')
+            command:str = (await cast(StreamReader, self.process.stdout).readuntil(b'\n\n')).decode()
             request = Walker(parse(command), 'request')
             if request.type == 'request_payload':
-                self.send_payload(request.instrument)
-            logging.info(line)
+                self.send_payload(as_int(request.instrument))
+            if request.type == 'exit':
+                break
+            logging.info(command)
 
-    async def __stderr_reader(self):
-        async for line in self.process.stderr:
-            logging.info(line)
+    async def __stderr_reader(self) -> None:
+        async for line in cast(StreamReader, self.process.stderr):
+            logging.info(f'[SUB] {line.decode()}')
 
     async def run(self):
         pass

@@ -81,7 +81,7 @@ struct automata final /*: boost::noncopyable*/
   {
     if(instrument_maybe_disabled(instrument_id)) [[unlikely]]
       return;
-    data.emplace_back(std::move(automaton));
+    data.push_back(std::move(automaton));
     instrument_ids.push_back(instrument_id);
   }
 
@@ -102,6 +102,7 @@ struct automata final /*: boost::noncopyable*/
 
   auto enter_cooldown(automaton *instrument) noexcept
   {
+    REQUIRES(instrument);
     instrument_ids[std::size_t(instrument - &data[0])] = INVALID_INSTRUMENT;
     return [&, instrument_id = instrument->instrument_id]() { // capture the id, some subscriptions/unsubscriptions may have happened in the interval
       if(const auto *automaton = instrument_maybe_disabled(instrument_id); automaton) [[likely]]

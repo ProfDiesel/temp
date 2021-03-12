@@ -22,6 +22,10 @@
 #include <thread>
 #include <variant>
 
+#if defined(LOGGER_SYSLOG_FORMAT)
+#include <syslog.h>
+#endif // defined(LOGGER_SYSLOG_FORMAT)
+
 namespace bp = boilerplate;
 
 namespace logger
@@ -70,6 +74,23 @@ constexpr auto is_format_v<format<chars...>> = true;
 
 struct printer
 {
+#if defined(LOGGER_SYSLOG_FORMAT)
+  int facility = LOG_USER;
+
+  static constexpr auto level_to_priority(level level) noexcept
+  {
+    switch(level)
+    {
+      case level::DEBUG_: return LOG_DEBUG;
+      case level::INFO: return LOG_INFO;
+      case level::WARNING: return LOG_WARNING;
+      case level::ERROR: return LOG_ERR;
+      case level::CRITICAL: return LOG_CRIT;
+    }
+  }
+
+#else // defined(LOGGER_SYSLOG_FORMAT)
+
   static constexpr auto level_to_string(level level) noexcept
   {
     switch(level)
@@ -82,6 +103,8 @@ struct printer
     }
     return "";
   }
+
+#endif // defined(LOGGER_SYSLOG_FORMAT)
 
 #if defined(LOGGER_FMT_COMPILE)
   template<typename>
@@ -98,8 +121,11 @@ struct printer
     {
       std::array<char, 4'096> line {};
       using namespace literals;
-      const auto [out, size] = fmt::format_to_n(line.data(), sizeof(line) - 1, FMT_COMPILE(("{:016x} {}"_format + first_arg_type {} + "\n"_format).buffer), tsc,
-                                                level_to_string(level), args...);
+#if defined(LOGGER_SYSLOG_FORMAT)
+      const auto [out, size] = fmt::format_to_n(line.data(), sizeof(line) - 1, FMT_COMPILE(("<{}> {:016x} "_format + first_arg_type {} + "\n"_format).buffer), level_to_priority(level), tsc, args...);
+#else // defined(LOGGER_SYSLOG_FORMAT)
+      const auto [out, size] = fmt::format_to_n(line.data(), sizeof(line) - 1, FMT_COMPILE(("{:016x} {}"_format + first_arg_type {} + "\n"_format).buffer), tsc, level_to_string(level), args...);
+#endif // defined(LOGGER_SYSLOG_FORMAT)
       *out = '\0';
       std::fwrite(line.data(), 1, size, stderr);
     }
@@ -289,11 +315,11 @@ struct ostreamlike_basic_logger : basic_logger<printer_type, on_full_type>
 
 // clang-format off
 #define LOG(instance, level, to_log)   do { if((level) >= logger::global_log_level) { (instance).log() << (level) << to_log; } } while(false)
-#define LOG_DEBUG(instance, to_log)    LOG(instance, logger::level::DEBUG,    to_log)
-#define LOG_INFO(instance, to_log)     LOG(instance, logger::level::INFO,     to_log)
-#define LOG_WARNING(instance, to_log)  LOG(instance, logger::level::WARNING,  to_log)
-#define LOG_ERROR(instance, to_log)    LOG(instance, logger::level::ERROR,    to_log)
-#define LOG_CRITICAL(instance, to_log) LOG(instance, logger::level::CRITICAL, to_log)
+#define LOG_DEBUG_(instance, to_log)    LOG(instance, logger::level::DEBUG,    to_log)
+#define LOG_INFO_(instance, to_log)     LOG(instance, logger::level::INFO,     to_log)
+#define LOG_WARNING_(instance, to_log)  LOG(instance, logger::level::WARNING,  to_log)
+#define LOG_ERROR_(instance, to_log)    LOG(instance, logger::level::ERROR,    to_log)
+#define LOG_CRITICAL_(instance, to_log) LOG(instance, logger::level::CRITICAL, to_log)
 // clang-format on
 
 struct variant_buffer
@@ -307,7 +333,7 @@ struct variant_buffer
   template<typename to_log_type>
   auto &operator<<(to_log_type &&to_log) noexcept
   {
-    elements_.emplace_back(to_log);
+    elements_.emplace_back(std::forward<to_log_type>(to_log));
     return *this;
   }
 };
@@ -341,4 +367,3 @@ struct logger_loop
   }
 };
 } // namespace logger
-

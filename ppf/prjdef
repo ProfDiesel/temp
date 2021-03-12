@@ -1,0 +1,28 @@
+#!/usr/bin/env genjutsu
+
+from genjutsu import Apply, Prjdef, Default
+from genjutsu_toolsets.c import Cxx, SharedObject, Executable, IncludeDir, CxxDef
+from þirdparty import ThirdParty
+
+parent_prjdef = Prjdef('..')
+
+Apply(
+    IncludeDir('../include'),
+    IncludeDir('../src'),
+    CxxDef('__USE_PRECOMPILED_HEADER__'),
+    (thirdparty.FLAGS for thirdparty in parent_prjdef.thirdparties.values()),
+)
+
+Apply(CxxDef('LINUX'))
+
+Apply(CxxDef('LEAN_AND_MEAN'))
+Apply(CxxDef('LOGGER_FMT_COMPILE'))
+# Apply(CxxDef('BOOST_SPIRIT_X3_DEBUG'))
+
+
+up = SharedObject('up', objects=(Cxx('tests/up.cpp', pic=True),))
+Executable('up_test', objects=(Cxx('tests/up.cpp', name='up_test', flags=(CxxDef('TEST'),), quick_build_alias=None),))
+
+Default(up)
+
+# vim: set filetype=python

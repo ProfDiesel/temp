@@ -4,5 +4,6 @@
     "python.linting.enabled": true,
     "files.associations": {
         "chrono": "cpp"
-    }
+    },
+    "python.linting.flake8Enabled": true
 }

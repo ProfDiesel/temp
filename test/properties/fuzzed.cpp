@@ -158,7 +158,7 @@ auto main() -> int
       const auto config = ""sv;
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(config));
 
-      const auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
+      auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
                                          [&](auto fast_path) -> boost::leaf::result<void> {
                                            while(!service.stopped())
                                              [[likely]]

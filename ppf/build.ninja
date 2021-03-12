@@ -1,0 +1,281 @@
+ninja_required_version=1.10
+include /home/jonathan/dev/pipo/genjutsu/resources/common.ninja_inc
+PYTHON=/usr/bin/python3
+NPROC=4
+include /home/jonathan/dev/pipo/genjutsu/resources/clang-linux.ninja_inc
+include /home/jonathan/dev/pipo/genjutsu/resources/gnu_toolset.ninja_inc
+include /home/jonathan/dev/pipo/genjutsu/resources/filesystem-linux.ninja_inc
+subninja /home/jonathan/dev/pipo/temp/ppf/common_build.ninja
+subninja /home/jonathan/dev/pipo/temp/common_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/common_build.ninja
+subninja /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_use/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/profile_sample_use/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/profile_sample_use/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile_sample_use/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/profile_sample_use/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_sample_use/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile_sample_use/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile_sample_use/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile_sample_use/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_use/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/profile_sample_use/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/profile_sample_use/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile_sample_use/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile_sample_use/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:profile_sample_use$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile_sample_use/test/unit/starter.o
+build benchmark$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile_sample_use/traversal_benchmark
+build contrib$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile_sample_use/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile_sample_use/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_sample_use/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile_sample_use/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_sample_use/trigger_helper_test
+build pch$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/profile_sample_use/precompiled_header.pch
+build ppf_ol$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/profile_sample_use/ppf_ol
+build test$:profile_sample_use : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile_sample_use/tests /home/jonathan/dev/pipo/temp/build/test/properties/profile_sample_use/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/default/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/default/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/default/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/default/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/default/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/default/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/default/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/default/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/default/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/default/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/default/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/default/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/default/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/default/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/default/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/ppf/build/default/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:default : phony /home/jonathan/dev/pipo/temp/ppf/build/default/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/default/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:default : phony /home/jonathan/dev/pipo/temp/build/default/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/default/src/main.o
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/default/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/test/properties/default/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/test/properties/default/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/test/properties/default/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/test/properties/default/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:default$:default : phony /home/jonathan/dev/pipo/temp/build/test/unit/default/test/unit/starter.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:default : phony /home/jonathan/dev/pipo/temp/build/test/unit/default/test/unit/starter.o
+build benchmark$:default : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/default/traversal_benchmark
+build benchmark : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/default/traversal_benchmark
+build contrib$:default : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/default/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/default/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/default/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/default/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/default/trigger_helper_test
+build contrib : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/default/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/default/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/default/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/default/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/default/trigger_helper_test
+build pch$:default : phony /home/jonathan/dev/pipo/temp/build/default/precompiled_header.pch
+build pch : phony /home/jonathan/dev/pipo/temp/build/default/precompiled_header.pch
+build ppf_ol$:default : phony /home/jonathan/dev/pipo/temp/build/default/ppf_ol
+build ppf_ol : phony /home/jonathan/dev/pipo/temp/build/default/ppf_ol
+build test$:default : phony /home/jonathan/dev/pipo/temp/build/test/unit/default/tests /home/jonathan/dev/pipo/temp/build/test/properties/default/fuzzable
+build test : phony /home/jonathan/dev/pipo/temp/build/test/unit/default/tests /home/jonathan/dev/pipo/temp/build/test/properties/default/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_undefined/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/sanitize_undefined/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/sanitize_undefined/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/sanitize_undefined/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/sanitize_undefined/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_undefined/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/sanitize_undefined/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/sanitize_undefined/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/sanitize_undefined/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/ppf/build/sanitize_undefined/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/sanitize_undefined/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/sanitize_undefined/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_undefined/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_undefined/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:sanitize_undefined$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/test/unit/sanitize_undefined/test/unit/starter.o
+build benchmark$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/sanitize_undefined/traversal_benchmark
+build contrib$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/sanitize_undefined/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/sanitize_undefined/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_undefined/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/sanitize_undefined/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_undefined/trigger_helper_test
+build pch$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/sanitize_undefined/precompiled_header.pch
+build ppf_ol$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/sanitize_undefined/ppf_ol
+build test$:sanitize_undefined : phony /home/jonathan/dev/pipo/temp/build/test/unit/sanitize_undefined/tests /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_undefined/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/debug/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/debug/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/debug/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/debug/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/debug/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/debug/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/debug/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/debug/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/debug/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/ppf/build/debug/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/debug/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/debug/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/test/properties/debug/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/test/properties/debug/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:debug$:debug : phony /home/jonathan/dev/pipo/temp/build/test/unit/debug/test/unit/starter.o
+build benchmark$:debug : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/debug/traversal_benchmark
+build contrib$:debug : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/debug/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/debug/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/debug/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/debug/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/debug/trigger_helper_test
+build pch$:debug : phony /home/jonathan/dev/pipo/temp/build/debug/precompiled_header.pch
+build ppf_ol$:debug : phony /home/jonathan/dev/pipo/temp/build/debug/ppf_ol
+build test$:debug : phony /home/jonathan/dev/pipo/temp/build/test/unit/debug/tests /home/jonathan/dev/pipo/temp/build/test/properties/debug/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/profile/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/profile/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/profile/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/profile/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/ppf/build/profile/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/profile/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/profile/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:profile$:profile : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile/test/unit/starter.o
+build benchmark$:profile : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile/traversal_benchmark
+build contrib$:profile : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile/trigger_helper_test
+build pch$:profile : phony /home/jonathan/dev/pipo/temp/build/profile/precompiled_header.pch
+build ppf_ol$:profile : phony /home/jonathan/dev/pipo/temp/build/profile/ppf_ol
+build test$:profile : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile/tests /home/jonathan/dev/pipo/temp/build/test/properties/profile/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_record/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/profile_sample_record/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/profile_sample_record/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile_sample_record/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/profile_sample_record/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_sample_record/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile_sample_record/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile_sample_record/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile_sample_record/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_record/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/profile_sample_record/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/profile_sample_record/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile_sample_record/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile_sample_record/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:profile_sample_record$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile_sample_record/test/unit/starter.o
+build benchmark$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile_sample_record/traversal_benchmark
+build contrib$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile_sample_record/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile_sample_record/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_sample_record/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile_sample_record/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_sample_record/trigger_helper_test
+build pch$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/profile_sample_record/precompiled_header.pch
+build ppf_ol$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/profile_sample_record/ppf_ol
+build test$:profile_sample_record : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile_sample_record/tests /home/jonathan/dev/pipo/temp/build/test/properties/profile_sample_record/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_use/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/profile_instr_use/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/profile_instr_use/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile_instr_use/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/profile_instr_use/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_instr_use/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile_instr_use/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile_instr_use/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile_instr_use/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_use/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/profile_instr_use/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/profile_instr_use/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile_instr_use/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile_instr_use/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:profile_instr_use$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile_instr_use/test/unit/starter.o
+build benchmark$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile_instr_use/traversal_benchmark
+build contrib$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile_instr_use/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile_instr_use/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_instr_use/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile_instr_use/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_instr_use/trigger_helper_test
+build pch$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/profile_instr_use/precompiled_header.pch
+build ppf_ol$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/profile_instr_use/ppf_ol
+build test$:profile_instr_use : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile_instr_use/tests /home/jonathan/dev/pipo/temp/build/test/properties/profile_instr_use/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_record/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/profile_instr_record/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/profile_instr_record/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile_instr_record/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/profile_instr_record/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_instr_record/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile_instr_record/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile_instr_record/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile_instr_record/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_record/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/profile_instr_record/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/profile_instr_record/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile_instr_record/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/test/properties/profile_instr_record/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:profile_instr_record$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile_instr_record/test/unit/starter.o
+build benchmark$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/profile_instr_record/traversal_benchmark
+build contrib$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/profile_instr_record/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/profile_instr_record/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_instr_record/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/profile_instr_record/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/profile_instr_record/trigger_helper_test
+build pch$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/profile_instr_record/precompiled_header.pch
+build ppf_ol$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/profile_instr_record/ppf_ol
+build test$:profile_instr_record : phony /home/jonathan/dev/pipo/temp/build/test/unit/profile_instr_record/tests /home/jonathan/dev/pipo/temp/build/test/properties/profile_instr_record/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_thread/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/sanitize_thread/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/sanitize_thread/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/sanitize_thread/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/sanitize_thread/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_thread/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/sanitize_thread/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/sanitize_thread/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/sanitize_thread/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/ppf/build/sanitize_thread/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/sanitize_thread/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/sanitize_thread/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_thread/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_thread/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:sanitize_thread$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/test/unit/sanitize_thread/test/unit/starter.o
+build benchmark$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/sanitize_thread/traversal_benchmark
+build contrib$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/sanitize_thread/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/sanitize_thread/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_thread/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/sanitize_thread/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_thread/trigger_helper_test
+build pch$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/sanitize_thread/precompiled_header.pch
+build ppf_ol$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/sanitize_thread/ppf_ol
+build test$:sanitize_thread : phony /home/jonathan/dev/pipo/temp/build/test/unit/sanitize_thread/tests /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_thread/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/coverage/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/coverage/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/coverage/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/coverage/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/coverage/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/coverage/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/coverage/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/coverage/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/coverage/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/ppf/build/coverage/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/coverage/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/coverage/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/test/properties/coverage/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/test/properties/coverage/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:coverage$:coverage : phony /home/jonathan/dev/pipo/temp/build/test/unit/coverage/test/unit/starter.o
+build benchmark$:coverage : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/coverage/traversal_benchmark
+build contrib$:coverage : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/coverage/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/coverage/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/coverage/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/coverage/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/coverage/trigger_helper_test
+build pch$:coverage : phony /home/jonathan/dev/pipo/temp/build/coverage/precompiled_header.pch
+build ppf_ol$:coverage : phony /home/jonathan/dev/pipo/temp/build/coverage/ppf_ol
+build test$:coverage : phony /home/jonathan/dev/pipo/temp/build/test/unit/coverage/tests /home/jonathan/dev/pipo/temp/build/test/properties/coverage/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_address/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/sanitize_address/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/sanitize_address/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/sanitize_address/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/sanitize_address/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_address/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/sanitize_address/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/sanitize_address/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/sanitize_address/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/ppf/build/sanitize_address/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/sanitize_address/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/sanitize_address/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_address/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_address/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:sanitize_address$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/test/unit/sanitize_address/test/unit/starter.o
+build benchmark$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/sanitize_address/traversal_benchmark
+build contrib$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/sanitize_address/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/sanitize_address/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_address/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/sanitize_address/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_address/trigger_helper_test
+build pch$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/sanitize_address/precompiled_header.pch
+build ppf_ol$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/sanitize_address/ppf_ol
+build test$:sanitize_address : phony /home/jonathan/dev/pipo/temp/build/test/unit/sanitize_address/tests /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_address/fuzzable
+subninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_memory/local_build.ninja
+subninja /home/jonathan/dev/pipo/temp/build/sanitize_memory/local_build.ninja
+subninja /home/jonathan/dev/pipo/dependencies/build/sanitize_memory/local_build.ninja
+build /home/jonathan/dev/pipo/temp/benchmark/integration/traversal.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/sanitize_memory/benchmark/integration/traversal.o
+build /home/jonathan/dev/pipo/temp/benchmark/unit/string_dispatch.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/benchmark/unit/sanitize_memory/benchmark/unit/string_dispatch.o
+build /home/jonathan/dev/pipo/temp/contrib/notebook/trigger_helper.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_memory/contrib/notebook/pic/trigger_helper.o
+build /home/jonathan/dev/pipo/temp/contrib/production/mlockall/mlockall.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/sanitize_memory/contrib/production/mlockall/pic/mlockall.o
+build /home/jonathan/dev/pipo/temp/contrib/production/smartbulb/smartbulb.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/sanitize_memory/contrib/production/smartbulb/pic/smartbulb.o
+build /home/jonathan/dev/pipo/temp/contrib/production/tsc_calibrate/tsc_calibrate.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/sanitize_memory/contrib/production/tsc_calibrate/tsc_calibrate.o
+build /home/jonathan/dev/pipo/temp/ppf/tests/up.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/ppf/build/sanitize_memory/tests/pic/up.o
+build /home/jonathan/dev/pipo/temp/src/feed/feed.hpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/sanitize_memory/src/feed/feed.i
+build /home/jonathan/dev/pipo/temp/src/main.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/sanitize_memory/src/main.o
+build /home/jonathan/dev/pipo/temp/test/properties/config_properties.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_memory/test/properties/config_properties.o
+build /home/jonathan/dev/pipo/temp/test/properties/fuzzed.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_memory/test/properties/fuzzed.o
+build /home/jonathan/dev/pipo/temp/test/unit/starter.cpp$:sanitize_memory$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/test/unit/sanitize_memory/test/unit/starter.o
+build benchmark$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/benchmark/integration/sanitize_memory/traversal_benchmark
+build contrib$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/contrib/production/mlockall/sanitize_memory/libmlockall.so /home/jonathan/dev/pipo/temp/build/contrib/production/tsc_calibrate/sanitize_memory/tsc_calibrate /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_memory/libtrigger_helper.so /home/jonathan/dev/pipo/temp/build/contrib/production/smartbulb/sanitize_memory/libsmartbulb.so /home/jonathan/dev/pipo/temp/build/contrib/notebook/sanitize_memory/trigger_helper_test
+build pch$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/sanitize_memory/precompiled_header.pch
+build ppf_ol$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/sanitize_memory/ppf_ol
+build test$:sanitize_memory : phony /home/jonathan/dev/pipo/temp/build/test/unit/sanitize_memory/tests /home/jonathan/dev/pipo/temp/build/test/properties/sanitize_memory/fuzzable
+build profile_sample_use : phony /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_use/libup.so /home/jonathan/dev/pipo/temp/build/profile_sample_use/ppf
+build default : phony /home/jonathan/dev/pipo/temp/ppf/build/default/libup.so /home/jonathan/dev/pipo/temp/build/default/ppf
+build sanitize_undefined : phony /home/jonathan/dev/pipo/temp/ppf/build/sanitize_undefined/libup.so /home/jonathan/dev/pipo/temp/build/sanitize_undefined/ppf
+build debug : phony /home/jonathan/dev/pipo/temp/ppf/build/debug/libup.so /home/jonathan/dev/pipo/temp/build/debug/ppf
+build profile : phony /home/jonathan/dev/pipo/temp/ppf/build/profile/libup.so /home/jonathan/dev/pipo/temp/build/profile/ppf
+build profile_sample_record : phony /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_record/libup.so /home/jonathan/dev/pipo/temp/build/profile_sample_record/ppf
+build profile_instr_use : phony /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_use/libup.so /home/jonathan/dev/pipo/temp/build/profile_instr_use/ppf
+build profile_instr_record : phony /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_record/libup.so /home/jonathan/dev/pipo/temp/build/profile_instr_record/ppf
+build sanitize_thread : phony /home/jonathan/dev/pipo/temp/ppf/build/sanitize_thread/libup.so /home/jonathan/dev/pipo/temp/build/sanitize_thread/ppf
+build coverage : phony /home/jonathan/dev/pipo/temp/ppf/build/coverage/libup.so /home/jonathan/dev/pipo/temp/build/coverage/ppf
+build sanitize_address : phony /home/jonathan/dev/pipo/temp/ppf/build/sanitize_address/libup.so /home/jonathan/dev/pipo/temp/build/sanitize_address/ppf
+build sanitize_memory : phony /home/jonathan/dev/pipo/temp/ppf/build/sanitize_memory/libup.so /home/jonathan/dev/pipo/temp/build/sanitize_memory/ppf
+default default
+build /home/jonathan/dev/pipo/temp/ppf/build.ninja /home/jonathan/dev/pipo/temp/ppf/build.ninja.d /home/jonathan/dev/pipo/temp/ppf/common_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_use/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/default/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_undefined/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/debug/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_record/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_use/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_record/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_thread/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/coverage/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_address/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_memory/build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_use/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/default/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_undefined/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/debug/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile_sample_record/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_use/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/profile_instr_record/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_thread/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/coverage/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_address/local_build.ninja /home/jonathan/dev/pipo/temp/ppf/build/sanitize_memory/local_build.ninja : genjutsu /home/jonathan/dev/pipo/temp/ppf/prjdef

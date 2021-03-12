@@ -9,6 +9,7 @@
 #include "payload.hpp"
 
 
+#include <boilerplate/contracts.hpp>
 #include <boilerplate/chrono.hpp>
 #include <boilerplate/leaf.hpp>
 #include <boilerplate/logger.hpp>
@@ -30,8 +31,9 @@
 #include <asio/read_until.hpp>
 #include <asio/write.hpp>
 
-#include <boost/hof/fix.hpp>
+#if !defined(LEAN_AND_MEAN) && !defined(FUZZ_TEST_HARNESS)
 #include <boost/hof/partial.hpp>
+#endif // !defined(LEAN_AND_MEAN) && !defined(FUZZ_TEST_HARNESS)
 
 #include <fmt/compile.h>
 #include <fmt/format.h>
@@ -65,7 +67,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 #endif // defined(BACKTEST_HARNESS)
 
 
-[[using gnu: flatten]] auto run(const config::properties::walker &config, asio::io_context &service, auto &command_input,
+[[using gnu: flatten]] auto run(const config::walker &config, asio::io_context &service, auto &command_input,
          auto &command_output, boilerplate::not_null_observer_ptr<logger::logger> logger, auto &&continuation,
          auto dynamic_subscription, auto &&trigger, auto handle_packet_loss,
          auto send_datagram) noexcept -> boost::leaf::result<void>
@@ -75,9 +77,6 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
   const auto feed = config["feed"_hs];
   const auto send = config["send"_hs];
   const auto subscription = config["subscription"_hs];
-#if defined(USE_TCPDIRECT)
-  static_stack stack;
-#endif // defined(USE_TCPDIRECT)
 
   auto spawn = [&](auto coroutine) {
     asio::co_spawn(
@@ -87,7 +86,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
         if(!result)
         {
           using namespace logger::literals;
-          logger->log(logger::critical, "{}. Leaving ..."_format, result.assume_error());
+          logger->log(logger::critical, "error={} Leaving ..."_format, result.assume_error());
           service.stop();
         }
       },
@@ -110,13 +109,14 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 #if defined(BACKTEST_HARNESS)
       const auto requester = backtest::make_snapshot_requester();
 #else //  defined(BACKTEST_HARNESS)
-    const auto [snapshot_host, snapshot_port] = (config::address)from_walker(feed["snapshot"_hs]);
-    const auto snapshot_endpoints = BOOST_LEAF_EC_TRY(asio::ip::tcp::resolver(service).resolve(snapshot_host, snapshot_port, _));
-    auto snapshot_socket = asio::ip::tcp::socket(service);
-    BOOST_LEAF_EC_TRY(asio::connect(snapshot_socket, snapshot_endpoints, _));
+      const auto [snapshot_host, snapshot_port] = (config::address)*feed["snapshot"_hs];
+      const auto snapshot_endpoints = BOOST_LEAF_EC_TRY(asio::ip::tcp::resolver(service).resolve(snapshot_host, snapshot_port, _));
+      auto snapshot_socket = asio::ip::tcp::socket(service);
+      BOOST_LEAF_EC_TRY(asio::connect(snapshot_socket, snapshot_endpoints, _));
 #endif // defined(BACKTEST_HARNESS)
 
     [&](typename automata_type::automaton *automaton) noexcept -> asio::awaitable<out::result<void>> {
+      REQUIRES(automaton);
       if constexpr(handle_packet_loss)
       {
         if(automaton->snapshot_request_running) [[unlikely]]
@@ -127,7 +127,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 #if defined(BACKTEST_HARNESS)
       auto state = OUTCOME_CO_TRYX(co_await requester(automaton->instrument_id));
 #else //  defined(BACKTEST_HARNESS)
-      auto state = OUTCOME_CO_TRYX(co_await feed::request_snapshot(snapshot_socket, automaton->instrument_id));
+        auto state = OUTCOME_CO_TRYX(co_await feed::request_snapshot(snapshot_socket, automaton->instrument_id));
 #endif // defined(BACKTEST_HARNESS)
       automaton->trigger.reset(std::move(state));
       if constexpr(handle_packet_loss)
@@ -225,16 +225,14 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 #if defined(BACKTEST_HARNESS)
     auto updates_source = backtest::make_update_source();
 #else
-    const auto [updates_host, updates_port] = (config::address)from_walker(feed["update"_hs]);
-    auto updates_source = BOOST_LEAF_TRYX(
-#  if defined(USE_TCPDIRECT)
-      multicast_udp_reader::create(service, stack, updates_host, updates_port)
-#  elif defined(LINUX)
-      multicast_udp_reader::create(service, updates_host, updates_port, from_walker(feed["spin_duration"_hs]))
+      const auto [updates_host, updates_port] = (config::address)*feed["update"_hs];
+      auto updates_source = BOOST_LEAF_TRYX(
+#  if defined(LINUX) && !defined(USE_TCPDIRECT)
+        multicast_udp_reader::create(service, updates_host, updates_port, *feed["spin_duration"_hs])
 #  else
-      multicast_udp_reader::create(service, updates_host, updates_port)
-#  endif // defined(USE_TCPDIRECT)
-    );
+        multicast_udp_reader::create(service, updates_host, updates_port)
+#  endif // defined(LINUX) && !defined(USE_TCPDIRECT)
+      );
 #endif   // defined(BACKTEST_HARNESS)
 
     const auto spin_count = std::min(std::size_t(feed["spin_count"_hs]), std::size_t(1));
@@ -261,9 +259,8 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
       return automaton;
     };
 
-    //hof::partial(feed::decode)(decode_header);
     [&decode_header](auto &&continuation, const network_clock::time_point &timestamp, const asio::const_buffer &buffer) noexcept {
-      return feed::decode(decode_header, continuation, timestamp, buffer);
+      return feed::detail::decode(decode_header, continuation, timestamp, buffer);
     };
   });
 
@@ -272,8 +269,8 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
   // TRIGGER
   //
 
-  const auto trigger_ = [](auto &&continuation, const network_clock::time_point &feed_timestamp, feed::update &&update, typename automata_type::automaton *automaton) noexcept {
-    return (automaton->trigger)(continuation, feed_timestamp, std::forward<decltype(update)>(update), automaton);
+  const auto trigger_ = [](auto &&continuation, const network_clock::time_point &feed_timestamp, const feed::update &update, typename automata_type::automaton *automaton) noexcept {
+    return (automaton->trigger)(continuation, feed_timestamp, update, automaton);
   };
 
   //
@@ -285,12 +282,8 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
     auto send_socket = BOOST_LEAF_TRYX([&]() {
       if constexpr(send_datagram())
       {
-        const auto [send_host, send_port] = (config::address)from_walker(send["datagram"_hs]);
-#if defined(USE_TCPDIRECT)
-        return udp_writer::create(service, stack, send_host, send_port);
-#else
+        const auto [send_host, send_port] = (config::address) * send["datagram"_hs];
         return udp_writer::create(service, send_host, send_port);
-#endif // defined(USE_TCPDIRECT)
       }
       else
         return boost::leaf::result<boilerplate::empty> {};
@@ -303,7 +296,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 #endif // defined(BACKTEST_HARNESS)
 
     const bool disposable_payload = send["disposable_payload"_hs];
-    const std::chrono::steady_clock::duration cooldown = from_walker(send["cooldown"_hs]);
+    const std::chrono::steady_clock::duration cooldown = *send["cooldown"_hs];
 
     [&, send_socket = std::move(send_socket), stream_send = std::move(stream_send), disposable_payload, cooldown](const network_clock::time_point &feed_timestamp, typename automata_type::automaton *instrument,
                                                                                                                   auto send_for_real) mutable noexcept {
@@ -321,7 +314,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
       stream_send(asio::const_buffer(instrument->payload.stream_payload));
 
       using namespace logger::literals;
-      logger->log(logger::info, "Sent instrument:{} in:{} out:{}"_format, instrument->instrument_id, to_timespec(feed_timestamp), to_timespec(send_timestamp));
+      logger->log(logger::info, "instrument={} in_ts={} out_ts={} Payload sent"_format, instrument->instrument_id, to_timespec(feed_timestamp), to_timespec(send_timestamp));
 
       if(disposable_payload)
       {
@@ -379,7 +372,7 @@ request.instrument = {}\n\n");
 }
 
 
-auto with_trigger_path(const config::properties::walker &config, asio::io_context &service, auto &command_input,
+auto with_trigger_path(const config::walker &config, asio::io_context &service, auto &command_input,
                        auto &command_output, boilerplate::not_null_observer_ptr<logger::logger> logger,
                        auto continuation) noexcept
 {

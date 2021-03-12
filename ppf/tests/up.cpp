@@ -8,6 +8,7 @@
 #include <asio/ip/tcp.hpp>
 #include <asio/ip/udp.hpp>
 
+#include <iostream>
 #include <string_view>
 #include <thread>
 #include <tuple>
@@ -57,24 +58,12 @@ struct up_server
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" up_server *up_server_new(const char *snapshot_address, const char *updates_address)
+extern "C" up_server *up_server_new(const char *snapshot_host, const char *snapshot_service, const char *updates_host, const char *updates_service)
 {
   asio::io_context service;
-
-  const auto snapshot_endpoint = ({
-    const std::string_view snapshot_address_(snapshot_address);
-    const auto n = snapshot_address_.find(':');
-    std::error_code ec;
-    asio::ip::tcp::resolver(service).resolve(snapshot_address_.substr(0, n), snapshot_address_.substr(n + 1), ec);
-  });
-  const auto updates_endpoint = ({
-    const std::string_view updates_address_(updates_address);
-    const auto n = updates_address_.find(':');
-    std::error_code ec;
-    asio::ip::udp::resolver(service).resolve(updates_address_.substr(0, n), updates_address_.substr(n + 1), ec);
-  });
-
-  return new up_server(*snapshot_endpoint.begin(), *updates_endpoint.begin());
+  const auto snapshot_addresses = asio::ip::tcp::resolver(service).resolve(snapshot_host, snapshot_service);
+  const auto updates_addresses = asio::ip::udp::resolver(service).resolve(updates_host, updates_service);
+  return new up_server(*snapshot_addresses.begin(), *updates_addresses.begin());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -108,7 +97,7 @@ ut::suite up_suite = [] {
   using namespace ut;
 
   "up_server"_test = [] {
-    auto s = up::server("127.0.0.1:9999", "127.0.0.1:9998");
+    auto s = up::server("127.0.0.1", "9999", "127.0.0.1", "9998");
     auto n = s.poll();
   };
 };

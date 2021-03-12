@@ -75,7 +75,7 @@ auto main() -> int
   signals.async_wait([&](auto error_code, auto signal_number) {
     if(error_code)
       return;
-    logger->log(logger::info, "Caught signal {}. Interrupting."_format, signal_number);
+    logger->log(logger::info, "signal={} Interrupting."_format, signal_number);
     service.stop();
   });
 
@@ -87,7 +87,7 @@ auto main() -> int
       BOOST_LEAF_EC_TRY(asio::read_until(command_input, asio::dynamic_buffer(command_buffer), "\n\n", _));
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(command_buffer));
 
-      const auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, logger, [&](auto fast_path) -> boost::leaf::result<void> {
+      auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, logger, [&](auto fast_path) -> boost::leaf::result<void> {
         while(!service.stopped())
           [[likely]]
           {
@@ -102,16 +102,16 @@ auto main() -> int
       return 0;
     },
     [&](const config::parse_error &error, const boost::leaf::e_source_location &location) {
-      logger->log(logger::critical, "{}: At char {}-{}, expected a '{}' expression, got \"{}\"."_format, location, error.indices.first, error.indices.second,
+      logger->log(logger::critical, "location=\"{}:{} {}\" first={} last={} expected={} actual={} Parse error"_format, location.file, location.line, location.function, error.indices.first, error.indices.second,
                   error.which, error.snippet);
       return 1;
     },
     [&](const boost::leaf::error_info &unmatched, const std::error_code &error_code, const boost::leaf::e_source_location &location) {
-      logger->log(logger::critical, "{}: error code {} - {}"_format, location, error_code, fmt::to_string(unmatched));
+      logger->log(logger::critical, "location=\"{}:{} {}\" code={} {}"_format, location.file, location.line, location.function, error_code, fmt::to_string(unmatched));
       return 2;
     },
     [&](const boost::leaf::error_info &unmatched, const boost::leaf::e_source_location &location) {
-      logger->log(logger::critical, "{}: {}"_format, location, fmt::to_string(unmatched));
+      logger->log(logger::critical, "location=\"{}:{} {}\" {}"_format, location.file, location.line, location.function, fmt::to_string(unmatched));
       return 3;
     },
     [&](const boost::leaf::error_info &unmatched) {
@@ -119,4 +119,3 @@ auto main() -> int
       return 4;
     });
 }
-

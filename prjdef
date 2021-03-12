@@ -1,5 +1,12 @@
+#!/usr/bin/env genjutsu
 # vim: set filetype=python
-thirdparties = tuple(
+
+from genjutsu import Apply, Default, Alias, env, main
+from genjutsu_toolsets.c import Cxx, SharedObject, Executable, IncludeDir, CxxDef, Pch
+from genjutsu_toolsets.filesystem import Copy
+from þirdparty import ThirdParty
+
+thirdparties = {thirdparty:
     ThirdParty(thirdparty)
     for thirdparty in (
         'asio_nortti',
@@ -10,23 +17,26 @@ thirdparties = tuple(
         'gsl',
         'leaf_nortti_nothreads',
         'observer-ptr-lite',
+        'openonload',
         'outcome',
         'rangeless',
         'robin_hood',
         'stdfunc_nortti',
-        'ut',
+#        'ut',
     )
-)
+}
+
 Apply(
     IncludeDir('include'),
     CxxDef('__USE_PRECOMPILED_HEADER__'),
-    (thirdparty.FLAGS for thirdparty in thirdparties),
+    (thirdparty.FLAGS for thirdparty in thirdparties.values()),
 )
 
 Apply(CxxDef('LINUX'))
 
 Apply(CxxDef('LEAN_AND_MEAN'))
 Apply(CxxDef('LOGGER_FMT_COMPILE'))
+Apply(CxxDef('LOGGER_SYSLOG_FORMAT'))
 # Apply(CxxDef('BOOST_SPIRIT_X3_DEBUG'))
 
 # pch = GeneratedPch('precompiled_header', sources=('src/main.cpp',), pch_gen_project=Prjdef('../precompiled_header_generator'))
@@ -36,11 +46,14 @@ Copy(
     Cxx('src/feed/feed.hpp', pch=pch, preprocess_only=True),
     'preprocessed/feed/feed.hpp',
 )
-Copy(Cxx('src/main.cpp', pch=pch, preprocess_only=True), 'preprocessed/main.i')
-Copy(Cxx('src/main.cpp', pch=pch, compile_only=True), 'preprocessed/main.s')
-main_exe = Executable('ppf', objects=(Cxx('src/main.cpp', pch=pch),))
 
-Default(main_exe)
+Default(Alias('ppf', (Executable('ppf', objects=(Cxx('src/main.cpp', pch=pch),)),)))
+
+with env():
+    Apply(CxxDef('USE_TCPDIRECT'))
+    Copy(preprocessed := Cxx('src/main.cpp', pch=pch, preprocess_only=True, quick_build_alias=None), 'preprocessed/main.i') # to be used by clang dump-record-layouts
+    Copy(object_ := Cxx(preprocessed, pch=pch, compile_only=True, quick_build_alias=None), 'preprocessed/main.s') # to be used by llvm-mca
+    Alias('ppf_ol', (Executable('ppf_ol', objects=(object_, *thirdparties['openonload'].ARCHIVES)),))
 
 with env('benchmark'):
     Apply(ThirdParty('benchmark').FLAGS)
@@ -87,13 +100,6 @@ with env('contrib/notebook'):
 
 Alias('contrib', (smartbulb_lib, mlockall_lib, trigger_helper_lib, trigger_helper_test, tsc_calibrate_exe))
 
-with env('test/integration'):
-    Apply(IncludeDir('src'))
-    up_lib = SharedObject('up', objects=(Cxx('up.cpp', pch=pch, pic=True),))
-    up_test_exe = Executable(
-        'up_test', objects=(Cxx('up.cpp', name='up_test', pch=pch, flags=(CxxDef('TEST'),), quick_build_alias=None),)
-    )
-
 with env('test/unit'):
     Apply(IncludeDir('src'))
     test_exe = Executable('tests', objects=(Cxx('starter.cpp', pch=pch),))
@@ -105,10 +111,4 @@ with env('test/properties'):
     )
     fuzzable_exe = Executable('fuzzable', objects=(Cxx('fuzzed.cpp', pch=pch),))
 
-Alias('test', (test_exe, fuzzable_exe, up_lib, up_test_exe))
-
-
-with env('playground'):
-    writev = Executable('writev', objects=(Cxx('writev.cpp', pch=pch),))
-
-Alias('playground', (writev,))
+Alias('test', (test_exe, fuzzable_exe))

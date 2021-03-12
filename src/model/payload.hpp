@@ -58,7 +58,7 @@ struct payload final
 };
 
 template<bool send_datagram>
-boost::leaf::result<payload<send_datagram>> decode_payload(const config::properties::walker &walker) noexcept
+boost::leaf::result<payload<send_datagram>> decode_payload(const config::walker &walker) noexcept
 {
   const auto base64 = [&](/*TODO: std::string_view s*/ const std::string &s) noexcept -> boost::leaf::result<detail::owning_aligned_buffer> {
     constexpr std::array lookup_table = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //
@@ -93,10 +93,10 @@ boost::leaf::result<payload<send_datagram>> decode_payload(const config::propert
 
   using namespace config::literals;
   if constexpr(send_datagram)
-    return payload<send_datagram> {.stream_payload = BOOST_LEAF_TRYX(base64(walker["message"_hs])),
-                                   .datagram_payload = BOOST_LEAF_TRYX(base64(walker["datagram"_hs]))};
+    return payload<send_datagram> {.stream_payload = BOOST_LEAF_TRYX(base64(*walker["message"_hs])),
+                                   .datagram_payload = BOOST_LEAF_TRYX(base64(*walker["datagram"_hs]))};
   else
-    return payload<send_datagram> {.stream_payload = BOOST_LEAF_TRYX(base64(walker["message"_hs]))};
+    return payload<send_datagram> {.stream_payload = BOOST_LEAF_TRYX(base64(*walker["message"_hs]))};
 }
 
 #if defined(DOCTEST_LIBRARY_INCLUDED)

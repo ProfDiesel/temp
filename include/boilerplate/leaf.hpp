@@ -8,10 +8,10 @@
 
 #define BOOST_LEAF_TRYX(...)                                                                                                                                   \
   ({                                                                                                                                                           \
-    auto &&BOOST_LEAF_TOKEN_PASTE2(boost_leaf_temp_, __LINE__) = __VA_ARGS__;                                                                                  \
-    if(!BOOST_LEAF_TOKEN_PASTE2(boost_leaf_temp_, __LINE__))                                                                                                   \
-      return BOOST_LEAF_TOKEN_PASTE2(boost_leaf_temp_, __LINE__).error();                                                                                      \
-    std::move(BOOST_LEAF_TOKEN_PASTE2(boost_leaf_temp_, __LINE__)).value();                                                                                    \
+    auto &&BOOST_LEAF_TMP = __VA_ARGS__;                                                                                  \
+    if(!BOOST_LEAF_TMP)                                                                                                   \
+      return BOOST_LEAF_TMP.error();                                                                                      \
+    std::move(BOOST_LEAF_TMP).value();                                                                                    \
   })
 
 #define BOOST_LEAF_EC_TRY(...)                                                                                                                                 \

@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ppf",
+            "type": "python",
+            "request": "launch",
+            "module": "ppf"
+        },
+        {
+            "name": "test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/test_pipo.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {"EXTRA_CLING_ARGS": "-ggdb3"}
+        },
+    ]
+}

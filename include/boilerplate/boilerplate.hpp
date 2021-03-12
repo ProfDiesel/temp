@@ -56,4 +56,8 @@ struct empty final
 
 constexpr void do_nothing() noexcept {}
 
+// Used to forbid template instantiation. ``static_assert(always_false<whatever>); ``
+template<typename...>
+constexpr bool always_false = false;
+
 } // namespace boilerplate
