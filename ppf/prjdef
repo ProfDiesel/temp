@@ -1,6 +1,6 @@
 #!/usr/bin/env genjutsu
 
-from genjutsu import Apply, Prjdef, Default
+from genjutsu import Apply, Prjdef, Default, Alias
 from genjutsu_toolsets.c import Cxx, SharedObject, Executable, IncludeDir, CxxDef
 from þirdparty import ThirdParty
 
@@ -21,7 +21,7 @@ Apply(CxxDef('LOGGER_FMT_COMPILE'))
 
 
 up = SharedObject('up', objects=(Cxx('tests/up.cpp', pic=True),))
-Executable('up_test', objects=(Cxx('tests/up.cpp', name='up_test', flags=(CxxDef('TEST'),), quick_build_alias=None),))
+Alias('up_test', (Executable('up_test', objects=(Cxx('tests/up.cpp', name='up_test', flags=(CxxDef('TEST'),), quick_build_alias=None),)),))
 
 Default(up)
 

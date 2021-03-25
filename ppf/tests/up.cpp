@@ -1,5 +1,7 @@
 #include "up.hpp"
 
+#include "boilerplate/leaf.hpp"
+
 #include "feed/feed_server.hpp"
 #include "feed/feed_structures.hpp"
 
@@ -7,6 +9,7 @@
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/ip/udp.hpp>
+#include <asio/use_future.hpp>
 
 #include <iostream>
 #include <string_view>
@@ -18,12 +21,12 @@
 #if defined(BOOST_NO_EXCEPTIONS)
 namespace boost
 {
-  void throw_exception(const std::exception &exception)
-  {
-    logger::printer printer;
-    printer(0, logger::level::CRITICAL, exception.what());
-    std::abort();
-  }
+void throw_exception(const std::exception &exception)
+{
+  logger::printer printer;
+  printer(0, logger::level::CRITICAL, exception.what());
+  std::abort();
+}
 } // namespace boost
 #endif //  defined(BOOST_NO_EXCEPTIONS)
 
@@ -31,30 +34,46 @@ namespace boost
 #if defined(ASIO_NO_EXCEPTIONS)
 namespace asio::detail
 {
-  template <typename exception_type>
-  void throw_exception(const exception_type &exception)
-  {
-    boost::throw_exception(exception);
-  }
+template<typename exception_type>
+void throw_exception(const exception_type &exception)
+{
+  boost::throw_exception(exception);
+}
 } // namespace asio::detail
 #endif // defined(ASIO_NO_EXCEPTIONS)
+
+const auto handlers = std::tuple {[](const boost::leaf::e_source_location &location, const std::error_code &error_code) -> boost::leaf::awaitable<void> {
+                                    std::clog << location.file << ":" << location.line << " " << error_code.value() << ":" << error_code.message() << "\n";
+                                    std::abort();
+                                  },
+                                  [](const boost::leaf::error_info &error_info) -> boost::leaf::awaitable<void> { std::abort(); }};
 
 ///////////////////////////////////////////////////////////////////////////////
 struct up_server
 {
   asio::io_context service;
   struct feed::server server;
+  std::atomic_flag quit = false;
 
-  up_server(const asio::ip::tcp::endpoint &snapshot_address, const asio::ip::udp::endpoint &updates_address) : server(service, snapshot_address, updates_address)
+  up_server(const asio::ip::tcp::endpoint &snapshot_address, const asio::ip::udp::endpoint &updates_address): server(service)
   {
+    boost::leaf::try_handle_all([&]() noexcept { return server.connect(snapshot_address, updates_address); }, handlers);
+
     asio::co_spawn(
-        service, [this]() -> boost::leaf::awaitable<void> {
-          for (;;)
-            co_await server.accept();
-          co_return;
-        },
-        asio::detached);
+      service,
+      [&]() noexcept -> boost::leaf::awaitable<void> {
+        co_await boost::leaf::co_try_handle_all(
+          [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>> {
+            while(!quit.test(std::memory_order_acquire))
+              BOOST_LEAF_CO_TRY(co_await server.accept());
+            co_return boost::leaf::success();
+          },
+          handlers);
+      },
+      asio::detached);
   }
+
+  ~up_server() { quit.notify_all(); }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -67,16 +86,10 @@ extern "C" up_server *up_server_new(const char *snapshot_host, const char *snaps
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_server_free(up_server *self)
-{
-  delete self;
-}
+extern "C" void up_server_free(up_server *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" std::size_t up_server_poll(up_server *self)
-{
-  return self->service.poll();
-}
+extern "C" std::size_t up_server_poll(up_server *self) { return self->service.poll(); }
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" void up_server_push_update(up_server *self, const up_update_state *states, std::size_t nb_states)
@@ -84,12 +97,17 @@ extern "C" void up_server_push_update(up_server *self, const up_update_state *st
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
   std::for_each_n(states, nb_states, [&](const auto &state) { states_.emplace_back(state.instrument, state.state); });
-  asio::co_spawn(self->service, [&, states=states_]() { return self->server.update(states); }, asio::detached);
+  asio::co_spawn(
+    self->service,
+    [&, states = states]() noexcept -> boost::leaf::awaitable<void> {
+      co_await boost::leaf::co_try_handle_all([&, states = states_]() { return self->server.update(states); }, handlers);
+    },
+    asio::detached);
 }
 
 #if defined(TEST)
 // GCOVR_EXCL_START
-#include <boost/ut.hpp>
+#  include <boost/ut.hpp>
 
 namespace ut = boost::ut;
 

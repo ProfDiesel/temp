@@ -52,15 +52,23 @@ struct server
 
   std::unordered_map<instrument_id_type, state> states {};
 
-  server(asio::io_context &service, const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint):
-    service(service), updates_socket(service), updates_endpoint(updates_endpoint), snapshot_acceptor(service, snapshot_endpoint)
+  server(asio::io_context &service): service(service), updates_socket(service), snapshot_acceptor(service) {}
+
+  boost::leaf::result<void> connect(const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint) noexcept
   {
-    snapshot_acceptor.set_option(decltype(snapshot_acceptor)::reuse_address(true));
+    BOOST_LEAF_EC_TRY(snapshot_acceptor.open(snapshot_endpoint.protocol(), _));
+    BOOST_LEAF_EC_TRY(snapshot_acceptor.set_option(decltype(snapshot_acceptor)::reuse_address(true), _));
+    BOOST_LEAF_EC_TRY(snapshot_acceptor.bind(snapshot_endpoint, _));
+    BOOST_LEAF_EC_TRY(snapshot_acceptor.listen(decltype(snapshot_acceptor)::max_listen_connections, _));
+
+    this->updates_endpoint = updates_endpoint;
+
+    return {};
   }
 
   void reset(instrument_id_type instrument, instrument_state state = {}) { states[instrument] = {state, state.updates}; }
 
-  boost::leaf::awaitable<void> update(const std::vector<std::tuple<instrument_id_type, instrument_state>> &states)
+  boost::leaf::awaitable<boost::leaf::result<void>> update(const std::vector<std::tuple<instrument_id_type, instrument_state>> &states)
   {
     std::aligned_storage_t<detail::packet_max_size, alignof(detail::packet)> storage;
     auto packet = new(&storage) detail::packet {static_cast<std::uint8_t>(states.size()), {}};
@@ -76,7 +84,8 @@ struct server
       accumulated_updates |= std::exchange(state.updates, {});
     }
 
-    co_await updates_socket.async_send_to(buffer, updates_endpoint, boost::leaf::use_awaitable);
+    BOOST_LEAF_CO_TRY(co_await updates_socket.async_send_to(buffer, updates_endpoint, boost::leaf::as_result(boost::leaf::use_awaitable)))
+    co_return boost::leaf::success();
   }
 
   instrument_state snapshot(instrument_id_type instrument) const noexcept

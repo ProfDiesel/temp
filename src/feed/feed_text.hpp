@@ -2,6 +2,7 @@
 
 #include <boilerplate/boilerplate.hpp>
 #include <boilerplate/chrono.hpp>
+#include <boilerplate/leaf.hpp>
 #include <boilerplate/pointers.hpp>
 #include <boilerplate/units.hpp>
 #include <boilerplate/x3.hpp>
@@ -15,9 +16,6 @@
 
 #include <boost/hof/lazy.hpp>
 #include <boost/hof/lift.hpp>
-
-#include <boost/leaf/common.hpp>
-#include <boost/leaf/error.hpp>
 
 #include <boost/preprocessor/facilities/expand.hpp>
 #include <boost/preprocessor/facilities/identity.hpp>

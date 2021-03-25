@@ -21,7 +21,7 @@ thirdparties = {thirdparty:
         'rangeless',
         'robin_hood',
         'stdfunc_nortti',
-#        'ut',
+        'ut',
     )
 }
 

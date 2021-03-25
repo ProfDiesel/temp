@@ -1,5 +1,6 @@
 #include "model/wiring.hpp"
 
+#include <boilerplate/leaf.hpp>
 #include <boilerplate/logger.hpp>
 #include <boilerplate/pointers.hpp>
 
@@ -8,9 +9,6 @@
 #include <asio/signal_set.hpp>
 
 #include <boost/core/noncopyable.hpp>
-
-#include <boost/leaf/common.hpp>
-#include <boost/leaf/handle_errors.hpp>
 
 #include <fmt/ostream.h>
 
