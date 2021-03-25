@@ -18,7 +18,6 @@ thirdparties = {thirdparty:
         'leaf_nortti_nothreads',
         'observer-ptr-lite',
         'openonload',
-        'outcome',
         'rangeless',
         'robin_hood',
         'stdfunc_nortti',
@@ -112,3 +111,8 @@ with env('test/properties'):
     fuzzable_exe = Executable('fuzzable', objects=(Cxx('fuzzed.cpp', pch=pch),))
 
 Alias('test', (test_exe, fuzzable_exe))
+
+with env('playground'):
+    leaf_coro = Executable('leaf_coro', objects=(Cxx('leaf_coro.cpp', pch=pch),))
+
+Alias('leaf_coro', (leaf_coro,))

@@ -5,7 +5,8 @@
             "name": "ppf",
             "type": "python",
             "request": "launch",
-            "module": "ppf"
+            "module": "ppf",
+            "args": ["--config", "${workspaceFolder}/ppf.conf"]
         },
         {
             "name": "test",

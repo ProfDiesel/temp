@@ -7,8 +7,10 @@
             "id": "target",
             "description": "target",
             "type": "pickString",
-            "default": "",
+            "default": "ppf",
             "options": [
+                "ppf",
+                "ppf_ol",
                 "benchmark",
                 "contrib",
                 "test",
@@ -21,7 +23,7 @@
             "default": "debug",
             "options": [
                 "debug",
-                "default"
+                "low_overhead"
             ],
         }
     ],

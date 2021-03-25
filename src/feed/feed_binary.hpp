@@ -5,7 +5,7 @@
 #include <boilerplate/boilerplate.hpp>
 #include <boilerplate/chrono.hpp>
 #include <boilerplate/contracts.hpp>
-#include <boilerplate/outcome.hpp>
+#include <boilerplate/leaf.hpp>
 
 #include <asio/awaitable.hpp>
 #include <asio/ip/tcp.hpp>
@@ -49,7 +49,7 @@ inline auto encode_message(instrument_id_type instrument, const instrument_state
 {
   const auto nb_updates = static_cast<uint8_t>(state.updates.count());
   const auto needed_bytes = sizeof(message) + sizeof(update) * (nb_updates - 1);
-  if(buffer.size() >= needed_bytes) 
+  if(buffer.size() >= needed_bytes)
   {
   auto *message = new(buffer.data()) (struct message) {.instrument = endian::big_uint16_buf_t(instrument),
                                               .sequence_id = endian::big_uint32_buf_t(state.sequence_id),
@@ -60,19 +60,19 @@ inline auto encode_message(instrument_id_type instrument, const instrument_state
   return needed_bytes;
 }
 
-inline asio::awaitable<out::result<instrument_state>> request_snapshot(asio::ip::tcp::socket &socket, instrument_id_type instrument) noexcept
+inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_snapshot(asio::ip::tcp::socket &socket, instrument_id_type instrument) noexcept
 {
   const snapshot_request request {.instrument = endian::big_uint16_buf_t(instrument)};
-  if(OUTCOME_CO_TRYX(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), as_result(asio::use_awaitable))) != sizeof(request))
-    co_return out::failure(std::make_error_code(std::errc::io_error)); // TODO
+  if(BOOST_LEAF_CO_TRYX(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), boost::leaf::as_result(boost::leaf::use_awaitable))) != sizeof(request))
+    co_return std::make_error_code(std::errc::io_error); // TODO
 
   std::aligned_storage_t<message_max_size, alignof(struct message)> buffer;
   auto *const message = reinterpret_cast<struct message *>(&buffer);
-  if(OUTCOME_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message, sizeof(struct message)), as_result(asio::use_awaitable))) != sizeof(struct message))
-    co_return out::failure(std::make_error_code(std::errc::io_error)); // TODO
+  if(BOOST_LEAF_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message, sizeof(struct message)), boost::leaf::as_result(boost::leaf::use_awaitable))) != sizeof(struct message))
+    co_return std::make_error_code(std::errc::io_error); // TODO
   const auto remaining = (message->nb_updates - 1) * sizeof(update); // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  if(OUTCOME_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message + 1, remaining), as_result(asio::use_awaitable))) != remaining) // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    co_return out::failure(std::make_error_code(std::errc::io_error)); // TODO
+  if(BOOST_LEAF_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message + 1, remaining), boost::leaf::as_result(boost::leaf::use_awaitable))) != remaining) // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    co_return std::make_error_code(std::errc::io_error); // TODO
 
   instrument_state state {.sequence_id = message->sequence_id.value()};
   update_state(state, *message);
@@ -190,8 +190,8 @@ TEST_SUITE("feed_binary")
 {
   TEST_CASE("decode")
   {
-    //  decode([](feed:instrument_instrument_id_type instrument, feed::sequence_id_type sequence_id){ CHECK(instrument == 1); CHECK(sequence_id == 0); return 0;}, 
-    //        [](network_clock::time_point timestamp, const feed::update &update, int instrument_closure){ CHECK(timestamp == 0); CHECK(instrument_closure == 0); }, 0, packet_0); 
+    //  decode([](feed:instrument_instrument_id_type instrument, feed::sequence_id_type sequence_id){ CHECK(instrument == 1); CHECK(sequence_id == 0); return 0;},
+    //        [](network_clock::time_point timestamp, const feed::update &update, int instrument_closure){ CHECK(timestamp == 0); CHECK(instrument_closure == 0); }, 0, packet_0);
   }
 }
 

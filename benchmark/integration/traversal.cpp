@@ -7,8 +7,8 @@
 
 #include <benchmark/benchmark.h>
 
+#include <boilerplate/leaf.hpp>
 #include <boilerplate/logger.hpp>
-#include <boilerplate/outcome.hpp>
 #include <boilerplate/pointers.hpp>
 
 #include <asio/awaitable.hpp>

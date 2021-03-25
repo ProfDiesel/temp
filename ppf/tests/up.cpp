@@ -48,7 +48,7 @@ struct up_server
   up_server(const asio::ip::tcp::endpoint &snapshot_address, const asio::ip::udp::endpoint &updates_address) : server(service, snapshot_address, updates_address)
   {
     asio::co_spawn(
-        service, [this]() -> asio::awaitable<void> {
+        service, [this]() -> boost::leaf::awaitable<void> {
           for (;;)
             co_await server.accept();
           co_return;

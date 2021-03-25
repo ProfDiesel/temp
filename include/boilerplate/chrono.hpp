@@ -43,7 +43,7 @@ using network_clock = nano_clock;
 
 constexpr std::timespec to_timespec(const std::chrono::nanoseconds &duration) noexcept { return {.tv_sec = static_cast<std::time_t>(duration.count() / 1'000'000'000), .tv_nsec = static_cast<long>(duration.count() % 1'000'000'000)}; }
 template<typename time_point_type>
-constexpr std::timespec to_timespec(const time_point_type &time_point) noexcept requires std::chrono::is_clock_v<typename time_point_type::clock> { return to_timespec(time_point.time_since_epoch()); }
+constexpr std::timespec to_timespec(const time_point_type &time_point) noexcept requires std::is_same_v<typename time_point_type::clock::time_point, std::decay_t<time_point_type>> { return to_timespec(time_point.time_since_epoch()); }
 
 constexpr ::timeval to_timeval(const std::chrono::nanoseconds &duration) noexcept { return {.tv_sec = static_cast<std::time_t>(duration.count() / 1'000'000'000), .tv_usec = static_cast<long>(duration.count() % 1'000'000'000) / 1000}; }
 

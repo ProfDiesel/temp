@@ -93,22 +93,18 @@ static boost::leaf::result<bool> parse(const continuation_type &continuation, it
   static const auto assignment = x3::rule<class assignment_class, assignment_type>("assignment")
     = x3::lexeme[-(object_name >> ".") >> expect(field_name)] >> expect("<-") >> expect(value) >> expect(";");
 
-  const auto grammar = *(!x3::eoi >> assignment[(
-                           [&](auto &context)
-                           {
-                             auto &[object, field, value] = x3::_attr(context);
-                             continuation(object, field, std::move(value));
-                           })]);
+  const auto grammar = *(!x3::eoi >> assignment[([&](auto &context) {
+    auto &[object, field, value] = x3::_attr(context);
+    continuation(object, field, std::move(value));
+  })]);
 
   return boost::leaf::try_handle_some(
-    [&]()
-    {
+    [&]() {
       boost::leaf::error_monitor monitor;
       auto it = first;
       return (x3::phrase_parse(it, last, grammar, discard) && (it == last)) ? boost::leaf::result<bool> {true} : monitor.check();
     },
-    [&](const expectation_failure<iterator_type> &error /*, const boost::leaf::e_source_location &location*/)
-    {
+    [&](const expectation_failure<iterator_type> &error /*, const boost::leaf::e_source_location &location*/) {
       std::string snippet;
       const auto where = error.where.begin();
       std::copy_n(where, std::min(10, static_cast<int>(std::distance(where, last))), std::back_inserter(snippet));
@@ -210,49 +206,53 @@ inline from_walker_t from_walker(const walker &w) noexcept { return from_walker_
 
 struct walker final
 {
-  operator bool() const noexcept { return !std::holds_alternative<std::monostate>(value); }
+  auto has_value() const noexcept { return LIKELY(!std::holds_alternative<std::monostate>(value)); }
 
-  auto operator*() const noexcept
+  auto get() const noexcept
   {
-    ASSERTS(*this);
+    ASSERTS(has_value());
     return from_walker(*this);
   }
 
-  const auto &get() const noexcept { return value; }
+  auto get_or(auto &&value) const noexcept { return has_value() ? static_cast<decltype(value)>(get()) : std::forward<decltype(value)>(value); }
 
-  walker operator[](const std::size_t &index) const noexcept
+  walker get(const std::size_t &index) const noexcept
   {
     if(std::holds_alternative<string_list_type>(value))
       return {data, std::get<string_list_type>(value)[index]};
-    if(std::holds_alternative<numeric_list_type>(value))
+    else if(std::holds_alternative<numeric_list_type>(value))
       return {data, std::get<numeric_list_type>(value)[index]};
-    return {data};
-  }
-
-  walker operator[](const detail::field_name_type &index) const noexcept
-  {
-    if(!resolve())
+    else [[unlikely]]
       return {data};
-    if(auto it = object->find(index); it != object->end())
-      return {data, it->second};
-    return {data};
   }
 
-  walker operator[](const hashed_string &index) const noexcept
+  walker get(const detail::field_name_type &index) const noexcept
   {
-    return (*this)[detail::field_name_type(index.data())]; // TODO
+    if(!resolve()) [[unlikely]]
+      return {data};
+    else if(auto it = object->find(index); it != object->end()) [[likely]]
+      return {data, it->second};
+    else [[unlikely]]
+      return {data};
   }
+
+  // TODO
+  walker get(const hashed_string &index) const noexcept { return get(detail::field_name_type(index.data())); }
 
   bool resolve() const noexcept
   {
     if(object)
       return true;
-    if(!std::holds_alternative<string_type>(value))
+    if(!std::holds_alternative<string_type>(value)) [[unlikely]]
       return false;
-    if(auto it = data->find(detail::object_name_type(std::get<string_type>(value))); it != data->end())
+    if(auto it = data->find(detail::object_name_type(std::get<string_type>(value))); it != data->end()) [[likely]]
       object.reset(&it->second);
-    return !!object;
+    return LIKELY(!!object);
   }
+
+  operator bool() const noexcept { return has_value(); }
+  auto operator*() const noexcept { return get(); }
+  walker operator[](auto index) const noexcept { return get(index); }
 
   gsl::strict_not_null<std::shared_ptr<const detail::world_type>> data;
   value_type value {};
@@ -270,15 +270,14 @@ struct from_walker_impl<bool>
 {
   auto operator()(const walker &w)
   {
-    return std::visit(
-      boilerplate::overloaded {
-        [&](const string_type &alternative) { return alternative == "true" || w.resolve(); },
-        [&](const numeric_type &alternative) { return bool(alternative); },
-        [&](const string_list_type &alternative) { return !alternative.empty(); },
-        [&](const numeric_list_type &alternative) { return !alternative.empty(); },
-        [&](const auto &) { return false; },
-      },
-      w.get());
+    return std::visit(boilerplate::overloaded {
+                        [&](const string_type &alternative) { return alternative == "true" || w.resolve(); },
+                        [&](const numeric_type &alternative) { return bool(alternative); },
+                        [&](const string_list_type &alternative) { return !alternative.empty(); },
+                        [&](const numeric_list_type &alternative) { return !alternative.empty(); },
+                        [&](const auto &) { return false; },
+                      },
+                      w.value);
   }
 };
 
@@ -288,17 +287,16 @@ struct from_walker_impl<string_type>
   auto operator()(const walker &w)
   {
     static const string_type default_result;
-    return std::holds_alternative<string_type>(w.get()) ? std::get<string_type>(w.get()) : default_result;
+    return std::holds_alternative<string_type>(w.value) ? std::get<string_type>(w.value) : default_result;
   }
 };
 
 template<typename value_type>
-requires std::is_arithmetic_v<value_type>
-struct from_walker_impl<value_type>
+requires std::is_arithmetic_v<value_type> struct from_walker_impl<value_type>
 {
   auto operator()(const walker &w)
   {
-    return std::holds_alternative<numeric_type>(w.get()) ? static_cast<value_type>(std::get<numeric_type>(w.get())) : value_type {};
+    return std::holds_alternative<numeric_type>(w.value) ? static_cast<value_type>(std::get<numeric_type>(w.value)) : value_type {};
   }
 };
 
@@ -309,8 +307,7 @@ struct properties final
   {
     auto data = std::make_shared<detail::world_type>();
     BOOST_LEAF_CHECK(parse(
-      [&](auto object, auto field, auto &&value)
-      {
+      [&](auto object, auto field, auto &&value) {
         auto [it, _] = data->try_emplace(detail::object_name_type {object.begin(), object.end()}, detail::object_type {});
         it->second.insert_or_assign(detail::field_name_type {field.begin(), field.end()}, std::forward<decltype(value)>(value));
       },
@@ -318,23 +315,25 @@ struct properties final
     return {properties {std::move(data)}};
   }
 
-  walker operator[](const detail::object_name_type &index) const noexcept
+  walker get(const detail::object_name_type &index) const noexcept
   {
     if(auto it = data->find(index); it != data->end())
       return {gsl::make_not_null(data), it->first, boilerplate::make_strict_not_null(&it->second)};
     return {gsl::make_not_null(data)};
   }
 
-  walker operator[](const hashed_string &index) const noexcept
+  walker get(const hashed_string &index) const noexcept
   {
     return (*this)[detail::object_name_type(index.data())]; // TODO
   }
 
-  walker operator[](const std::tuple<detail::object_name_type, detail::field_name_type> &index) const noexcept
+  walker get(const std::tuple<detail::object_name_type, detail::field_name_type> &index) const noexcept
   {
     const auto &[object, field] = index;
     return (*this)[object][field];
   }
+
+  walker operator[](auto index) const noexcept { return get(index); }
 
   std::shared_ptr<const detail::world_type> data {};
 };
@@ -361,13 +360,12 @@ a.b <- 42;\n\
 a.c <- ['string', 'list'];\n\
 a.d <- [0, 1, 2, 3, 4];\n\n"sv;
       boost::leaf::try_handle_all(
-        [&]() -> boost::leaf::result<void>
-        {
+        [&]() -> boost::leaf::result<void> {
           const auto result = BOOST_LEAF_TRYX(config::properties::create(config_str));
           const auto a = result["a"_hs];
           CHECK(a);
           CHECK(a["a"_hs].get() == config::value_type {"string"s});
-          CHECK(a["b"_hs].get() == config::value_type {42.0});
+          CHECK(a["b"_hs].get() == config::value_type {44.0});
           CHECK(a["c"_hs].get() == config::value_type {std::vector {"string"s, "list"s}});
           CHECK(a["d"_hs].get() == config::value_type {std::vector {0.0, 1.0, 2.0, 3.0, 4.0}});
           return {};
@@ -380,13 +378,11 @@ a.d <- [0, 1, 2, 3, 4];\n\n"sv;
 parsing.fails <- here;\n\n"sv;
       bool success = false;
       boost::leaf::try_handle_all(
-        [&]() -> boost::leaf::result<void>
-        {
+        [&]() -> boost::leaf::result<void> {
           BOOST_LEAF_CHECK(config::properties::create(config_str));
           return {};
         },
-        [&](const config::parse_error &error)
-        {
+        [&](const config::parse_error &error) {
           CHECK(error.indices == std::pair {std::size_t {17}, std::size_t {24}});
           CHECK(error.which == "value");
           success = true;
@@ -403,8 +399,7 @@ b.next <- 'c';\n\
 b.value <- 'string';\n\
 c.next <- ['a', 'b'];\n\n"sv;
       boost::leaf::try_handle_all(
-        [&]() -> boost::leaf::result<void>
-        {
+        [&]() -> boost::leaf::result<void> {
           const auto result = BOOST_LEAF_TRYX(config::properties::create(config_str));
           const auto a = result["a"_hs];
           CHECK(a);

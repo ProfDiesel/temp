@@ -1,7 +1,8 @@
-from pyparsing import Group, Optional, Suppress, delimitedList, restOfLine, pyparsing_common, Char, ParserElement
-from typing import Union, Dict, Tuple, Set, Sequence, cast, List, Iterator, Type
+from pyparsing import Group, Optional as Optional_, Suppress, delimitedList, restOfLine, pyparsing_common, Char, ParserElement
+from typing import Union, Dict, Tuple, Set, Sequence, cast, List, Iterator, Type, Optional
 from dataclasses import dataclass
 from functools import singledispatchmethod
+from contextlib import suppress
 
 Value = Union[str, float, Tuple[str, ...], Tuple[float, ...]]
 Object = Dict[str, Value]
@@ -16,7 +17,7 @@ def list_of(expr: ParserElement) -> str:
     return (Suppress('[') + delimitedList(expr) + Suppress(']')).setParseAction(tuple)
 
 
-key = (Optional(identifier + Suppress('.'), '') + identifier).setParseAction(tuple)
+key = (Optional_(identifier + Suppress('.'), '') + identifier).setParseAction(tuple)
 value = string | numeric | list_of(string) | list_of(numeric)
 assignment = Group(key + Suppress('<-') + value + Suppress(';'))
 grammar = assignment[1, ...].ignore('#' + restOfLine)
@@ -39,13 +40,11 @@ def format_assignment(name: str, field: str, value: Value) -> str:
 def write(config: Config) -> str:
     result = ""
 
-    def walk():
-        for name, object_ in sorted(config.items()):
-            for field, value in sorted(object_.items()):
-                format_assignment(name, field, value)
+    for name, object_ in sorted(config.items()):
+        for field, value in sorted(object_.items()):
+            result += format_assignment(name, field, value) + '\n'
 
     return result
-
 
 class Unresolved:
     pass
@@ -110,6 +109,11 @@ class Walker:
     def __str__(self):
         return self.name
 
+    def get(self, item: str) -> Optional[WalkerResult]:
+        with suppress(ValueError, KeyError):
+            return getattr(self, item)
+        return None
+
     def walk(self) -> Iterator[Tuple['Walker', str, Value]]:
         for field, value in self.fields:
             yield self, field, as_value(value)
@@ -144,6 +148,9 @@ class WalkerSequence(Sequence[Walker]):
 def as_object(result: WalkerResult) -> Walker:
     assert(isinstance(result, Walker))
     return cast(Walker, result)
+
+def as_object_opt(result: Optional[WalkerResult]) -> Optional[Walker]:
+    return cast(Optional[Walker], result)
 
 def as_sequence(result: WalkerResult) -> WalkerSequence:
     assert(isinstance(result, WalkerSequence))

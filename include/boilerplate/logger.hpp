@@ -26,8 +26,6 @@
 #include <syslog.h>
 #endif // defined(LOGGER_SYSLOG_FORMAT)
 
-namespace bp = boilerplate;
-
 namespace logger
 {
 enum struct level : uint8_t

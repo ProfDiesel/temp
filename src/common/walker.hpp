@@ -5,6 +5,7 @@
 #include "properties_dispatch.hpp"
 
 #include <boilerplate/boilerplate.hpp>
+#include <boilerplate/leaf.hpp>
 
 #include <chrono>
 #include <type_traits>
@@ -41,11 +42,11 @@ struct from_walker_impl<address>
 template<>
 struct from_walker_impl<feed::price_t>
 {
-#if !defined(__clang__)
+#if defined(LEAN_AND_MEAN) || defined(__clang__)
+  auto operator()(const walker &w) { return static_cast<config::numeric_type>(*w); }
+#else  // defined(LEAN_AND_MEAN) || defined(__clang__)
   auto operator()(const walker &w) { return feed::price_t(std::decimal::decimal32(static_cast<config::numeric_type>(*w))); }
-#else  // !defined(__clang__)
-  auto operator()(const walker &w) { return feed::price_t(static_cast<config::numeric_type>(*w)); }
-#endif // !defined(__clang__)
+#endif // defined(LEAN_AND_MEAN) || defined(__clang__)
 };
 
 inline auto dispatch_hash(const walker &w)
@@ -55,3 +56,16 @@ inline auto dispatch_hash(const walker &w)
 }
 
 } // namespace config
+
+struct missing_field
+{
+  config::hashed_string field;
+};
+
+boost::leaf::result<config::from_walker_t> get_or_error(const config::walker &w, config::hashed_string field)
+{
+  auto result = w[field];
+  if(!result) [[unlikely]]
+    return BOOST_LEAF_NEW_ERROR(missing_field {field});
+  return *result;
+}

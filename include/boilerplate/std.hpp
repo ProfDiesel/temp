@@ -26,6 +26,7 @@ constexpr T *construct_at(T *p, Args &&... args)
 
   using experimental::detected_or_t;
 
+#if defined(__clang__)
 namespace chrono
 {
   template<typename>
@@ -34,4 +35,5 @@ namespace chrono
   template<typename value_type>
   constexpr auto is_clock_v = is_clock<value_type>::value;
 } // namespace chrono
+#endif // defined(__clang__)
 } // namespace std

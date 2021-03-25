@@ -17,15 +17,23 @@
 #include <atomic>
 #include <thread>
 
+[[noreturn]] inline void abort(auto... args)
+{
+  logger::printer printer;
+  printer(0, logger::level::CRITICAL, args...);
+  std::abort();
+}
+
 #if defined(BOOST_NO_EXCEPTIONS)
 namespace boost
 {
-void throw_exception(const std::exception &exception)
+/*[[noreturn]]*/ void throw_exception(const std::exception &exception)
 {
-  logger::printer printer;
-  printer(0, logger::level::CRITICAL, exception.what());
-  std::abort();
+  abort(exception.what());
 }
+
+struct source_location;
+[[noreturn]] void throw_exception(std::exception const &e, boost::source_location const &) { throw_exception(e); }
 } // namespace boost
 #endif //  defined(BOOST_NO_EXCEPTIONS)
 
@@ -33,7 +41,7 @@ void throw_exception(const std::exception &exception)
 namespace asio::detail
 {
 template<typename exception_type>
-void throw_exception(const exception_type &exception)
+/*[[noreturn]]*/ void throw_exception(const exception_type &exception)
 {
   boost::throw_exception(exception);
 }
@@ -55,6 +63,7 @@ struct logger_thread : boost::noncopyable
   ~logger_thread()
   {
     logger.flush();
+    logger.drain();
     leave.store(true, std::memory_order_release);
     thread.join();
   }
@@ -65,6 +74,12 @@ auto main() -> int
   using namespace logger::literals;
 
   asio::io_context service(1);
+
+#if defined(USE_TCPDIRECT)
+    zf_env stack = boost::leaf::try_handle_all([&]() -> boost::leaf::result<zf_env> { return zf_env::create(); },
+                                    [&](const boost::leaf::error_info &unmatched) -> zf_env { abort("leaf_error_id={}", unmatched.error()); });
+#endif // defined(USE_TCPDIRECT)
+
 
   asio::posix::stream_descriptor command_input(service, ::dup(STDIN_FILENO)), command_output(service, ::dup(STDOUT_FILENO));
 
@@ -87,7 +102,7 @@ auto main() -> int
       BOOST_LEAF_EC_TRY(asio::read_until(command_input, asio::dynamic_buffer(command_buffer), "\n\n", _));
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(command_buffer));
 
-      auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, logger, [&](auto fast_path) -> boost::leaf::result<void> {
+      auto loop = [&](auto fast_path) -> boost::leaf::result<void> {
         while(!service.stopped())
           [[likely]]
           {
@@ -96,26 +111,40 @@ auto main() -> int
             logger->flush();
           }
         return {};
-      });
+      };
 
-      BOOST_LEAF_CHECK(run());
+#if defined(USE_TCPDIRECT)
+      BOOST_LEAF_CHECK(with_trigger_path(properties["config"_hs], service, stack, command_input, command_output, logger, loop)());
+#else // defined(USE_TCPDIRECT)
+      BOOST_LEAF_CHECK(with_trigger_path(properties["config"_hs], service, command_input, command_output, logger, loop)());
+#endif // defined(USE_TCPDIRECT)
       return 0;
     },
     [&](const config::parse_error &error, const boost::leaf::e_source_location &location) {
-      logger->log(logger::critical, "location=\"{}:{} {}\" first={} last={} expected={} actual={} Parse error"_format, location.file, location.line, location.function, error.indices.first, error.indices.second,
-                  error.which, error.snippet);
+      logger->log(logger::critical, "location=\"{}:{} {}\" first={} last={} expected={} actual={} Parse error"_format, location.file, location.line,
+                  location.function, error.indices.first, error.indices.second, error.which, error.snippet);
       return 1;
     },
-    [&](const boost::leaf::error_info &unmatched, const std::error_code &error_code, const boost::leaf::e_source_location &location) {
-      logger->log(logger::critical, "location=\"{}:{} {}\" code={} {}"_format, location.file, location.line, location.function, error_code, fmt::to_string(unmatched));
-      return 2;
+    [&](const missing_field &missing_field, const boost::leaf::e_source_location &location) {
+      logger->log(logger::critical, "location=\"{}:{} {}\" field={} Missing field"_format, location.file, location.line, location.function,
+                  missing_field.field.data());
+      return 1;
     },
-    [&](const boost::leaf::error_info &unmatched, const boost::leaf::e_source_location &location) {
-      logger->log(logger::critical, "location=\"{}:{} {}\" {}"_format, location.file, location.line, location.function, fmt::to_string(unmatched));
-      return 3;
+    [&](const std::error_code &error_code, const boost::leaf::e_source_location &location) {
+      logger->log(logger::critical, "location=\"{}:{} {}\" code={} {}"_format, location.file, location.line, location.function, error_code.value(),
+                  error_code.message());
+      return 1;
+    },
+    [&](const boost::leaf::e_source_location &location) {
+      logger->log(logger::critical, "location=\"{}:{} {}\""_format, location.file, location.line, location.function);
+      return 1;
+    },
+    [&](const std::error_code &error_code) {
+      logger->log(logger::critical, "code={} {}"_format, error_code.value(), error_code.message());
+      return 1;
     },
     [&](const boost::leaf::error_info &unmatched) {
-      logger->log(logger::critical, fmt::to_string(unmatched));
-      return 4;
+      logger->log(logger::critical, "leaf_error_id={}", unmatched.error());
+      return 1;
     });
 }

@@ -50,7 +50,6 @@ async def randori(config: str):
 
     uke = Fairy(config_walker)
     await uke.setup()
-    await uke.run()
 
     yield uke, tori
 
@@ -58,8 +57,7 @@ async def randori(config: str):
 
 
 async def test_static():
-    FORMAT = "%(message)s"
-    logging.basicConfig(level=logging.DEBUG, format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
+    logging.basicConfig(level=logging.DEBUG, format="%(message)s", datefmt="[%X.%f]", handlers=[RichHandler(rich_tracebacks=True)])
 
     async with randori('integration.conf') as (uke, tori):
         await scenario_0(uke, tori)
