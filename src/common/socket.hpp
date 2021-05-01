@@ -35,10 +35,10 @@ struct deleters
   void operator()(::zf_stack *ptr) { ::zf_stack_free(ptr); };
 };
 
-struct zf_env
+struct static_stack
 {
-  std::unique_ptr<::zf_attr, deleters> zf_attr;
-  std::unique_ptr<::zf_stack, deleters> zf_stack;
+  std::unique_ptr<::zf_attr, deleters> attr;
+  std::unique_ptr<::zf_stack, deleters> stack;
 
   ::ef_driver_handle dh;
   ::ef_pd pd;
@@ -46,32 +46,32 @@ struct zf_env
   ::ef_pio pio;
 
   // set ZF_ATTR "interface=enp4s0f0;log_level=3:ctpio_mode=ct;rx_timestamping=1"
-  static boost::leaf::result<zf_env> create() noexcept
+  static_stack() noexcept
   {
     BOOST_LEAF_RC_TRY(::zf_init());
 
     ::zf_attr *attr = nullptr;
     BOOST_LEAF_RC_TRY(::zf_attr_alloc(&attr));
-    std::unique_ptr<::zf_attr, deleters> attr_(attr);
+    this->attr.reset(attr);
 
     ::zf_stack *stack = nullptr;
     BOOST_LEAF_RC_TRY(::zf_stack_alloc(attr, &stack));
-    std::unique_ptr<::zf_stack, deleters> stack_(stack);
+    this->stack.reset(stack);
 
     char *interface = nullptr;
     BOOST_LEAF_RC_TRY(::zf_attr_get_str(attr, "interface", &interface));
 
-    ::ef_driver_handle dh;
     BOOST_LEAF_RC_TRY(::ef_driver_open(&dh));
-    ::ef_pd pd;
     BOOST_LEAF_RC_TRY(::ef_pd_alloc_by_name(&pd, dh, interface, EF_PD_DEFAULT));
-    ::ef_vi vi;
     BOOST_LEAF_RC_TRY(::ef_vi_alloc_from_pd(&vi, dh, &pd, dh, -1, 0, -1, nullptr, -1, EF_VI_FLAGS_DEFAULT));
-    ::ef_pio pio;
     BOOST_LEAF_RC_TRY(::ef_pio_alloc(&pio, dh, &pd, -1, dh));
     BOOST_LEAF_RC_TRY(::ef_pio_link_vi(&pio, dh, &vi, dh));
+  }
 
-    return zf_env {.zf_attr = std::move(attr_), .zf_stack = std::move(stack_), .dh = dh, .pd = pd, .vi = vi, .pio = pio};
+  static const auto &instance() noexcept
+  {
+    static static_stack instance;
+    return instance;
   }
 };
 
@@ -95,22 +95,22 @@ class multicast_udp_reader final : public asio::ip::udp::socket
 
 public:
 #if defined(USE_TCPDIRECT)
-  static boost::leaf::result<multicast_udp_reader> create(asio::io_context &service, zf_env &stack, std::string_view address, std::string_view port) noexcept
+  static boost::leaf::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
   {
     const asio::ip::udp::endpoint addr = BOOST_LEAF_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _))->endpoint();
 
     ::zfur *zock_ = nullptr;
-    BOOST_LEAF_RC_TRY(::zfur_alloc(&zock_, stack.zf_stack.get(), stack.zf_attr.get()));
+    BOOST_LEAF_RC_TRY(::zfur_alloc(&zock_, static_stack::instance().stack.get(), static_stack::instance().attr.get()));
     zock_ptr zock {zock_};
 
     BOOST_LEAF_RC_TRY(::zfur_addr_bind(zock.get(), const_cast<sockaddr *>(addr.data()), sizeof(*addr.data()), nullptr, 0, 0));
 
-    return multicast_udp_reader(stack, std::move(zock));
+    return multicast_udp_reader(std::move(zock));
   }
 #else
 #  if defined(LINUX)
   static boost::leaf::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port,
-                                                          const std::chrono::nanoseconds &spin_duration = {}, bool timestamping = false) noexcept
+                                                     const std::chrono::nanoseconds &spin_duration = {}, bool timestamping = false) noexcept
 #  else  // defined(LINUX)
   static boost::leaf::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
 #  endif // defined(LINUX)
@@ -158,7 +158,7 @@ public:
   [[using gnu: always_inline, flatten, hot]] auto operator()(auto &continuation) noexcept -> boost::leaf::result<void>
   {
 #if defined(USE_TCPDIRECT)
-    ::zf_reactor_perform(stack_.zf_stack.get());
+    ::zf_reactor_perform(static_stack::instance().stack.get());
 
     struct
     {
@@ -169,7 +169,7 @@ public:
     ::zfur_zc_recv(zock_.get(), &msg.msg, 0);
     auto _ = gsl::finally([&]() { ::zfur_zc_recv_done(zock_.get(), &msg.msg); });
     if(!msg.msg.iovcnt)
-      return boost::leaf::success();
+      return {};
 
     timespec timestamp;
     unsigned int timestamp_flags;
@@ -178,11 +178,12 @@ public:
     continuation(to_time_point<network_clock>(timestamp), asio::const_buffer(msg.msg.iov[0].iov_base, msg.msg.iov[0].iov_len));
 
 #elif defined(LINUX)
-    // recvmmsg timeout parameter is buggy
+      // recvmmsg timeout parameter is buggy
     auto spin_duration = spin_duration_;
     const auto nb_messages_read = BOOST_LEAF_ERRNO_TRYX(::recvmmsg(native_handle(), msgvec_.data(), nb_messages, MSG_WAITFORONE, &spin_duration), _ > 0);
 
-    const auto get_timestamp = [](msghdr *msg) {
+    const auto get_timestamp = [](msghdr *msg)
+    {
       for(auto *cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR(msg, cmsg)) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
       {
         if(cmsg->cmsg_level != SOL_SOCKET)
@@ -207,17 +208,16 @@ public:
     continuation({}, buffer_);
 #endif // defined(LINUX)
 
-    return boost::leaf::success();
+    return {};
   }
 
 private:
 #if defined(USE_TCPDIRECT)
   using zock_ptr = std::unique_ptr<zfur, deleters>;
 
-  zf_env &stack_;
   zock_ptr zock_;
 
-  explicit multicast_udp_reader(zf_env &stack, zock_ptr &&zock): stack_(stack), zock_(std::move(zock)) {}
+  explicit multicast_udp_reader(zock_ptr &&zock): zock_(std::move(zock)) {}
 #elif defined(LINUX)
   const std::timespec spin_duration_;
 
@@ -259,14 +259,14 @@ class udp_writer final : public asio::ip::udp::socket
 {
 public:
 #if defined(USE_TCPDIRECT)
-  static boost::leaf::result<udp_writer> create(asio::io_context &service, zf_env &stack, std::string_view address, std::string_view port) noexcept
+  static boost::leaf::result<udp_writer> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
   {
     const asio::ip::udp::endpoint addr_local(asio::ip::udp::v4(), 0),
       addr_remote = BOOST_LEAF_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _))->endpoint();
 
     zfut *zock_ = nullptr;
-    BOOST_LEAF_RC_TRY(::zfut_alloc(&zock_, stack.zf_stack.get(), addr_local.data(), sizeof(*addr_local.data()),
-                                   const_cast<sockaddr *>(addr_remote.data()), sizeof(*addr_remote.data()), 0, stack.zf_attr.get()));
+    BOOST_LEAF_RC_TRY(::zfut_alloc(&zock_, static_stack::instance().stack.get(), addr_local.data(), sizeof(*addr_local.data()),
+                                    const_cast<sockaddr *>(addr_remote.data()), sizeof(*addr_remote.data()), 0, static_stack::instance().attr.get()));
     zock_ptr zock {zock_};
 
     return udp_writer(std::move(zock));

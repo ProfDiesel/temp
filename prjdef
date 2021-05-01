@@ -52,7 +52,7 @@ with env():
     Apply(CxxDef('USE_TCPDIRECT'))
     Copy(preprocessed := Cxx('src/main.cpp', pch=pch, preprocess_only=True, quick_build_alias=None), 'preprocessed/main.i') # to be used by clang dump-record-layouts
     Copy(object_ := Cxx(preprocessed, pch=pch, compile_only=True, quick_build_alias=None), 'preprocessed/main.s') # to be used by llvm-mca
-    Alias('ppf_ol', (Executable('ppf_ol', objects=(object_, *thirdparties['openonload'].ARCHIVES)),))
+    #Alias('ppf_ol', (Executable('ppf_ol', objects=(object_, *thirdparties['openonload'].ARCHIVES)),))
 
 with env('benchmark'):
     Apply(ThirdParty('benchmark').FLAGS)
@@ -113,6 +113,7 @@ with env('test/properties'):
 Alias('test', (test_exe, fuzzable_exe))
 
 with env('playground'):
+    #Apply(CxxDef('ASIO_ENABLE_HANDLER_TRACKING'))
     leaf_coro = Executable('leaf_coro', objects=(Cxx('leaf_coro.cpp', pch=pch),))
 
 Alias('leaf_coro', (leaf_coro,))

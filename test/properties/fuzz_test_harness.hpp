@@ -10,11 +10,13 @@
 #include <limits>
 #include <random>
 
-void bad_test() { ::exit(0); }
-void failed_test() { ::abort(); }
 
 namespace fuzz
 {
+
+void bad_test() { ::exit(0); }
+void failed_test() { ::abort(); }
+
 
 class generator : public boost::noncopyable
 {

@@ -14,7 +14,7 @@
 #include <unordered_map>
 
 #define BOOST_LEAF_CO_TRY_OP_LENGTH(op, stream, data, length)                                                                                                  \
-  if(BOOST_LEAF_CO_TRYX(co_await op(socket, asio::buffer(data, length), boost::leaf::as_result(boost::leaf::use_awaitable))) != length)                        \
+  if(BOOST_LEAF_CO_TRYX(co_await op(socket, asio::buffer(data, length), boost::leaf::as_result(boost::leaf::use_awaitable))) != length)                               \
     co_return std::make_error_code(std::errc::io_error); // TODO
 
 #define BOOST_LEAF_CO_TRY_READ_LENGTH(stream, data, length) BOOST_LEAF_CO_TRY_OP_LENGTH(asio::async_read, stream, data, length)
@@ -52,23 +52,14 @@ struct server
 
   std::unordered_map<instrument_id_type, state> states {};
 
-  server(asio::io_context &service): service(service), updates_socket(service), snapshot_acceptor(service) {}
-
-  boost::leaf::result<void> connect(const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint) noexcept
+  server(asio::io_context &service, const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint):
+    service(service), updates_socket(service), updates_endpoint(updates_endpoint), snapshot_acceptor(service, snapshot_endpoint)
   {
-    BOOST_LEAF_EC_TRY(snapshot_acceptor.open(snapshot_endpoint.protocol(), _));
-    BOOST_LEAF_EC_TRY(snapshot_acceptor.set_option(decltype(snapshot_acceptor)::reuse_address(true), _));
-    BOOST_LEAF_EC_TRY(snapshot_acceptor.bind(snapshot_endpoint, _));
-    BOOST_LEAF_EC_TRY(snapshot_acceptor.listen(decltype(snapshot_acceptor)::max_listen_connections, _));
-
-    this->updates_endpoint = updates_endpoint;
-
-    return {};
   }
 
   void reset(instrument_id_type instrument, instrument_state state = {}) { states[instrument] = {state, state.updates}; }
 
-  boost::leaf::awaitable<boost::leaf::result<void>> update(const std::vector<std::tuple<instrument_id_type, instrument_state>> &states)
+  boost::leaf::awaitable<void> update(const std::vector<std::tuple<instrument_id_type, instrument_state>> &states)
   {
     std::aligned_storage_t<detail::packet_max_size, alignof(detail::packet)> storage;
     auto packet = new(&storage) detail::packet {static_cast<std::uint8_t>(states.size()), {}};
@@ -84,8 +75,7 @@ struct server
       accumulated_updates |= std::exchange(state.updates, {});
     }
 
-    BOOST_LEAF_CO_TRY(co_await updates_socket.async_send_to(buffer, updates_endpoint, boost::leaf::as_result(boost::leaf::use_awaitable)))
-    co_return boost::leaf::success();
+    co_await updates_socket.async_send_to(buffer, updates_endpoint, boost::leaf::use_awaitable);
   }
 
   instrument_state snapshot(instrument_id_type instrument) const noexcept
@@ -105,7 +95,8 @@ struct server
     auto session_ptr = std::make_shared<session>(std::move(socket), boilerplate::make_strict_not_null(this));
     asio::co_spawn(
       service,
-      [&]() noexcept -> boost::leaf::awaitable<void> {
+      [&]() noexcept -> boost::leaf::awaitable<void>
+      {
         auto result = co_await(*session_ptr)();
         if(!result)
         {

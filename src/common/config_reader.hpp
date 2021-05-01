@@ -93,18 +93,22 @@ static boost::leaf::result<bool> parse(const continuation_type &continuation, it
   static const auto assignment = x3::rule<class assignment_class, assignment_type>("assignment")
     = x3::lexeme[-(object_name >> ".") >> expect(field_name)] >> expect("<-") >> expect(value) >> expect(";");
 
-  const auto grammar = *(!x3::eoi >> assignment[([&](auto &context) {
-    auto &[object, field, value] = x3::_attr(context);
-    continuation(object, field, std::move(value));
-  })]);
+  const auto grammar = *(!x3::eoi >> assignment[(
+                           [&](auto &context)
+                           {
+                             auto &[object, field, value] = x3::_attr(context);
+                             continuation(object, field, std::move(value));
+                           })]);
 
   return boost::leaf::try_handle_some(
-    [&]() {
+    [&]()
+    {
       boost::leaf::error_monitor monitor;
       auto it = first;
       return (x3::phrase_parse(it, last, grammar, discard) && (it == last)) ? boost::leaf::result<bool> {true} : monitor.check();
     },
-    [&](const expectation_failure<iterator_type> &error /*, const boost::leaf::e_source_location &location*/) {
+    [&](const expectation_failure<iterator_type> &error /*, const boost::leaf::e_source_location &location*/)
+    {
       std::string snippet;
       const auto where = error.where.begin();
       std::copy_n(where, std::min(10, static_cast<int>(std::distance(where, last))), std::back_inserter(snippet));
@@ -201,6 +205,13 @@ struct from_walker_t final
     static_assert(has_from_walker_v<value_type>);
     return from_walker_impl<value_type> {}(w);
   }
+
+  template<typename value_type>
+  bool operator==(value_type &&value) const &&noexcept
+  {
+    static_assert(has_from_walker_v<value_type>);
+    return from_walker_impl<value_type> {}(w) == std::forward<value_type>(value);
+  }
 };
 inline from_walker_t from_walker(const walker &w) noexcept { return from_walker_t {w}; }
 
@@ -210,7 +221,7 @@ struct walker final
 
   auto get() const noexcept
   {
-    ASSERTS(has_value());
+    ASSERTS(*this);
     return from_walker(*this);
   }
 
@@ -270,14 +281,15 @@ struct from_walker_impl<bool>
 {
   auto operator()(const walker &w)
   {
-    return std::visit(boilerplate::overloaded {
-                        [&](const string_type &alternative) { return alternative == "true" || w.resolve(); },
-                        [&](const numeric_type &alternative) { return bool(alternative); },
-                        [&](const string_list_type &alternative) { return !alternative.empty(); },
-                        [&](const numeric_list_type &alternative) { return !alternative.empty(); },
-                        [&](const auto &) { return false; },
-                      },
-                      w.value);
+    return std::visit(
+      boilerplate::overloaded {
+        [&](const string_type &alternative) { return alternative == "true" || w.resolve(); },
+        [&](const numeric_type &alternative) { return bool(alternative); },
+        [&](const string_list_type &alternative) { return !alternative.empty(); },
+        [&](const numeric_list_type &alternative) { return !alternative.empty(); },
+        [&](const auto &) { return false; },
+      },
+      w.value);
   }
 };
 
@@ -292,11 +304,32 @@ struct from_walker_impl<string_type>
 };
 
 template<typename value_type>
-requires std::is_arithmetic_v<value_type> struct from_walker_impl<value_type>
+requires std::is_arithmetic_v<value_type>
+struct from_walker_impl<value_type>
 {
   auto operator()(const walker &w)
   {
     return std::holds_alternative<numeric_type>(w.value) ? static_cast<value_type>(std::get<numeric_type>(w.value)) : value_type {};
+  }
+};
+
+template<>
+struct from_walker_impl<string_list_type>
+{
+  auto operator()(const walker &w)
+  {
+    static const string_list_type default_result;
+    return std::holds_alternative<string_list_type>(w.value) ? std::get<string_list_type>(w.value) : default_result;
+  }
+};
+
+template<>
+struct from_walker_impl<numeric_list_type>
+{
+  auto operator()(const walker &w)
+  {
+    static const numeric_list_type default_result;
+    return std::holds_alternative<numeric_list_type>(w.value) ? std::get<numeric_list_type>(w.value) : default_result;
   }
 };
 
@@ -307,7 +340,8 @@ struct properties final
   {
     auto data = std::make_shared<detail::world_type>();
     BOOST_LEAF_CHECK(parse(
-      [&](auto object, auto field, auto &&value) {
+      [&](auto object, auto field, auto &&value)
+      {
         auto [it, _] = data->try_emplace(detail::object_name_type {object.begin(), object.end()}, detail::object_type {});
         it->second.insert_or_assign(detail::field_name_type {field.begin(), field.end()}, std::forward<decltype(value)>(value));
       },
@@ -360,14 +394,15 @@ a.b <- 42;\n\
 a.c <- ['string', 'list'];\n\
 a.d <- [0, 1, 2, 3, 4];\n\n"sv;
       boost::leaf::try_handle_all(
-        [&]() -> boost::leaf::result<void> {
+        [&]() -> boost::leaf::result<void>
+        {
           const auto result = BOOST_LEAF_TRYX(config::properties::create(config_str));
           const auto a = result["a"_hs];
           CHECK(a);
-          CHECK(a["a"_hs].get() == config::value_type {"string"s});
-          CHECK(a["b"_hs].get() == config::value_type {44.0});
-          CHECK(a["c"_hs].get() == config::value_type {std::vector {"string"s, "list"s}});
-          CHECK(a["d"_hs].get() == config::value_type {std::vector {0.0, 1.0, 2.0, 3.0, 4.0}});
+          CHECK(*a["a"_hs] == "string"s);
+          CHECK(*a["b"_hs] == 44.0);
+          CHECK(*a["c"_hs] == std::vector {"string"s, "list"s});
+          CHECK(*a["d"_hs] == std::vector {0.0, 1.0, 2.0, 3.0, 4.0});
           return {};
         },
         [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
@@ -378,11 +413,13 @@ a.d <- [0, 1, 2, 3, 4];\n\n"sv;
 parsing.fails <- here;\n\n"sv;
       bool success = false;
       boost::leaf::try_handle_all(
-        [&]() -> boost::leaf::result<void> {
+        [&]() -> boost::leaf::result<void>
+        {
           BOOST_LEAF_CHECK(config::properties::create(config_str));
           return {};
         },
-        [&](const config::parse_error &error) {
+        [&](const config::parse_error &error)
+        {
           CHECK(error.indices == std::pair {std::size_t {17}, std::size_t {24}});
           CHECK(error.which == "value");
           success = true;
@@ -399,25 +436,26 @@ b.next <- 'c';\n\
 b.value <- 'string';\n\
 c.next <- ['a', 'b'];\n\n"sv;
       boost::leaf::try_handle_all(
-        [&]() -> boost::leaf::result<void> {
+        [&]() -> boost::leaf::result<void>
+        {
           const auto result = BOOST_LEAF_TRYX(config::properties::create(config_str));
           const auto a = result["a"_hs];
           CHECK(a);
-          CHECK(a.get() == config::value_type {"a"s});
-          CHECK(a["value"_hs].get() == config::value_type {1.0});
+          CHECK(*a == "a"s);
+          CHECK(*a["value"_hs] == 1.0);
           const auto b = a["next"_hs];
           CHECK(b);
-          CHECK(b.get() == config::value_type {"b"s});
-          CHECK(b["value"_hs].get() == config::value_type {"string"s});
+          CHECK(*b == "b"s);
+          CHECK(*b["value"_hs] == "string"s);
           const auto c = b["next"_hs];
           CHECK(c);
-          CHECK(c.get() == config::value_type {"c"s});
+          CHECK(*c == "c"s);
           const auto a_ = c["next"_hs][0];
           const auto b_ = c["next"_hs][1];
           CHECK(a_);
           CHECK(b_);
-          CHECK(b_.get() == config::value_type {"b"s});
-          CHECK(b_["next"_hs].get() == config::value_type {"c"s});
+          CHECK(*b_ == "b"s);
+          CHECK(*b_["next"_hs] == "c"s);
 
           return {};
         },

@@ -1,5 +1,5 @@
 from asyncio.streams import StreamWriter, StreamReader
-from .config_reader import parse, write as write_config, Walker, format_assignment, as_int, as_object, as_str, as_object_opt
+from .config_reader import parse, write as write_config, Walker, format_assignment, as_int, as_object, as_str
 from argparse import ArgumentParser
 import logging
 from pathlib import Path
@@ -11,7 +11,9 @@ import json
 from dataclasses import dataclass
 from typing import Dict, cast, Optional
 
+
 LOGGER: logging.Logger = logging.getLogger('Fairy')
+
 
 @dataclass
 class Instrument:
@@ -32,16 +34,14 @@ class Subprocess:
             stderr=PIPE,
             close_fds=False,
         )
-
-        LOGGER.info('pid=%d command="%s" Subprocess launched', process.pid, command.replace('"', r'\"'))
+        LOGGER.info('pid=%d Subprocess launched', process.pid)
 
         self_ = Subprocess(process)
 
         async def command_reader() -> None:
             while True:
                 command:str = (await cast(StreamReader, process.stdout).readuntil(b'\n\n')).decode()
-                if LOGGER.isEnabledFor(logging.DEBUG):
-                    LOGGER.debug('recv="%s"', command.replace('"', r'\"'))
+                LOGGER.debug('recv="%s"', command.replace('"', '\\"'))
                 request = Walker(parse(command), 'request')
                 if await on_request(request):
                     break
@@ -67,8 +67,7 @@ class Subprocess:
         if self.__process is None:
             return
         out: StreamWriter = cast(StreamWriter, self.__process.stdin)
-        if LOGGER.isEnabledFor(logging.DEBUG):
-            LOGGER.debug('send="%s"', data.replace('"', r'\"'))
+        LOGGER.debug('send="%s"', data.replace('"', '\\"'))
         out.write(data.encode() + b'\n\n')
         await out.drain()
 
@@ -79,7 +78,7 @@ class Fairy:
         self.__instruments: Dict[int, Instrument] = {}
         self.__process: Optional[Subprocess] = None
 
-        if subscription := as_object_opt(self.__config.get('subscription')):
+        if subscription := as_object(self.__config.subscription):
             instrument:int = as_int(subscription.instrument)
             self.__instruments[instrument] = Instrument(instrument)
 

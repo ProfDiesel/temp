@@ -13,6 +13,8 @@
 #include <boost/leaf/common.hpp>
 #include <boost/leaf/handle_errors.hpp>
 
+#include <std_function/function.h>
+
 #include <chrono>
 #include <functional>
 #include <string_view>
@@ -43,7 +45,7 @@ namespace fuzz
 class executor
 {
 public:
-  using action_type = std::function<void(void)>;
+  using action_type = func::function<void(void)>;
 
   static std::unique_ptr<executor> instance;
 
@@ -74,12 +76,12 @@ struct feeder
 
   static std::unique_ptr<feeder> instance;
 
-  asio::awaitable<out::result<feed::instrument_state>> on_snapshot_request(feed::instrument_id_type instrument) noexcept
+  boost::leaf::awaitable<boost::leaf::result<feed::instrument_state>> on_snapshot_request(feed::instrument_id_type instrument) noexcept
   {
-    co_return out::failure(std::make_error_code(std::errc::io_error)); // TODO
+    co_return BOOST_LEAF_NEW_ERROR(std::make_error_code(std::errc::io_error)); // TODO
   }
 
-  boost::leaf::result<void> on_update_poll(std::function<void(network_clock::time_point, asio::const_buffer &&)> continuation) noexcept
+  boost::leaf::result<void> on_update_poll(func::function<void(network_clock::time_point, asio::const_buffer &&)> continuation) noexcept
   {
     std::aligned_storage<feed::detail::message_max_size, alignof(feed::message)> buffer_storage;
     std::byte *const first = reinterpret_cast<std::byte *>(&buffer_storage), *last = first, *const end = first + sizeof(buffer_storage);
@@ -110,7 +112,7 @@ struct feeder
 
   auto make_update_source() noexcept
   {
-    return [this](std::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept { return on_update_poll(continuation); };
+    return [this](func::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept { return on_update_poll(continuation); };
   }
 };
 
@@ -118,9 +120,8 @@ std::unique_ptr<feeder> feeder::instance;
 
 struct stream_send
 {
-  auto operator()(const asio::const_buffer &buffer) noexcept
+  void operator()(const asio::const_buffer &buffer) noexcept
   {
-    return out::success(network_clock::time_point {});
   }
 };
 
@@ -128,14 +129,11 @@ struct stream_send
 
 namespace backtest
 {
-using snapshot_requester_type = std::function<asio::awaitable<out::result<feed::instrument_state>>(feed::instrument_id_type)>;
-using update_source_type = std::function<boost::leaf::result<void>(std::function<void(network_clock::time_point, const asio::const_buffer &)>)>;
-
 snapshot_requester_type make_snapshot_requester() { return fuzz::feeder::instance->make_snapshot_requester(); }
 update_source_type make_update_source() { return fuzz::feeder::instance->make_update_source(); }
 send_stream_type make_stream_send() { return fuzz::stream_send {}; }
 
-using delayed_action = std::function<void(void)>;
+using delayed_action = func::function<void(void)>;
 void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady_clock::duration &delay, delayed_action action) { return fuzz::executor::instance->add(delay, action); }
 
 } // namespace backtest
@@ -166,7 +164,7 @@ auto main() -> int
                                                fast_path();
                                                fuzz::executor::instance->poll();
                                                if(service.poll())
-                                                 bad_test(); // the non-deterministic executor is not supposed to be used
+                                                 fuzz::bad_test(); // the non-deterministic executor is not supposed to be used
                                                logger.flush();
                                              }
                                            return {};

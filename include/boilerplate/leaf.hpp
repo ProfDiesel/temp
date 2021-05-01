@@ -2,8 +2,8 @@
 
 #include <boost/leaf/as_result.hpp>
 #include <boost/leaf/context.hpp>
+#include <boost/leaf/coro.hpp>
 #include <boost/leaf/on_error.hpp>
-#include <boost/leaf/handle_errors.hpp>
 #include <boost/leaf/result.hpp>
 
 #define BOOST_LEAF_TRY(...)                                                                                                                                    \
@@ -62,10 +62,10 @@
 #define BOOST_LEAF_EC_CO_TRYX(...)                                                                                                                             \
   ({                                                                                                                                                           \
     std::error_code ec;                                                                                                                                        \
-    auto &&handler = asio::redirect_error(asio::use_awaitable, ec);                                                                                            \
+    auto &&handler = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                            \
     auto &&result = (__VA_ARGS__);                                                                                                                             \
     if(_) [[unlikely]]                                                                                                                                         \
-      co_return BOOST_LEAF_CO_NEW_ERROR(ec).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                \
+      co_return BOOST_LEAF_NEW_ERROR(ec).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                \
     std::move(result);                                                                                                                                         \
   })
 // clang-format on
@@ -86,3 +86,4 @@
       return BOOST_LEAF_NEW_ERROR(std::error_code(-rc, std::generic_category()), BOOST_PP_STRINGIZE(__VA_ARGS__));                                             \
   }
 // clang-format on
+

@@ -11,7 +11,6 @@
 #include <boilerplate/logger.hpp>
 #include <boilerplate/pointers.hpp>
 
-#include <asio/awaitable.hpp>
 #include <asio/io_context.hpp>
 #include <asio/posix/stream_descriptor.hpp>
 #include <asio/this_coro.hpp>
@@ -20,6 +19,8 @@
 #include <boost/leaf/handle_errors.hpp>
 
 #include <fmt/format.h>
+
+#include <std_function/function.h>
 
 #include <chrono>
 #include <iostream>
@@ -73,18 +74,18 @@ struct feeder
 
   auto make_update_source() noexcept
   {
-    return [this](std::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept { return on_update_poll(continuation); };
+    return [this](func::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept { return on_update_poll(continuation); };
   }
 
-  asio::awaitable<out::result<feed::instrument_state>> on_snapshot_request(feed::instrument_id_type instrument) noexcept
+  boost::leaf::awaitable<boost::leaf::result<feed::instrument_state>> on_snapshot_request(feed::instrument_id_type instrument) noexcept
   {
     using namespace std::chrono_literals;
-    co_await asio::steady_timer(co_await asio::this_coro::executor, 100ms).async_wait(asio::use_awaitable);
-    co_return out::success(server.snapshot(instrument));
+    co_await asio::steady_timer(co_await asio::this_coro::executor, 100ms).async_wait(boost::leaf::use_awaitable);
+    co_return boost::leaf::success(server.snapshot(instrument));
   }
 
   [[using gnu: always_inline, flatten, hot]] boost::leaf::result<void>
-  on_update_poll(std::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept
+  on_update_poll(func::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept
   {
     timestamp += network_clock::duration(1);
     if(!canned_updates.empty())
@@ -114,25 +115,21 @@ std::unique_ptr<feeder> feeder::instance;
 
 struct stream_send
 {
-  auto operator()(const asio::const_buffer &buffer) noexcept
+  void operator()(const asio::const_buffer &buffer) noexcept
   {
     benchmark::DoNotOptimize(buffer);
-    return out::success(network_clock::time_point {});
   }
 };
 } // namespace bench
 
 namespace backtest
 {
-using snapshot_requester_type = std::function<asio::awaitable<out::result<feed::instrument_state>>(feed::instrument_id_type)>;
-using update_source_type = std::function<boost::leaf::result<void>(std::function<void(network_clock::time_point, const asio::const_buffer &)>)>;
-using send_stream_type = std::function<void(const asio::const_buffer &)>;
 
 snapshot_requester_type make_snapshot_requester() { return bench::feeder::instance->make_snapshot_requester(); }
 update_source_type make_update_source() { return bench::feeder::instance->make_update_source(); }
 send_stream_type make_stream_send() { return bench::stream_send {}; }
 
-using delayed_action = std::function<void(void)>;
+using delayed_action = func::function<void(void)>;
 void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady_clock::duration &delay, delayed_action action) { asio::steady_timer(service, delay).async_wait([=]([[maybe_unused]] auto error_code) { action(); }); }
 } // namespace backtest
 
@@ -189,7 +186,7 @@ subscription.message <- 'bWVzc2FnZQo=';\n\
 
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(initial_config));
 
-      const auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
+      auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
                                          [&](auto fast_path) -> boost::leaf::result<void>
                                          {
                                            // warm up with for a few cycles
