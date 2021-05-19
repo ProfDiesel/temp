@@ -65,7 +65,7 @@ struct automata final /*: boost::noncopyable*/
 
   automata(automata &&) noexcept = default;
 
-  [[using gnu: always_inline, flatten, hot]] automaton *instrument(feed::instrument_id_type instrument_id) noexcept
+  [[using gnu: always_inline, flatten, hot]] inline automaton *instrument(feed::instrument_id_type instrument_id) noexcept
   {
     const auto it = std::find(instrument_ids.begin(), instrument_ids.end(), instrument_id);
     return LIKELY(it != instrument_ids.end()) ? &data[it - instrument_ids.begin()] : nullptr;

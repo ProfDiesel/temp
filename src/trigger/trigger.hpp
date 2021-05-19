@@ -20,7 +20,7 @@ public:
   void warm_up() noexcept { ::__builtin_prefetch(&threshold, 1, 1); }
 
   template<typename continuation_type, typename timestamp_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
+  [[using gnu : always_inline, flatten, hot]] inline auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     if(value < threshold)
       return continuation(timestamp, std::forward<args_types>(args)...);
@@ -51,7 +51,7 @@ public:
   void warm_up() noexcept { ::__builtin_prefetch(&bounds, 1, 1); }
 
   template<typename continuation_type, typename timestamp_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
+  [[using gnu : always_inline, flatten, hot]] inline auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     const auto &[lower, upper] = bounds;
     decltype(continuation(timestamp, std::forward<args_types>(args)...)) result {};
@@ -93,7 +93,7 @@ public:
   void warm_up() noexcept { ::__builtin_prefetch(&bounds, 1, 1); }
 
   template<typename continuation_type, typename timestamp_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
+  [[using gnu : always_inline, flatten, hot]] inline auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     decltype(continuation(timestamp, std::forward<args_types>(args)...)) result {};
     decltype(last_bucket) current_bucket = static_cast<decltype(last_bucket)>(timestamp.time_since_epoch().count() >> timestamp_to_bucket_rshift);
@@ -164,7 +164,7 @@ public:
   void warm_up() noexcept { upstream.warm_up(); }
 
   template<typename continuation_type, typename timestamp_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
+  [[using gnu : always_inline, flatten, hot]] inline auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     return upstream(continuation, timestamp, normalize(value), std::forward<args_types>(args)...);
   }
@@ -195,7 +195,7 @@ public:
   }
 
   template<typename continuation_type, typename timestamp_type, typename... args_types>
-  [[using gnu : always_inline, flatten, hot]] auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
+  [[using gnu : always_inline, flatten, hot]] inline auto operator()(continuation_type &continuation, const timestamp_type &timestamp, const value_type &value, args_types &&...args) noexcept
   {
     decltype(continuation(timestamp, std::forward<args_types>(args)...)) result {};
 
@@ -313,4 +313,3 @@ TEST_SUITE("trigger")
 
 // GCOVR_EXCL_STOP
 #endif // defined(DOCTEST_LIBRARY_INCLUDED)
-

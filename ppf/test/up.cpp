@@ -43,7 +43,8 @@ void throw_exception(const exception_type &exception)
 #endif // defined(ASIO_NO_EXCEPTIONS)
 
 const auto handlers = std::tuple {[](const boost::leaf::e_source_location &location, const std::error_code &error_code) -> boost::leaf::awaitable<void> {
-                                    std::clog << location.file << ":" << location.line << " " << error_code.value() << ":" << error_code.message() << "\n";
+                                    std::clog << location.file << ":" << location.line << " - error_code " << error_code.value() << ":" << error_code.message()
+                                              << "\n";
                                     std::abort();
                                   },
                                   [](const boost::leaf::error_info &error_info) -> boost::leaf::awaitable<void> { std::abort(); }};
@@ -99,8 +100,8 @@ extern "C" void up_server_push_update(up_server *self, const up_update_state *st
   std::for_each_n(states, nb_states, [&](const auto &state) { states_.emplace_back(state.instrument, state.state); });
   asio::co_spawn(
     self->service,
-    [&, states = states]() noexcept -> boost::leaf::awaitable<void> {
-      co_await boost::leaf::co_try_handle_all([&, states = states_]() { return self->server.update(states); }, handlers);
+    [&, states = std::move(states_)]() noexcept -> boost::leaf::awaitable<void> {
+      co_await boost::leaf::co_try_handle_all([&, states = std::move(states)]() { return self->server.update(states); }, handlers);
     },
     asio::detached);
 }
@@ -115,12 +116,24 @@ ut::suite up_suite = [] {
   using namespace ut;
 
   "up_server"_test = [] {
-    auto s = up::server("127.0.0.1", "9999", "127.0.0.1", "9998");
-    auto n = s.poll();
+    auto *s = up_server_new("127.0.0.1", "4400", "127.0.0.1", "4401");
+    up_server_poll(s);
+
+    feed::instrument_state instrument_state;
+    feed::update_state_poly(instrument_state, feed::field::b0, 10.0);
+    feed::update_state_poly(instrument_state, feed::field::bq0, 1);
+    instrument_state.sequence_id = 5;
+
+    up_update_state state {42, instrument_state};
+    up_server_push_update(s, &state, 1);
+
+    for(int i = 0; i < 100; ++i)
+      up_server_poll(s);
+
+    up_server_free(s);
   };
 };
 
 int main() {}
-
 // GCOVR_EXCL_STOP
 #endif // defined(TEST)

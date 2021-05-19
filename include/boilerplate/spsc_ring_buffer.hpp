@@ -43,7 +43,7 @@ private:
 
     size_t last_flushed_index_ = 0;
 
-    void flush(std::byte *buffer, const size_t buffer_size_mask) noexcept 
+    void flush(std::byte *buffer, const size_t buffer_size_mask) noexcept
     {
       const auto value_cache_line = value_ - (value_ & CACHE_LINE_MASK);
       auto last_flushed_cache_line = last_flushed_index_ - (last_flushed_index_ & CACHE_LINE_MASK);
@@ -107,5 +107,11 @@ public:
   }
   void consumer_commit(size_t size) noexcept { read_pos_ += size; }
   void consumer_flush() noexcept { read_pos_.flush(buffer_.get(), buffer_size_mask); }
-};
 
+  // wait for the queue to be empty. Similar to ``!consumer_peek(0)``, but from the consumer view
+  bool producer_test_empty() noexcept
+  {
+    const auto read_pos = read_pos_.load();
+    return !(LIKELY(read_pos <= write_pos_) || UNLIKELY(read_pos + buffer_size <= write_pos_));
+  }
+};

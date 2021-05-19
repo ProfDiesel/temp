@@ -45,8 +45,17 @@ struct static_stack
   ::ef_vi vi;
   ::ef_pio pio;
 
-  // set ZF_ATTR "interface=enp4s0f0;log_level=3:ctpio_mode=ct;rx_timestamping=1"
-  static_stack() noexcept
+  // set -x ZF_ATTR "interface=enp4s0f0;log_level=3:ctpio_mode=ct;rx_timestamping=1"
+  static_stack() noexcept { init(); }
+
+  static const auto &instance() noexcept
+  {
+    static static_stack instance;
+    return instance;
+  }
+
+private:
+  boost::leaf::result<void> init()
   {
     BOOST_LEAF_RC_TRY(::zf_init());
 
@@ -66,12 +75,8 @@ struct static_stack
     BOOST_LEAF_RC_TRY(::ef_vi_alloc_from_pd(&vi, dh, &pd, dh, -1, 0, -1, nullptr, -1, EF_VI_FLAGS_DEFAULT));
     BOOST_LEAF_RC_TRY(::ef_pio_alloc(&pio, dh, &pd, -1, dh));
     BOOST_LEAF_RC_TRY(::ef_pio_link_vi(&pio, dh, &vi, dh));
-  }
 
-  static const auto &instance() noexcept
-  {
-    static static_stack instance;
-    return instance;
+    return boost::leaf::success();
   }
 };
 
@@ -155,7 +160,7 @@ public:
   }
 #endif   // defined(USE_TCPDIRECT)
 
-  [[using gnu: always_inline, flatten, hot]] auto operator()(auto &continuation) noexcept -> boost::leaf::result<void>
+  [[using gnu: always_inline, flatten, hot]] inline auto operator()(auto &continuation) noexcept -> boost::leaf::result<void>
   {
 #if defined(USE_TCPDIRECT)
     ::zf_reactor_perform(static_stack::instance().stack.get());
@@ -282,7 +287,7 @@ public:
 #endif
 
 #if defined(USE_TCPDIRECT)
-  [[using gnu: always_inline, flatten, hot]] boost::leaf::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
+  [[using gnu: always_inline, flatten, hot]] inline boost::leaf::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
   {
     ::zfut_send_single(zock_.get(), buffer.data(), buffer.size());
 
@@ -297,7 +302,7 @@ public:
     return network_clock::time_point();
   }
 #else  // defined(USE_TCPDIRECT)
-  [[using gnu: always_inline, flatten, hot]] boost::leaf::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
+  [[using gnu: always_inline, flatten, hot]] inline boost::leaf::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
   {
     BOOST_LEAF_EC_TRY(asio::ip::udp::socket::send(buffer, 0, _));
     return network_clock::now();

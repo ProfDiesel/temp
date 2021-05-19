@@ -11,6 +11,7 @@
 #include <functional>
 #include <filesystem>
 #include <thread>
+#include <variant>
 
 template<typename value_type, typename char_type>
 struct fmt::formatter<std::reference_wrapper<const value_type>, char_type> : fmt::formatter<value_type, char_type>
@@ -84,4 +85,3 @@ struct default_formatter : fmt::formatter<const char *, char_type_>
     return fmt::format_to(context.out(), /*FMT_COMPILE*/ ("{} at {0x%016x}"), boost::typeindex::type_id<value_type>().pretty_name(), static_cast<const void*>(std::addressof(value)));
   }
 };
-

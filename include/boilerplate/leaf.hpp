@@ -1,10 +1,8 @@
 #pragma once
 
-#include <boost/leaf/as_result.hpp>
-#include <boost/leaf/context.hpp>
-#include <boost/leaf/coro.hpp>
-#include <boost/leaf/on_error.hpp>
-#include <boost/leaf/result.hpp>
+#include <boost/leaf/error.hpp>
+
+#include <asio/redirect_error.hpp>
 
 #define BOOST_LEAF_TRY(...)                                                                                                                                    \
   {                                                                                                                                                            \
@@ -59,12 +57,23 @@
 // clang-format on
 
 // clang-format off
-#define BOOST_LEAF_EC_CO_TRYX(...)                                                                                                                             \
+#define BOOST_LEAF_ASIO_CO_TRY(...)                                                                                                                            \
+  {                                                                                                                                                            \
+    std::error_code ec;                                                                                                                                        \
+    auto &&_ = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                           \
+    (__VA_ARGS__);                                                                                                                                             \
+    if(ec) [[unlikely]]                                                                                                                                        \
+      co_return BOOST_LEAF_NEW_ERROR(ec).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                \
+  }
+// clang-format on
+
+// clang-format off
+#define BOOST_LEAF_ASIO_CO_TRYX(...)                                                                                                                           \
   ({                                                                                                                                                           \
     std::error_code ec;                                                                                                                                        \
-    auto &&handler = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                            \
+    auto &&_ = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                           \
     auto &&result = (__VA_ARGS__);                                                                                                                             \
-    if(_) [[unlikely]]                                                                                                                                         \
+    if(ec) [[unlikely]]                                                                                                                                        \
       co_return BOOST_LEAF_NEW_ERROR(ec).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                \
     std::move(result);                                                                                                                                         \
   })
@@ -86,4 +95,3 @@
       return BOOST_LEAF_NEW_ERROR(std::error_code(-rc, std::generic_category()), BOOST_PP_STRINGIZE(__VA_ARGS__));                                             \
   }
 // clang-format on
-

@@ -84,7 +84,7 @@ struct feeder
     co_return boost::leaf::success(server.snapshot(instrument));
   }
 
-  [[using gnu: always_inline, flatten, hot]] boost::leaf::result<void>
+  [[using gnu: always_inline, flatten, hot]] inline boost::leaf::result<void>
   on_update_poll(func::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept
   {
     timestamp += network_clock::duration(1);

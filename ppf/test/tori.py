@@ -1,6 +1,7 @@
-from common_types import Address
-from down import Down
-from up import Up
+from ppf.config import Address
+
+from .down import Down
+from .up import Up
 
 
 class Tori:

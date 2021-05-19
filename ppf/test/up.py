@@ -5,7 +5,7 @@ import shlex
 import json
 import re
 
-from common_types import Address
+from ppf.config import Address
 
 import cppyy
 
@@ -13,11 +13,11 @@ root = Path(__file__).parent / '..'
 flavour = 'debug'
 with open('compile_commands.json') as commands_file:
     for command in json.load(commands_file):
-        if (root / f'build/{flavour}/tests/pic/up.o').resolve() == Path(command['output']).resolve():
+        if (root / f'build/{flavour}/test/pic/up.o').resolve() == Path(command['output']).resolve():
             for arg in shlex.split(command['command']):
                 if match := re.match('(-I|-isystem)(?P<directory>.*)', arg):
                     cppyy.add_include_path(match.groupdict()['directory'])
-cppyy.add_include_path(str(root / 'tests'))
+cppyy.add_include_path(str(root / 'test'))
 cppyy.cppdef('#include "up.hpp"')
 cppyy.load_library(str(root / f'build/{flavour}/libup.so'))
 

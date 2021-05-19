@@ -1,4 +1,5 @@
 #include "feed/feed_binary.hpp"
+#include "handlers.hpp"
 #include "model/wiring.hpp"
 
 #include "fuzz_test_harness.hpp"
@@ -94,11 +95,12 @@ struct feeder
       current_timestamp += network_clock::duration(clock_distribution(gen));
 
       auto buffer = asio::buffer(first, last - first);
-      const auto sanitized = feed::detail::sanitize(boilerplate::overloaded {
-                                                      [&](auto field, feed::price_t value) { return value; },
-                                                      [&](auto field, feed::quantity_t value) { return value; },
-                                                    },
-                                                    buffer);
+      const auto sanitized = feed::detail::sanitize(
+        boilerplate::overloaded {
+          [&](auto field, feed::price_t value) { return value; },
+          [&](auto field, feed::quantity_t value) { return value; },
+        },
+        buffer);
       continuation(current_timestamp, buffer);
 
       last = std::copy(first + sanitized, last, first);
@@ -120,9 +122,7 @@ std::unique_ptr<feeder> feeder::instance;
 
 struct stream_send
 {
-  void operator()(const asio::const_buffer &buffer) noexcept
-  {
-  }
+  void operator()(const asio::const_buffer &buffer) noexcept {}
 };
 
 } // namespace fuzz
@@ -134,7 +134,10 @@ update_source_type make_update_source() { return fuzz::feeder::instance->make_up
 send_stream_type make_stream_send() { return fuzz::stream_send {}; }
 
 using delayed_action = func::function<void(void)>;
-void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady_clock::duration &delay, delayed_action action) { return fuzz::executor::instance->add(delay, action); }
+void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady_clock::duration &delay, delayed_action action)
+{
+  return fuzz::executor::instance->add(delay, action);
+}
 
 } // namespace backtest
 
@@ -149,29 +152,38 @@ auto main() -> int
   logger::printer printer {};
   logger::logger logger {boilerplate::make_strict_not_null(&printer)};
 
-  return boost::leaf::try_handle_all(
-    [&]() -> boost::leaf::result<int> {
+  boost::leaf::try_handle_all(
+    [&]() -> boost::leaf::result<void>
+    {
       using namespace config::literals;
 
-      const auto config = ""sv;
+      const auto config = "\
+config.subscription <- 'subscription';\n\
+subscription.instrument <- 10;\n\
+subscription.message <- 'cGlwb2xvbG8=';\n\
+subscription.cooldown <- 10;\n\
+subscription.instant_threshold <- 1.0;\n\
+"sv;
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(config));
 
       auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
-                                         [&](auto fast_path) -> boost::leaf::result<void> {
-                                           while(!service.stopped())
-                                             [[likely]]
-                                             {
-                                               fast_path();
-                                               fuzz::executor::instance->poll();
-                                               if(service.poll())
-                                                 fuzz::bad_test(); // the non-deterministic executor is not supposed to be used
-                                               logger.flush();
-                                             }
-                                           return {};
-                                         });
+                                   [&](auto fast_path) -> boost::leaf::result<void>
+                                   {
+                                     while(!service.stopped())
+                                       [[likely]]
+                                       {
+                                         fast_path();
+                                         fuzz::executor::instance->poll();
+                                         if(service.poll())
+                                           fuzz::bad_test(); // the non-deterministic executor is not supposed to be used
+                                         logger.flush();
+                                       }
+                                     return {};
+                                   });
 
       BOOST_LEAF_CHECK(run());
-      return 0;
+      return {};
     },
-    [&](const boost::leaf::error_info &unmatched) -> int { std::abort(); });
+    make_handlers(std::ref(printer)));
+  return 0;
 }

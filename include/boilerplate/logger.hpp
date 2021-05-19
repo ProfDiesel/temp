@@ -140,12 +140,13 @@ struct printer
     }
   }
 #else  // defined(LOGGER_FMT_COMPILE)
-  template<typename... args_types>
-  void operator()(uint64_t tsc, level level, const args_types &...args) noexcept
+  void operator()(uint64_t tsc, level level, const auto &...args) noexcept
   {
     fmt::print(stderr, /*FMT_COMPILE*/ ("{:016x} {} {}\n"), tsc, level_to_string(level), fmt::join(std::tuple(args...), ""));
   }
 #endif // defined(LOGGER_FMT_COMPILE)
+
+  void operator()(level level, const auto &...args) noexcept { (*this)(__rdtsc(), level, args...); }
 };
 
 namespace detail
@@ -245,6 +246,13 @@ public:
     } while((payload = reinterpret_cast<payload_t *>(queue_.consumer_peek(sizeof(payload_t)))));
     queue_.consumer_flush();
     return true;
+  }
+
+  void wait() noexcept
+  {
+    flush();
+    while(!queue_.producer_test_empty())
+      std::this_thread::yield();
   }
 
 private:

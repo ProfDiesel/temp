@@ -121,7 +121,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
   auto request_snapshot = (
     {
 #if defined(BACKTEST_HARNESS)
-      const auto requester = backtest::make_snapshot_requester();
+      auto requester = backtest::make_snapshot_requester();
 #else  //  defined(BACKTEST_HARNESS)
       const auto [snapshot_host, snapshot_port] = (config::address)*feed["snapshot"_hs];
       const auto snapshot_endpoints = BOOST_LEAF_EC_TRYX(asio::ip::tcp::resolver(service).resolve(snapshot_host, snapshot_port, _));
@@ -129,7 +129,12 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
       BOOST_LEAF_EC_TRY(asio::connect(snapshot_socket, snapshot_endpoints, _));
 #endif // defined(BACKTEST_HARNESS)
 
-      [&](typename automata_type::automaton *automaton) noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
+#if defined(BACKTEST_HARNESS)
+      [requester = std::move(requester), handle_packet_loss]
+#else  //  defined(BACKTEST_HARNESS)
+      [snapshot_socket = std::move(snapshot_socket), handle_packet_loss]
+#endif // defined(BACKTEST_HARNESS)
+      (typename automata_type::automaton *automaton) mutable noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
       {
         REQUIRES(automaton);
         if constexpr(handle_packet_loss)
@@ -195,8 +200,8 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 
     for(;;)
     {
-      auto bytes_transferred = BOOST_LEAF_CO_TRYX(
-        co_await asio::async_read_until(command_input, asio::dynamic_buffer(command_buffer), "\n\n", boost::leaf::as_result(boost::leaf::use_awaitable)));
+      auto bytes_transferred = BOOST_LEAF_ASIO_CO_TRYX(
+        co_await asio::async_read_until(command_input, asio::dynamic_buffer(command_buffer), "\n\n", _));
 
       if(!bytes_transferred)
         co_return std::make_error_code(std::errc::io_error);
@@ -354,10 +359,9 @@ request.type <- request_payload; \n\
 request.instrument = {}\n\n");
           const auto [_, size] = fmt::format_to_n(buffer.data(), sizeof(buffer), request_payload, instrument->instrument_id);
           spawn(
-            [&, size = size]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
-            {
-              auto n = BOOST_LEAF_CO_TRYX(
-                co_await asio::async_write(command_output, asio::buffer(buffer.data(), size), boost::leaf::as_result(boost::leaf::use_awaitable)));
+            [&, size = size]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>> {
+              auto n = BOOST_LEAF_ASIO_CO_TRYX(
+                co_await asio::async_write(command_output, asio::buffer(buffer.data(), size), _));
 #if !defined(__clang__)
               if(n != size) [[unlikely]]
                 co_return std::errc::not_supported;

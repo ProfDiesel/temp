@@ -1,16 +1,18 @@
-from asyncio.streams import StreamWriter, StreamReader
-from .config_reader import parse, write as write_config, Walker, format_assignment, as_int, as_object, as_str
-from argparse import ArgumentParser
-import logging
-from pathlib import Path
 import asyncio
-from asyncio.subprocess import PIPE, Process
-import socket
-from base64 import b64encode
 import json
+import logging
+import socket
+from argparse import ArgumentParser
+from asyncio.streams import StreamReader, StreamWriter
+from asyncio.subprocess import PIPE, Process
+from base64 import b64encode
 from dataclasses import dataclass
-from typing import Dict, cast, Optional
+from pathlib import Path
+from typing import Dict, Optional, cast, Callable
 
+from .config_reader import Walker, as_int, as_object, as_object_opt, as_str, parse
+from .config_reader import write as write_config
+from . import config
 
 LOGGER: logging.Logger = logging.getLogger('Fairy')
 
@@ -26,7 +28,7 @@ class Subprocess:
         self.__process = process
 
     @staticmethod
-    async def launch(command, on_request) -> 'Subprocess':
+    async def launch(command, on_request: Callable[[config.Command], bool]) -> 'Subprocess':
         process = await asyncio.create_subprocess_shell(
             command,
             stdin=PIPE,
@@ -42,8 +44,8 @@ class Subprocess:
             while True:
                 command:str = (await cast(StreamReader, process.stdout).readuntil(b'\n\n')).decode()
                 LOGGER.debug('recv="%s"', command.replace('"', '\\"'))
-                request = Walker(parse(command), 'request')
-                if await on_request(request):
+                command = config.Command(parse(command), 'request')
+                if await on_request(command):
                     break
         command_reader_task = asyncio.create_task(command_reader())
 
@@ -73,12 +75,12 @@ class Subprocess:
 
 
 class Fairy:
-    def __init__(self, config: Walker):
-        self.__config:Walker = config
+    def __init__(self, config_: config.Ppf):
+        self.__config:config.Ppf = config_
         self.__instruments: Dict[int, Instrument] = {}
         self.__process: Optional[Subprocess] = None
 
-        if subscription := as_object(self.__config.subscription):
+        if subscription := self.__config.subscription:
             instrument:int = as_int(subscription.instrument)
             self.__instruments[instrument] = Instrument(instrument)
 
@@ -96,10 +98,9 @@ class Fairy:
 
     async def setup(self, *, loop=None) -> None:
         assert(self.__process is None)
-        self.__process = await Subprocess.launch('rr ' + as_str(self.__config.executable), self.__on_request)
+        self.__process = await Subprocess.launch('rr ' + self.__config.executable, self.__on_request)
 
-        down_host, down_port = as_str(self.__config.down_address).split(':', 1)
-        down_socket = socket.create_connection((down_host, int(down_port)))
+        down_socket = socket.create_connection(self.__config.down_address)
         down_reader, down_writer = await asyncio.open_connection(sock=down_socket)
 
         command = f'''\
@@ -114,7 +115,7 @@ send.fd <- {down_socket.fileno()};
 
         if subscription := as_object(self.__config.subscription):
             instrument: int = as_int(subscription.instrument)
-            command += "\n".join(format_assignment(object_.name, field, value) for object_, field, value in subscription.walk()) + "\n"
+            #command += "\n".join(format_assignment(object_.name, field, value) for object_, field, value in subscription.walk()) + "\n"
             command += self._get_payload(subscription.name, self.__instruments[instrument])
             command += f'''\
 config.subscription <- '{subscription}';
@@ -145,11 +146,11 @@ entrypoint.type <- 'subscribe';
             return
         await self.__process.send(write_config({'entrypoint': {'type': 'quit'}}))
 
-    async def __on_request(self, request) -> bool:
-        if request.type == 'exit':
+    async def __on_request(self, request: config.Command) -> bool:
+        if isinstance(request, config.Exit):
             return True
-        elif request.type == 'request_payload':
-            self.send_payload(as_int(request.instrument))
+        elif isinstance(request, config.RequestPayload):
+            self.send_payload(request.instrument)
         return False
 
 
@@ -166,7 +167,7 @@ def main(argv=None):
         logging.basicConfig(level=logging.INFO)
 
     async def run():
-        config = Walker(parse(Path(args.config).read_text()), 'ppf')
+        config = config.Ppf(parse(Path(args.config).read_text()), 'ppf')
         fairy = Fairy(config)
         await fairy.setup()
         await fairy.run()

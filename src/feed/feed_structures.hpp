@@ -164,7 +164,7 @@ inline update encode_update(enum field field, const price_t &value) noexcept
 }
 
 template<typename continuation_type>
-[[using gnu : always_inline, flatten, hot]] auto visit_update(continuation_type &&continuation, const struct update &update)
+[[using gnu : always_inline, flatten, hot]] inline auto visit_update(continuation_type &&continuation, const struct update &update)
 {
   switch(field{update.field})
   {
@@ -191,7 +191,7 @@ struct instrument_state final
 };
 
 template<typename field_constant_type>
-[[using gnu : always_inline, flatten, hot]] void update_state(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept 
+[[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
 {
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
@@ -210,7 +210,7 @@ template<typename field_constant_type>
 }
 
 template<typename value_type>
-[[using gnu : always_inline, flatten, hot]] void update_state_poly(instrument_state &state, enum field field, const value_type &value) noexcept 
+[[using gnu : always_inline, flatten, hot]] inline void update_state_poly(instrument_state &state, enum field field, const value_type &value) noexcept
 {
   switch(field)
   {
@@ -240,7 +240,7 @@ template<typename value_type>
 }
 
 template<typename continuation_type>
-[[using gnu : always_inline, flatten, hot]] void visit_state(continuation_type &&continuation, const instrument_state &state)
+[[using gnu : always_inline, flatten, hot]] inline void visit_state(continuation_type &&continuation, const instrument_state &state)
 {
     // clang-format off
 #define HANDLE_FIELD(r, _, elem) \

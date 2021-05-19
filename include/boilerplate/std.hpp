@@ -19,10 +19,10 @@ constexpr T *construct_at(T *p, Args &&... args)
   static_assert(atomic_unsigned_lock_free::is_always_lock_free);
 #endif // !defined(__clang__)
 
-#if defined(__clang__)
-  template <typename iterator_type>
-  constexpr auto contiguous_iterator = __is_cpp17_contiguous_iterator<iterator_type>::value;
-#endif // defined(__clang__)
+//#if defined(__clang__)
+//  template <typename iterator_type>
+//  constexpr auto contiguous_iterator = __is_cpp17_contiguous_iterator<iterator_type>::value;
+//#endif // defined(__clang__)
 
   using experimental::detected_or_t;
 

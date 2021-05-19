@@ -7,7 +7,7 @@
 #include <regex>
 #include <system_error>
 
-auto prefault_stack(std::size_t prefault_size) noexcept
+std::error_code prefault_stack(std::size_t prefault_size) noexcept
 {
   // pre-fault the stack
   pthread_attr_t attr;
@@ -24,7 +24,7 @@ auto prefault_stack(std::size_t prefault_size) noexcept
   void *prefault_base = ::alloca(prefault_size);
   ::memset(prefault_base, 0, static_cast<std::size_t>(reinterpret_cast<std::byte *>(prefault_base) - reinterpret_cast<std::byte *>(stack_address)));
 
-  return std::error_code();
+  return {};
 }
 
 class proc_maps
@@ -38,19 +38,23 @@ public:
 
   proc_maps() noexcept { update(); }
 
-  void update() noexcept
+  std::error_code update() noexcept
   {
     std::ifstream input("/proc/self/maps");
-    std::array<char, 128> line;
+    if(!input)
+      return std::error_code(errno, std::generic_category());
+
     //                          begin-addr  end-addr    permissions      offset      dev                     inode   path
     static std::regex const re("([0-9a-f]+)-([0-9a-f]+) [-r][-w][-x][-p] [0-9a-f]{8} [0-9a-f]{2}:[0-9a-f]{2} [0-9]+ +/.*");
-    while(input.getline(line.data(), sizeof(line)))
+    for(std::array<char, 1024> line; input.getline(line.data(), sizeof(line)); )
     {
       std::cmatch results;
       const auto to_ptr = [](const auto &field) { return reinterpret_cast<const void *>(std::strtoll(field.first, nullptr, 16)); };
       if(std::regex_match(line.data(), results, re))
         segments.emplace(to_ptr(results[2]), to_ptr(results[1]));
     }
+
+    return {};
   }
 
   bool is_in_code_segment(const void *ptr) const noexcept
@@ -80,4 +84,3 @@ public:
 private:
   boost::container::flat_map<const void *, const void *> segments {};
 };
-

@@ -13,6 +13,11 @@
 #include <asio/use_awaitable.hpp>
 #include <asio/write.hpp>
 
+#include <boost/leaf/coro.hpp>
+#include <boost/leaf/error.hpp>
+#include <boost/leaf/handle_errors.hpp>
+#include <boost/leaf/result.hpp>
+
 #include <boost/endian/conversion.hpp>
 
 #include <std_function/function.h>
@@ -63,15 +68,15 @@ inline auto encode_message(instrument_id_type instrument, const instrument_state
 inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_snapshot(asio::ip::tcp::socket &socket, instrument_id_type instrument) noexcept
 {
   const snapshot_request request {.instrument = endian::big_uint16_buf_t(instrument)};
-  if(BOOST_LEAF_CO_TRYX(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), boost::leaf::as_result(boost::leaf::use_awaitable))) != sizeof(request))
+  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), _)) != sizeof(request))
     co_return std::make_error_code(std::errc::io_error); // TODO
 
   std::aligned_storage_t<message_max_size, alignof(struct message)> buffer;
   auto *const message = reinterpret_cast<struct message *>(&buffer);
-  if(BOOST_LEAF_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message, sizeof(struct message)), boost::leaf::as_result(boost::leaf::use_awaitable))) != sizeof(struct message))
+  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message, sizeof(struct message)), _)) != sizeof(struct message))
     co_return std::make_error_code(std::errc::io_error); // TODO
   const auto remaining = (message->nb_updates - 1) * sizeof(update); // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  if(BOOST_LEAF_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message + 1, remaining), boost::leaf::as_result(boost::leaf::use_awaitable))) != remaining) // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message + 1, remaining), _)) != remaining) // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     co_return std::make_error_code(std::errc::io_error); // TODO
 
   instrument_state state {.sequence_id = message->sequence_id.value()};
@@ -80,7 +85,7 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
   co_return state;
 }
 
-[[using gnu : always_inline, flatten, hot]] void decode(auto &&message_header_handler, auto &&update_handler, const network_clock::time_point &timestamp,
+[[using gnu : always_inline, flatten, hot]] inline void decode(auto &&message_header_handler, auto &&update_handler, const network_clock::time_point &timestamp,
                     const asio::const_buffer &buffer) noexcept
 {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)

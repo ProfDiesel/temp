@@ -35,11 +35,11 @@ struct trigger_dispatcher
     {
       auto &[fields, trigger] = trigger_map_value;
       if constexpr(boilerplate::tuple_contains_type_v<decltype(field), decltype(fields)>)
-        return trigger(continuation, timestamp, value, std::forward<decltype(args)>(args)..., std::true_type());
+        return trigger(continuation, timestamp, value, args..., std::true_type());
       else
         return false;
     };
-    return std::apply([&](auto &...triggers) { return LIKELY((apply(triggers) || ...)) || continuation(timestamp, std::forward<decltype(args)>(args)..., std::false_type()); },
+    return std::apply([&](auto &...triggers) { return LIKELY((apply(triggers) || ...)) || continuation(timestamp, args..., std::false_type()); },
                       triggers);
   }
 
@@ -105,9 +105,8 @@ struct invalid_trigger_config
   const config::walker &walker;
 };
 
-template<typename continuation_type>
 auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger::logger> logger,
-                  continuation_type &&continuation) noexcept
+                  auto &&continuation) noexcept
 {
   using namespace config::literals;
 
@@ -188,7 +187,7 @@ auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger
 #if !defined(LEAN_AND_MEAN)
          |= decode_move_trigger |= decode_min_size_trigger
 #endif // !defined(LEAN_AND_MEAN)
-         |= check_has_trigger |= std::forward<continuation_type>(continuation);
+         |= check_has_trigger |= std::forward<decltype(continuation)>(continuation);
 }
 
 

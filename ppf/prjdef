@@ -20,8 +20,8 @@ Apply(CxxDef('LOGGER_FMT_COMPILE'))
 # Apply(CxxDef('BOOST_SPIRIT_X3_DEBUG'))
 
 
-up = SharedObject('up', objects=(Cxx('tests/up.cpp', pic=True),))
-Alias('up_test', (Executable('up_test', objects=(Cxx('tests/up.cpp', name='up_test', flags=(CxxDef('TEST'),), quick_build_alias=None),)),))
+up = SharedObject('up', objects=(Cxx('test/up.cpp', pic=True),))
+Alias('up_test', (Executable('up_test', objects=(Cxx('test/up.cpp', name='up_test', flags=(CxxDef('TEST'),), quick_build_alias=None),)),))
 
 Default(up)
 

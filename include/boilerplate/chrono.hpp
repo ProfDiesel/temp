@@ -29,11 +29,12 @@ struct incomplete_nano_clock
 struct nano_clock : public incomplete_nano_clock
 {
 #if defined(BACKTEST_HARNESS)
-  static time_point &now() noexcept { static time_point now; return now; }
+  static time_point now() noexcept { static time_point now; return now; }
 #else
   static time_point now() noexcept { return time_point(std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch())); }
 #endif // !defined(BACKTEST_HARNESS)
 };
+static_assert(std::chrono::is_clock_v<nano_clock>);
 
 #if defined(USE_TCPDIRECT)
 using network_clock = incomplete_nano_clock;
