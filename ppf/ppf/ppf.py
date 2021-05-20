@@ -36,7 +36,7 @@ class Subprocess:
             stderr=PIPE,
             close_fds=False,
         )
-        LOGGER.info('pid=%d Subprocess launched', process.pid)
+        LOGGER.info('command="%s" pid=%d Subprocess launched', command, process.pid)
 
         self_ = Subprocess(process)
 
@@ -81,20 +81,16 @@ class Fairy:
         self.__process: Optional[Subprocess] = None
 
         if subscription := self.__config.subscription:
-            instrument:int = as_int(subscription.instrument)
+            instrument:int = subscription.instrument
             self.__instruments[instrument] = Instrument(instrument)
 
     @staticmethod
-    def _get_payload(name: str, instrument: Instrument) -> str:
+    def _get_payload(name: str, instrument: Instrument) -> config.Payload:
         def encode(message) -> str:
             return b64encode(json.dumps(message).encode()).decode()
 
         message, datagram = {'instrument': instrument._id, 'content': f'hit #{instrument._serial}'}, {'instrument': instrument._id, 'content': f'datagram hit #{instrument._serial}'}
-        return f'''\
-{name}.instrument <- {instrument._id};
-{name}.message <- '{encode(message)}';
-{name}.datagram <- '{encode(datagram)}';
-'''
+        return config.Payload(instrument=instrument._id, message=json.dumps(message).encode(), datagram=json.dumps(datagram).encode())
 
     async def setup(self, *, loop=None) -> None:
         assert(self.__process is None)
@@ -107,14 +103,14 @@ class Fairy:
 config.feed <- 'feed';
 config.send <- 'send';
 config.command_out_fd <- 1;
-feed.snapshot <- '{as_str(self.__config.up_snapshot_address)}';
-feed.update <- '{as_str(self.__config.up_updates_address)}';
+feed.snapshot <- '{self.__config.up_snapshot_address}';
+feed.update <- '{self.__config.up_updates_address}';
 feed.spin_duration <- 0;
 send.fd <- {down_socket.fileno()};
 '''
 
-        if subscription := as_object(self.__config.subscription):
-            instrument: int = as_int(subscription.instrument)
+        if subscription := self.__config.subscription:
+            instrument: int = subscription.instrument
             #command += "\n".join(format_assignment(object_.name, field, value) for object_, field, value in subscription.walk()) + "\n"
             command += self._get_payload(subscription.name, self.__instruments[instrument])
             command += f'''\

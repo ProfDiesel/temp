@@ -1,5 +1,6 @@
-from pyparsing import Group, Optional as Optional_, Suppress, delimitedList, restOfLine, stringEnd, pyparsing_common, Char, ParserElement
-from typing import Union, Dict, Tuple, Set, Sequence, cast, List, Iterator, Type, Optional, TypeVar, Any
+from pyparsing import Group, Optional as Optional_, Suppress, delimitedList, restOfLine, stringEnd, pyparsing_common, Char, ParserElement, QuotedString
+import typing
+from typing import Union, Dict, Tuple, Set, Sequence, cast, List, Iterator, Type, Optional, TypeVar, Generic, Callable, Protocol, Final
 from dataclasses import dataclass, fields
 from functools import singledispatch, singledispatchmethod, reduce
 from contextlib import suppress
@@ -8,7 +9,7 @@ Value = Union[str, float, List[str], List[float]]
 Object = Dict[str, Value]
 Config = Dict[str, Object]
 
-string = Suppress('"') + ... + Suppress(~Char('"') + '"')
+string = QuotedString('"', unquoteResults=True)
 numeric = pyparsing_common.fnumber.copy()
 identifier = pyparsing_common.identifier.copy()
 
@@ -19,8 +20,9 @@ def list_of(expr: ParserElement) -> str:
 
 key = (Optional_(identifier + Suppress('.'), '') + identifier).setParseAction(tuple)
 value = string | numeric | list_of(string) | list_of(numeric)
-assignment = Group(Suppress('"') + key + Suppress('"') + Suppress(':') + value + (Suppress(',') | stringEnd))
-grammar = assignment[1, ...].ignore('//' + restOfLine)
+assignment = Group(Suppress('"') + key + Suppress('"') + Suppress(':') + value)
+#grammar = (assignment + Suppress(';'))[1, ...].ignore('//' + restOfLine)
+grammar = delimitedList(assignment).ignore('//' + restOfLine)
 
 
 def parse(config: str) -> Config:
@@ -74,6 +76,10 @@ class Walker:
         self.__value = UNRESOLVED if defer_resolution else self.__config.get(name)
 
     @property
+    def _config(self):
+        return self.__config
+
+    @property
     def name(self):
         return self.__name
 
@@ -105,7 +111,7 @@ class Walker:
 
     def get(self, item: str) -> Optional[WalkerResult]:
         with suppress(ValueError, KeyError):
-            return getattr(self, item)
+            return self[item]
         return None
 
     def walk(self) -> Iterator[Tuple['Walker', str, Value]]:
@@ -116,15 +122,6 @@ class Walker:
             if isinstance(value, List) and (len(value) > 1) and isinstance(value[0], str):
                 yield from WalkerSequence(self.__config, value).walk()
 
-class WalkerWithAttribute(Walker):
-    def __getattr__(self, name: str) -> Any:
-        return self[name]
-
-class WalkerWithType(Walker):
-    def __init__(self, protocol):
-        pass
-    def __getattr__(self, name: str) -> Any:
-        return self[name]
 
 @dataclass
 class WalkerSequence(Sequence[Walker]):
@@ -160,7 +157,7 @@ def as_sequence(result: WalkerResult) -> WalkerSequence:
     return cast(WalkerSequence, result)
 
 def as_numeric(result: WalkerResult) -> float:
-    assert(isinstance(result, float))
+    assert(isinstance(result, (float, int)))
     return cast(float, result)
 
 def as_numeric_seq(result: WalkerResult) -> List[float]:
@@ -183,42 +180,56 @@ def as_int(result: WalkerResult) -> int:
     assert(value.is_integer())
     return int(value)
 
+
+class ConfigSerializable(Protocol):
+    @classmethod
+    def of_value(cls, value: Value) -> 'ConfigSerializable': ...
+
+    def as_value(self) -> Value: ...
+
+
 T = TypeVar('T')
+KeyT = TypeVar('KeyT')
+ValueT = TypeVar('ValueT')
 
-@singledispatch
-def of_walker(result: WalkerResult, type_: Type[T], **kwargs) -> T:
-    pass
 
-"""
-@of_walker.register
-def _(result: WalkerResult, address: Address, **kwargs) -> Address:
-    return as_str(result).split(':', 1)
-"""
+def walker_type(cls, /, typename: Optional[str] = None):
+    def make_field(name: str, type_: Generic[T]) -> property:
+        is_optional: Final[bool] = typing.get_origin(type_) is Union and type(None) in typing.get_args(type_)
+        optional_types = set(typing.get_args(type_)) - {type(None)}
+        decayed: Final[Type] = next(iter(optional_types)) if len(optional_types) == 1 else type_
+        
+        if of_value := getattr(decayed, 'of_value', None):
+            of_walker = lambda walker: of_value(walker.value)
+        else:
+            of_walker = getattr(decayed, 'of_walker', decayed)
 
-class TypedWalker(Walker):
-    def __init_subclass__(cls, /, typename: Optional[str] = None):
-        fields = cls.__dict__.get('__annotations__', {})
-
-        for name, type_ in fields.items():
+        if is_optional:
             def getter(self: Type[cls]):
-                return of_value(self[name], type_)
+                if (value := self.get(name)) is not None:
+                    return of_walker(value)
+                return None
+        else:
+            def getter(self: Type[cls]):
+                return of_walker(self[name])
 
-            def setter(self: Type[cls], value: Type[type_]):
-                self[name] = as_value(value)
+        def setter(self: Type[cls], value: T):
+            self[name] = as_value(value)
 
-            setattr(cls, name, property(getter, setter))
+        return property(getter, setter)
 
-        if not typename:
-            typename = reduce(lambda acc, c: acc + (f'_{c}' if c.isupper() else c), cls.__name__).lower()
+    if not typename:
+        typename = reduce(lambda acc, c: acc + (f'_{c}' if c.isupper() else c), cls.__name__).lower()
 
-        def of_walker_(walker: Walker, *, recursive=False):
-            def field(name, type_: Type[T]) -> T:
-                field_walker: Final[Walker] = walker[name]
-                return of_value(as_value(field_walker), type_) if not issubclass(type_, TypedWalker) else of_walker(field_walker, type_) if recursive else UNRESOLVED
-            return cls(*(field(name, type_) for name, type_ in fields))
+    @classmethod
+    def of_walker(cls_: Type[cls], walker: Walker, *, recursive=False):
+        assert(as_str(walker['type']) in (getattr(parent, 'typename', None) for parent in cls_.mro()))
+        return cls_(walker._config, walker.name, walker.value)
 
-        of_walker.register(of_walker_)
-
+    fields: Final[Dict[str, Type]] = dict(**cls.__dict__.get('__annotations__', {}), type=str)
+    bases = cls.__bases__ if cls.__bases__ != (object,) else ()
+    class_dict = dict(**{name: make_field(name, type_) for name, type_ in fields.items()}, of_walker=of_walker, typename=typename)
+    return type(cls.__name__, (*bases, Walker,), class_dict)
 
 
 """
@@ -226,9 +237,10 @@ class TypedWalker(Walker):
 class MyConfObject:
     a: Map(str, OtherObject)  # -> Dict[str, OtherObject]
 """
-class Mapping:
-    def __init__(key_type, value_type, keys_name, values_name):
+class Mapping(Generic[KeyT, ValueT]):
+    def __init__(key_type: KeyT, value_type: ValueT, keys_name: str, values_name: str):
         if not keys_name:
             keys_name = f'{field.name}_keys'
         if not values_name:
             values = f'{field.name}_values'
+

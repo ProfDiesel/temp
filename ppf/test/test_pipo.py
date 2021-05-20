@@ -58,6 +58,16 @@ async def randori(config_: str):
     await uke.quit()
 
 
+def test_config():
+    from ppf import config_reader
+    config_reader.string.parseString('"ppf"')
+    config_reader.numeric.parseString('16.12')
+    config_reader.identifier.parseString('ppf')
+    config_reader.key.parseString('ppf.executable')
+    config_reader.value.parseString('"ppf"')
+    config_reader.assignment.parseString('"ppf.executable": "ppf"')
+    config_reader.grammar.parseString('"ppf.executable": "ppf", "ppf.type": "ppf"')
+
 @pytestmark
 async def test_static():
     logging.basicConfig(level=logging.DEBUG, format="%(message)s", datefmt="[%X.%f]", handlers=[RichHandler(rich_tracebacks=True)])

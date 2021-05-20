@@ -110,7 +110,8 @@ auto main() -> int
                                    });
 
       BOOST_LEAF_CHECK(run());
+      return {};
     },
-    make_handlers(std::ref(printer)));
+    make_handlers(std::ref(logger_thread.printer)));
   return 0;
 }

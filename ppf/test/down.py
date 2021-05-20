@@ -55,7 +55,7 @@ class Down:
     async def connect(self, stream_address: Address, datagram_address: Address, *, loop=None):
         if not loop:
             loop = asyncio.get_event_loop()
-        self.__stream_server = await asyncio.start_server(self.on_new_connection, *stream_address, loop=loop)
+        self.__stream_server = await asyncio.start_server(self.on_new_connection, *stream_address)
         self.__datagram_transport, self.__datagram_protocol = await loop.create_datagram_endpoint(lambda: _DatagramBumper(self), local_addr=datagram_address)
 
     @staticmethod

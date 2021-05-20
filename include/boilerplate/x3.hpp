@@ -23,15 +23,14 @@ template<typename subject_type>
 auto expect(subject_type &&subject)
 {
   namespace x3 = boost::spirit::x3;
-  auto &&parser = x3::as_parser(std::forward<subject_type>(subject));
+  const auto parser = x3::as_parser(std::forward<subject_type>(subject));
 
   const auto store = [](auto &context) { x3::_val(context) = x3::_attr(context); };
-  const auto error = [&](auto &context) {
-    BOOST_LEAF_NEW_ERROR(expectation_failure {x3::what(parser), x3::_where(context)});
+  const auto error = [which = x3::what(parser)](auto &context) {
+    BOOST_LEAF_NEW_ERROR(expectation_failure {which, x3::_where(context)});
     x3::_pass(context) = false;
   };
   return x3::rule<struct _, typename std::decay_t<decltype(parser)>::attribute_type> {"expect"} = parser[store] | x3::eps[error];
 }
 
 } // namespace x3_ext
-
