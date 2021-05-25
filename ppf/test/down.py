@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 import json
 
-from ppf.config import Address
+from ppf.config_objects import Address
 
 @dataclass
 class Handshake:

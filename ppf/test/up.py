@@ -5,7 +5,7 @@ import shlex
 import json
 import re
 
-from ppf.config import Address
+from ppf.config_objects import Address
 
 import cppyy
 

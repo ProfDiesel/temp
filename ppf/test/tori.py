@@ -1,4 +1,4 @@
-from ppf.config import Address
+from ppf.config_objects import Address
 
 from .down import Down
 from .up import Up

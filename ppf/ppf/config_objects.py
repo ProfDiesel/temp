@@ -1,4 +1,4 @@
-from ppf.config_reader import walker_type, Walker, ConfigSerializable, Value
+from .config.walker import walker_type, Walker, ConfigSerializable, Value
 from typing import Tuple, Type, Optional
 from base64 import b64encode, b64decode
 
@@ -21,6 +21,8 @@ class Base64(bytes, ConfigSerializable):
     def as_value(self) -> Value:
         return b64encode(self).decode()
 
+Instrument = int
+
 @walker_type
 class Feed:
     snapshot: Address
@@ -28,34 +30,35 @@ class Feed:
     spin_duration: int
 
 @walker_type
-class Fairy:
-    executable: str
-    feed: Feed
-    down_address: Address
-
-@walker_type
-class Subscription:
-    instrument: int
+class Trigger:
+    instrument: Instrument
     instant_threshold: float
     threshold: Optional[float]
     period: Optional[int]
     cooldown: int
-    message: Base64
-    datagram: Optional[Base64]
 
 @walker_type
 class Send:
     fd: int
-    datagram: Address
+    datagram: Optional[Address]
     disposable_payload: bool
 
 @walker_type
-class Ppf:
-    up_snapshot_address: Address
-    up_updates_address: Address
-    down_address: Address
+class Payload:
+    message: Base64
+    datagram: Optional[Base64]
+
+@walker_type
+class Subscription:
+    trigger: Trigger
+    payload: Payload
+
+@walker_type
+class Fairy:
+    executable: str
     feed: Feed
-    send: Send
+    down_address: Address
+    trigger: Optional[Trigger]
     subscription: Optional[Subscription]
 
 @walker_type
@@ -63,15 +66,37 @@ class Command:
     pass
 
 @walker_type
-class Exit(Command):
+class Request:
     pass
 
 @walker_type
-class RequestPayload(Command):
-    instrument: int
+class Dust(Command):
+    feed: Feed
+    send: Send
+    subscription: Optional[Subscription]
+    command_out_fd: int
 
 @walker_type
-class Payload:
-    instrument: int
-    message: Base64
-    datagram: Optional[Base64]
+class Subscribe(Command):
+    subscription: Subscription
+
+@walker_type
+class Unsubscribe(Command):
+    instrument: Instrument
+
+@walker_type
+class Quit(Command):
+    pass
+
+@walker_type
+class Exit(Request):
+    pass
+
+@walker_type
+class RequestPayload(Request):
+    instrument: Instrument
+
+@walker_type
+class UpdatePayload(Command):
+    instrument: Instrument
+    payload: Payload

@@ -2,20 +2,27 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "test_pipo",
+            "type": "python",
+            "request": "launch",
+            "module": "test.test_pipo",
+            "justMyCode": false,
+            "autoReload": {
+                "enable": true
+            },
+            "env": {
+                "EXTRA_CLING_ARGS": "-ggdb3"
+            },
+        },
+        {
             "name": "ppf",
             "type": "python",
             "request": "launch",
             "module": "ppf",
-            "args": ["--config", "${workspaceFolder}/ppf.conf"]
-        },
-        {
-            "name": "test",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/tests/test_pipo.py",
-            "console": "integratedTerminal",
-            "justMyCode": false,
-            "env": {"EXTRA_CLING_ARGS": "-ggdb3"}
+            "args": [
+                "--config",
+                "${workspaceFolder}/ppf.conf"
+            ]
         },
     ]
 }
