@@ -47,9 +47,9 @@ async def scenario_0(uke: Fairy, tori: Tori):
 
 @asynccontextmanager
 async def randori(config_: str):
-    config_walker: confobj.Fairy = unmarshall_walker((Path(__file__).parent / config_).read_text().format(**locals(), **globals()), 'ppf', confobj.Fairy)
+    config_walker: confobj.Fairy = unmarshall_walker((Path(__file__).parent / config_).read_text().format(**locals(), **globals()), 'fairy', confobj.Fairy)
 
-    tori = await Tori(up_snapshot_addr, up_updates_addr, down_stream_addr, down_datagram_addr)
+    tori = await Tori.create(up_snapshot_addr, up_updates_addr, down_stream_addr, down_datagram_addr)
 
     uke = Fairy(config_walker)
     await uke.setup()

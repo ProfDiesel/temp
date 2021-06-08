@@ -1,6 +1,8 @@
-from .config.walker import walker_type, Walker, ConfigSerializable, Value
+from .config.typed_walker import Value
+from .config.typed_walker import walker_type, ConfigSerializable
 from typing import Tuple, Type, Optional
 from base64 import b64encode, b64decode
+
 
 class Address(Tuple[str, int], ConfigSerializable):
     @classmethod
@@ -12,6 +14,7 @@ class Address(Tuple[str, int], ConfigSerializable):
     def as_value(self) -> Value:
         return f'{self[0]}:{self[1]}'
 
+
 class Base64(bytes, ConfigSerializable):
     @classmethod
     def of_value(cls, value: Value) -> 'Base64':
@@ -21,13 +24,16 @@ class Base64(bytes, ConfigSerializable):
     def as_value(self) -> Value:
         return b64encode(self).decode()
 
+
 Instrument = int
+
 
 @walker_type
 class Feed:
     snapshot: Address
     update: Address
     spin_duration: int
+
 
 @walker_type
 class Trigger:
@@ -37,21 +43,25 @@ class Trigger:
     period: Optional[int]
     cooldown: int
 
+
 @walker_type
 class Send:
     fd: int
     datagram: Optional[Address]
     disposable_payload: bool
 
+
 @walker_type
 class Payload:
     message: Base64
     datagram: Optional[Base64]
 
+
 @walker_type
 class Subscription:
     trigger: Trigger
     payload: Payload
+
 
 @walker_type
 class Fairy:
@@ -59,15 +69,17 @@ class Fairy:
     feed: Feed
     down_address: Address
     trigger: Optional[Trigger]
-    subscription: Optional[Subscription]
+
 
 @walker_type
 class Command:
     pass
 
+
 @walker_type
 class Request:
     pass
+
 
 @walker_type
 class Dust(Command):
@@ -76,25 +88,31 @@ class Dust(Command):
     subscription: Optional[Subscription]
     command_out_fd: int
 
+
 @walker_type
 class Subscribe(Command):
     subscription: Subscription
+
 
 @walker_type
 class Unsubscribe(Command):
     instrument: Instrument
 
+
 @walker_type
 class Quit(Command):
     pass
+
 
 @walker_type
 class Exit(Request):
     pass
 
+
 @walker_type
 class RequestPayload(Request):
     instrument: Instrument
+
 
 @walker_type
 class UpdatePayload(Command):

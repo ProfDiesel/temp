@@ -5,11 +5,13 @@ from .up import Up
 
 
 class Tori:
-    async def __new__(cls, *args, **kwargs):
-        instance = super().__new__(cls)
-        await instance.__init__(*args, **kwargs)
-        return instance
+    def __init__(self, up: Up, down: Down):
+        self.up = up
+        self.down = down
 
-    async def __init__(self, up_snapshot_addr: Address, up_updates_addr: Address, down_stream_addr: Address, down_datagram_addr: Address):
-        self.up = Up(up_snapshot_addr, up_updates_addr)
-        self.down = await Down.create(down_stream_addr, down_datagram_addr)
+    @classmethod
+    async def create(cls, up_snapshot_addr: Address, up_updates_addr: Address, down_stream_addr: Address, down_datagram_addr: Address):
+        up = Up(up_snapshot_addr, up_updates_addr)
+        down = Down()
+        await down.connect(down_stream_addr, down_datagram_addr)
+        return cls(up, down)

@@ -80,25 +80,28 @@ static boost::leaf::result<bool> parse(const continuation_type &continuation, it
   using name_type = std::conditional_t<std::contiguous_iterator<iterator_type>, boost::iterator_range<iterator_type>, std::string>;
   using assignment_type = std::tuple<name_type, name_type, value_type>;
 
-  static const auto comment = x3::rule<class comment>("comment") = '#' >> *(x3::char_ - x3::eol) >> x3::eol;
+  static const auto comment = x3::rule<class comment>("comment") = "//" >> *(x3::char_ - x3::eol) >> x3::eol;
   static const auto discard = x3::space | comment;
 
   static const auto quoted_string = x3::rule<class quoted_string_class, string_type>("quoted string")
-    = x3::lexeme['\'' >> x3::raw[*(x3::char_ - '\'')] >> expect('\'')];
+    = x3::lexeme['"' >> x3::raw[*(x3::char_ - '"')] >> expect('"')];
   static const auto string_list = x3::rule<class string_list_class, string_list_type>("string list") = '[' >> (quoted_string % ',') >> expect(']');
   static const auto numeric_list = x3::rule<class numeric_list_class, numeric_list_type>("numeric list") = '[' >> -(x3::double_ % ',') >> expect(']');
   static const auto value = x3::rule<class value_class, value_type>("value") = quoted_string | x3::double_ | string_list | numeric_list;
   static const auto object_name = x3::rule<class object_name_class, name_type>("object") = x3::raw[(x3::alpha | '_') >> *(x3::alnum | '_')];
   static const auto field_name = x3::rule<class field_name_class, name_type>("field") = x3::raw[(x3::alpha | '_') >> *(x3::alnum | '_')];
   static const auto assignment = x3::rule<class assignment_class, assignment_type>("assignment")
-    = x3::lexeme[-(object_name >> ".") >> expect(field_name)] >> expect("<-") >> expect(value) >> expect(";");
+    = '"' >> x3::lexeme[-(object_name >> ".") >> expect(field_name)] >> expect('"') >> expect(":") >> expect(value);
 
-  const auto grammar = *(!x3::eoi >> assignment[(
-                           [&](auto &context)
-                           {
-                             auto &[object, field, value] = x3::_attr(context);
-                             continuation(object, field, std::move(value));
-                           })]);
+  static const auto assignment_with_action = assignment[(
+      [&](auto &context)
+      {
+        auto &[object, field, value] = x3::_attr(context);
+        continuation(object, field, std::move(value));
+      })];
+  
+  //const auto grammar = *(!x3::eoi >> assignment_with_action >> expect(";"));
+  const auto grammar = assignment_with_action % ',';
 
   return boost::leaf::try_handle_some(
     [&]()
@@ -389,10 +392,10 @@ TEST_SUITE("config_reader")
     SUBCASE("success")
     {
       const auto config_str = "\
-a.a <- 'string';\n\
-a.b <- 42;\n\
-a.c <- ['string', 'list'];\n\
-a.d <- [0, 1, 2, 3, 4];\n\n"sv;
+\"a.a\": \"string\",\n\
+\"a.b\": 42,\n\
+\"a.c\": [\"string\", \"list\"],\n\
+\"a.d\": [0, 1, 2, 3, 4]\n\n"sv;
       boost::leaf::try_handle_all(
         [&]() -> boost::leaf::result<void>
         {
@@ -430,11 +433,11 @@ parsing.fails <- here;\n\n"sv;
     SUBCASE("walker")
     {
       const auto config_str = "\
-a.next <- 'b';\n\
-a.value <- 1;\n\
-b.next <- 'c';\n\
-b.value <- 'string';\n\
-c.next <- ['a', 'b'];\n\n"sv;
+\"a.next\": \"b\",\n\
+\"a.value\": 1,\n\
+\"b.next\": \"c\",\n\
+\"b.value\": \"string\",\n\
+\"c.next\": [\"a\", \"b\"]\n\n"sv;
       boost::leaf::try_handle_all(
         [&]() -> boost::leaf::result<void>
         {

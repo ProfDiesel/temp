@@ -208,9 +208,9 @@ TEST_SUITE("trigger_dispatcher")
     using namespace std::string_view_literals;
 
     const auto config = "\n\
-entrypoint.instant_threshold <- 2;\n\
-entrypoint.threshold <- 3;\n\
-entrypoint.period <- 10;"sv;
+\"entrypoint.instant_threshold\": 2,\n\
+\"entrypoint.threshold\": 3,\n\
+\"entrypoint.period\": 10"sv;
 
   boost::leaf::try_handle_all(
       [&]() -> boost::leaf::result<void> {

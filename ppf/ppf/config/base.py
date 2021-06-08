@@ -6,6 +6,8 @@ class Object(Dict[str, Value]):
     pass
 
 class Config(Dict[str, Object]):
-    pass
-
+    def try_add(self, name: str, object_: Object):
+        if name in self:
+            raise KeyError(name)
+        self[name] = object_
 

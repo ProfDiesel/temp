@@ -76,13 +76,13 @@ class Subprocess:
 
 
 class Fairy:
-    def __init__(self, config_: confobj.Fairy):
-        self.__config:confobj.Fairy = config_
+    def __init__(self, config: confobj.Fairy):
+        self.__config:confobj.Fairy = config
         self.__instruments: Dict[int, Instrument] = {}
         self.__process: Optional[Subprocess] = None
 
-        if subscription := self.__config.subscription:
-            instrument:int = subscription.trigger.instrument
+        if trigger := self.__config.trigger :
+            instrument:int = trigger.instrument
             self.__instruments[instrument] = Instrument(instrument)
 
     @staticmethod
@@ -95,36 +95,36 @@ class Fairy:
 
     async def setup(self, *, loop=None) -> None:
         assert(self.__process is None)
-        self.__process = await Subprocess.launch('rr ' + self.__config.executable, self.__on_request)
+        self.__process = await Subprocess.launch(self.__config.executable, self.__on_request)
 
         down_socket = socket.create_connection(self.__config.down_address)
         down_reader, down_writer = await asyncio.open_connection(sock=down_socket)
 
-        command = confobj.Dust(feed = self.__config.feed, send= confobj.Send(fd = down_socket.fileno(), datagram=None, disposable_payload=False), command_out_fd=1)
+        command = confobj.Dust('config', feed=self.__config.feed, send=confobj.Send('send', fd=down_socket.fileno(), datagram=None, disposable_payload=False), command_out_fd=1)
         if trigger := self.__config.trigger:
-            command.subscription = confobj.Subscription(trigger=trigger, payload = self._get_payload(self.__instruments[trigger.instrument]))
+            command.subscription = confobj.Subscription('subscription', trigger=trigger, payload=self._get_payload(self.__instruments[trigger.instrument]))
 
         await self.__process.send(command)
 
-    async def send_payload(self, instrument:int) -> None:
+    async def send_payload(self, instrument: int) -> None:
         if self.__process is None:
             return
-        await self.__process.send(confobj.UpdatePayload(instrument=instrument, payload = self._get_payload(self.__instruments[instrument])))
+        await self.__process.send(confobj.UpdatePayload('entrypoint', instrument=instrument, payload=self._get_payload(self.__instruments[instrument])))
 
     async def send_subscribe(self, instrument: int, trigger: confobj.Trigger) -> None:
         if self.__process is None:
             return
-        await self.__process.send(confobj.Subscribe(subscription=confobj.Subscription(trigger=trigger, payload = self._get_payload(self.__instruments[trigger.instrument]))))
+        await self.__process.send(confobj.Subscribe('entrypoint', subscription=confobj.Subscription(trigger=trigger, payload = self._get_payload(self.__instruments[trigger.instrument]))))
 
     async def send_unsubscribe(self, instrument: int) -> None:
         if self.__process is None:
             return
-        await self.__process.send(confobj.Unsubscribe(instrument=instrument))
+        await self.__process.send(confobj.Unsubscribe('entrypoint', instrument=instrument))
 
     async def quit(self) -> None:
         if self.__process is None:
             return
-        await self.__process.send(confobj.Quit())
+        await self.__process.send(confobj.Quit('entrypoint'))
 
     async def __on_request(self, request: confobj.Request) -> bool:
         if isinstance(request, confobj.Quit):
