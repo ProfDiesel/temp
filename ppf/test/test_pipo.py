@@ -24,11 +24,12 @@ pytestmark = pytest.mark.asyncio
 
 INSTRUMENT_0 = 42
 
-up_snapshot_addr: Final = confobj.Address(('127.0.0.1', 4400))
-up_updates_addr: Final = confobj.Address(('239.255.0.1', 4401))
-down_stream_addr: Final = confobj.Address(('127.0.0.1', 9998))
-down_datagram_addr: Final = confobj.Address(('127.0.0.1', 9999))
+up_snapshot_addr: Final = confobj.Address('127.0.0.1', 4400)
+up_updates_addr: Final = confobj.Address('239.255.0.1', 4401)
+down_stream_addr: Final = confobj.Address('127.0.0.1', 9998)
+down_datagram_addr: Final = confobj.Address('127.0.0.1', 9999)
 executable: Path = Path(__file__).parent / '../../build/debug/ppf'
+
 
 async def scenario_0(uke: Fairy, tori: Tori):
     tori.up.update(1000, INSTRUMENT_0, b0=10, bq0=5)

@@ -7,9 +7,10 @@ from functools import partial
 from itertools import chain
 
 from .base import Config, Object, Value
-from .walker import Walker, as_value, as_str
+from .walker import Walker, as_value, as_str, WalkerValue
 
 
+@runtime_checkable
 class ConfigSerializable(Protocol):
     @classmethod
     def of_value(cls, value: Value) -> 'ConfigSerializable': ...
@@ -126,6 +127,7 @@ class MappingField(Generic[T], FieldDecorator[Mapping[str, T]]):
     def __get__(self, instance: Optional[Walker], owner: Optional[Type['MappingField']]) -> Mapping[str, T]:
         if instance is None:
             raise AttributeError(self.name)
+
         class Proxy(Mapping[str, T]):
             __getitem__ = partial(self.get_item, instance=instance, owner=owner)
         return Proxy(self, instance)
@@ -163,34 +165,39 @@ def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWa
             if issubclass(type_, (FieldBase, FieldDecorator)):
                 return type_(name)
         is_optional, decayed = decay_optional(type_)
-        field: FieldBase
-        if issubclass(decayed, TypedWalker):
-            field = ObjectField(name, decayed)
+        if type_ in typing.get_args(Value):
+            return ValueField(name, type_, type_)
+        elif type_ in (int, bool):
+            return ValueField(name, type_, float)
+        elif is_optional:
+            field = make_field(name, decayed)
+            return OptionalField(field)
+        elif issubclass(type_, ConfigSerializable):
+            return ValueField(name, type_.of_value, type_.as_value)
+        elif issubclass(type_, TypedWalker):
+            return ObjectField(name, type_)
+        elif issubclass(type_, Sequence):
+            assert(issubclass(typing.get_origin(type_), Sequence))
+            item_type, *_ = typing.get_args(type_)
+            return SequenceField(make_field(name, item_type))
         else:
-            if decayed in typing.get_args(Value):
-                as_value, of_value = decayed, decayed
-            elif decayed in (int, bool):
-                as_value, of_value = float, decayed
-            else:
-                as_value, of_value = getattr(decayed, 'as_value'), getattr(decayed, 'of_value')
-            field = ValueField(name, of_value, as_value)
-        return OptionalField(field) if is_optional else SequenceField(field) if issubclass(decayed, Sequence) else field
+            raise TypeError(type_)
 
     if not typename:
         typename = reduce(lambda acc, c: acc + (f'_{c}' if c.isupper() else c), cls.__name__).lower()
 
     bases = cls.__bases__ if cls.__bases__ != (object,) else ()
-    cls_fields: Final[Dict[str, Type]] = dict(chain.from_iterable(typing.get_type_hints(cls_).items() for cls_ in reversed(cls.mro())))
+    field_descriptors: Final[Dict[str, FieldBase]] = {name: make_field(name, type_) for name, type_ in typing.get_type_hints(cls).items()}
 
     def init(self: TypedWalker[T], source: Union[Walker, str, None], /, *, fields: Mapping[str, Any] = {}, **kwargs):
         walker: Walker
-        if not isinstance(source, Walker):
+        if isinstance(source, Walker):
+            walker = source
+        else:
             name: str = source if source else f'{type(self).__qualname__}_{uuid4().hex}'
             object_ = Object(type=type(self).type)
             config = Config(**{name: object_})
             walker = Walker(config, name, _object=object_)
-        else:
-            walker = source
 
         # TODO: should look for __init__ in the bases, but type(super(type(self), self)) == type(self)
         # -> have a classmethod to resolve the type ?
@@ -199,31 +206,20 @@ def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWa
         fields.update(kwargs)
         for field_name, value in fields.items():
             setattr(self, field_name, value)
-        for field_name, type_ in cls_fields.items():
-            if field_name in fields:
-                continue
-            is_optional, decayed = decay_optional(type_)
-            if is_optional:
-                source = walker.get(field_name)
-                value = decayed(source) if source else None
-            elif issubclass(type_, Walker):
-                value = type_(walker.get(field_name))
-            else:
-                value = type_()
-            setattr(self, field_name, value)
 
     def validate(self) -> bool:
         actual_type: Final[Type[TypedWalker]] = _WALKER_TYPE_REGISTRY[as_str(self['type'])]
         if not issubclass(actual_type, type(self)):
             return False
         with suppress(ValueError, KeyError):
-            for field_name in cls_fields.keys():
-                getattr(self, field_name)
+            for field in self._fields.values():
+                value = field.__get__(self, type(self))
+                if isinstance(value, TypedWalker):
+                    value.validate()
             return True
         return False
 
-    class_dict = dict(**{name: make_field(name, type_) for name, type_ in cls_fields.items()}, __init__=init, validate=validate)
+    class_dict = dict(**field_descriptors, _fields=field_descriptors, type=typename, __init__=init, validate=validate)
     result = type(cls.__name__, (*bases, TypedWalker,), class_dict)
-    result.type = typename
     _WALKER_TYPE_REGISTRY[typename] = result
     return result

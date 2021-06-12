@@ -77,12 +77,14 @@ class Subprocess:
 
 class Fairy:
     def __init__(self, config: confobj.Fairy):
-        self.__config:confobj.Fairy = config
+        self.__config: confobj.Fairy = config
         self.__instruments: Dict[int, Instrument] = {}
         self.__process: Optional[Subprocess] = None
 
-        if trigger := self.__config.trigger :
-            instrument:int = trigger.instrument
+        assert(self.__config.validate())
+
+        if trigger := self.__config.trigger:
+            instrument: int = trigger.instrument
             self.__instruments[instrument] = Instrument(instrument)
 
     @staticmethod
@@ -91,7 +93,7 @@ class Fairy:
             return b64encode(json.dumps(message).encode()).decode()
 
         message, datagram = {'instrument': instrument._id, 'content': f'hit #{instrument._serial}'}, {'instrument': instrument._id, 'content': f'datagram hit #{instrument._serial}'}
-        return confobj.Payload(message=json.dumps(message).encode(), datagram=json.dumps(datagram).encode())
+        return confobj.Payload('payload', message=json.dumps(message).encode(), datagram=json.dumps(datagram).encode())
 
     async def setup(self, *, loop=None) -> None:
         assert(self.__process is None)

@@ -169,9 +169,9 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
     {
       if constexpr(!dynamic_subscription())
       {
-        auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription));
+        auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription["payload"_hs]));
         auto automaton =
-          typename automata_type::automaton {.trigger = std::move(trigger), .payload = std::move(payload), .instrument_id = subscription["instrument"_hs]};
+          typename automata_type::automaton {.trigger = std::move(trigger), .payload = std::move(payload), .instrument_id = subscription["trigger"_hs]["instrument"_hs]};
         spawn(
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
           {
@@ -421,8 +421,8 @@ auto with_trigger_path(const config::walker &config, asio::io_context &service, 
 #if !defined(LEAN_AND_MEAN) && !defined(FUZZ_TEST_HARNESS)
   const auto dynamic_subscription_test = [&](auto &&continuation, auto &&...tags) noexcept
   {
-    const auto subscription = config["subscription"_hs];
-    return subscription ? with_trigger(subscription, logger,
+    const auto trigger = config["subscription"_hs]["trigger"_hs];
+    return trigger ? with_trigger(trigger, logger,
                                        [&](auto &&trigger_dispatcher)
                                        { return continuation(std::forward<decltype(tags)>(tags)..., std::false_type {}, std::move(trigger_dispatcher)); })()
                         : continuation(std::forward<decltype(tags)>(tags)..., std::true_type {}, polymorphic_trigger_dispatcher());
@@ -444,8 +444,8 @@ auto with_trigger_path(const config::walker &config, asio::io_context &service, 
   return dynamic_subscription_test |= handle_packet_loss_test |= send_datagram_test
          |= hof::partial(run)(service, command_input, command_output, logger, continuation, properties);
 #else  // !defined(LEAN_AND_MEAN) && !defined(FUZZ_TEST_HARNESS)
-  const auto subscription = config["subscription"_hs];
-  return with_trigger(subscription, logger,
+  const auto trigger = config["subscription"_hs]["trigger"_hs];
+  return with_trigger(trigger, logger,
                       [&](auto &&trigger_dispatcher)
                       {
                         return run(config, service, command_input, command_output, logger, continuation, std::false_type {},

@@ -2,17 +2,24 @@ from .config.typed_walker import Value
 from .config.typed_walker import walker_type, ConfigSerializable
 from typing import Tuple, Type, Optional
 from base64 import b64encode, b64decode
+from collections import namedtuple
 
 
-class Address(Tuple[str, int], ConfigSerializable):
+_Address = namedtuple('_Adddres', ('host', 'port'))
+
+
+class Address(_Address, ConfigSerializable):
+    def __new__(cls, host: str = '0.0.0.0', port: int = 0):
+        return super().__new__(cls, host, port)
+
     @classmethod
     def of_value(cls, value: Value) -> 'Address':
         assert(isinstance(value, str))
         host, port = value.split(':', 1)
-        return cls((host, int(port)))
+        return cls(host, int(port))
 
     def as_value(self) -> Value:
-        return f'{self[0]}:{self[1]}'
+        return f'{self.host}:{self.port}'
 
 
 class Base64(bytes, ConfigSerializable):

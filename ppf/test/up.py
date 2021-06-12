@@ -35,9 +35,9 @@ states_vector = cppyy.gbl.std.vector[update_state]
 
 
 class Up:
-    def __init__(self, snapshot_address: Address, updates_address: Address):
-        snapshot_host, snapshot_port = snapshot_address
-        updates_host, updates_port = updates_address
+    def __init__(self, snapshot: Address, update: Address):
+        snapshot_host, snapshot_port = snapshot
+        updates_host, updates_port = update
         self.__server = cppyy.gbl.up.make_server(snapshot_host, str(snapshot_port), updates_host, str(updates_port))
         self.__states: Dict[instrument_type, update_state] = {}
         self.__to_flush = states_vector()
