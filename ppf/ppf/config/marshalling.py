@@ -1,7 +1,7 @@
 from pyparsing import Group, Optional as Optional_, Suppress, delimitedList, restOfLine, stringEnd, pyparsing_common, Char, ParserElement, QuotedString
 from typing import Union, Dict, Tuple, Set, Sequence, cast, List, Iterator, Type, Optional, TypeVar, Generic, Callable, Protocol, Final, overload, TypeVar, Literal
 
-from .base import Config, Object, Value
+from .types import Config, Object, Value
 from .walker import Walker
 from .typed_walker import TypedWalker
 

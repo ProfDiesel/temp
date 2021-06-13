@@ -17,7 +17,7 @@ namespace fuzz
 void bad_test() { ::exit(0); }
 void failed_test() { ::abort(); }
 
-
+/*
 class generator : public boost::noncopyable
 {
 public:
@@ -47,11 +47,59 @@ public:
   }
 
 private:
-  const int fd = STDIN_FILENO; 
+  const int fd = STDIN_FILENO;
   const bool is_owner = false;
 };
+*/
 
-}
+class generator : public boost::noncopyable
+{
+public:
+  using result_type = unsigned int;
+
+  explicit generator(const asio::const_buffer &buffer) noexcept: buffer(buffer) {}
+
+  static constexpr result_type min() noexcept { return std::numeric_limits<result_type>::min(); }
+  static constexpr result_type max() noexcept { return std::numeric_limits<result_type>::max(); }
+
+  result_type operator()() noexcept
+  {
+    result_type result;
+    if(fill(asio::buffer(&result, sizeof(result))).size() != sizeof(result))
+      bad_test();
+    return result;
+  }
+
+  asio::mutable_buffer fill(const asio::mutable_buffer &buffer) noexcept
+  {
+    const auto size = asio::buffer_copy(buffer, this->buffer);
+    if(size < 0)
+      bad_test();
+    this->buffer += size;
+    return asio::buffer(buffer.data(), size);
+  }
+
+  template<typename value_type>
+  auto get() noexcept
+  {
+    value_type value;
+    fill(asio::buffer(&value, sizeof(value)));
+    return value;
+  }
+
+private:
+  asio::const_buffer buffer;
+};
+
+struct feeder
+{
+  fuzz::generator gen;
+  network_clock::time_point current_timestamp;
+  // std::uniform_int_distribution<network_clock::rep> clock_distribution {0, 1'000'000'000};
+
+      // current_timestamp += network_clock::duration(clock_distribution(gen));
+
+
 /*
     auto random_duration = [&]() {
       std::uniform_int_distribution<clock::rep> distribution(0, 1'000'000'000);
@@ -75,3 +123,7 @@ private:
       return distribution(gen);
     };
 */
+
+
+};
+}

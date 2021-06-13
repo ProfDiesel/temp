@@ -37,7 +37,7 @@ constexpr auto operator"" _h()
 #if defined(DOCTEST_LIBRARY_INCLUDED)
 // GCOVR_EXCL_START
 
-TEST_SUITE("properties_dispatch")
+TEST_SUITE("dispatch")
 {
   using namespace dispatch::literals;
 

@@ -11,6 +11,10 @@
 
 #include <boost/fusion/include/std_tuple.hpp>
 
+#include <boost/leaf/handle_errors.hpp>
+#include <boost/leaf/on_error.hpp>
+#include <boost/leaf/result.hpp>
+
 #include <boost/range/iterator_range.hpp>
 #include <boost/spirit/include/support_istream_iterator.hpp>
 

@@ -18,6 +18,8 @@
 #include <boost/leaf/handle_errors.hpp>
 #include <boost/leaf/result.hpp>
 
+#include <boost/preprocessor/stringize.hpp>
+
 #include <boost/endian/conversion.hpp>
 
 #include <std_function/function.h>
@@ -25,6 +27,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <cstddef>
 #include <cstdint>
 
 namespace feed
@@ -49,6 +52,7 @@ static_assert(sizeof(snapshot_request) == 2); // NOLINT(cppcoreguidelines-avoid-
 
 constexpr std::size_t packet_max_size = 65'536;
 constexpr std::size_t message_max_size = sizeof(message) + (static_cast<int>(field_index::_count) - 1) * sizeof(update);
+constexpr std::size_t packet_header_size = offsetof(packet, message);
 
 inline auto encode_message(instrument_id_type instrument, const instrument_state &state, const asio::mutable_buffer &buffer) noexcept
 {
@@ -85,13 +89,14 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
   co_return state;
 }
 
-[[using gnu : always_inline, flatten, hot]] inline void decode(auto &&message_header_handler, auto &&update_handler, const network_clock::time_point &timestamp,
-                    const asio::const_buffer &buffer) noexcept
-{
+[[using gnu : always_inline, flatten, hot]] inline std::size_t decode(auto &&message_header_handler, auto &&update_handler,
+                                                                      const network_clock::time_point &timestamp, const asio::const_buffer &buffer) noexcept
+ {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  const auto *const buffer_end = reinterpret_cast<const std::byte *>(buffer.data()) + buffer.size();
+  const auto *buffer_begin = reinterpret_cast<const std::byte *>(buffer.data()),
+             *buffer_end = buffer_begin + buffer.size();
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-  const auto *packet = reinterpret_cast<const struct packet *>(buffer.data());
+  const auto *packet = reinterpret_cast<const struct packet *>(buffer_begin);
   const auto advance = [](const message *&message) {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
     message = reinterpret_cast<const struct message *>(reinterpret_cast<const std::byte *>(message) + sizeof(*message)
@@ -99,20 +104,14 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
   };
   for(auto [i, message] = std::tuple {0, &packet->message}; i < packet->nb_messages; ++i, advance(message))
   {
-#if defined(SAFE_LQ2)
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    if(reinterpret_cast<const std::byte *>(message) > buffer_end)
-      break;
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    if(reinterpret_cast<const std::byte *>(&message->update + message->nb_updates) > buffer_end)
-      break;
-#endif // defined(SAFE_LQ2)
     const auto instrument_closure = message_header_handler(message->instrument.value(), message->sequence_id.value());
     if(UNLIKELY(!instrument_closure))
       continue;
 
     std::for_each_n(&message->update, message->nb_updates, [&](auto &update) { update_handler(timestamp, update, instrument_closure); });
   }
+
+  return reinterpret_cast<const std::byte*>(message) - buffer_begin;
 }
 
 std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer) noexcept
@@ -137,8 +136,8 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     if(current = reinterpret_cast<std::byte *>(message); current > buffer_end)
     {
-      packet->nb_messages = i;
-      return current - buffer_begin;
+      packet->nb_messages = i; // fix the number of message
+      return buffer.size(); // we consumed it all (and a bit more)
     }
 
     for(auto [j, update] = std::tuple {0, &message->update}; j < message->nb_updates; ++j, ++update)
@@ -146,8 +145,9 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
       if(current = reinterpret_cast<std::byte *>(update); current > buffer_end)
       {
-        message->nb_updates = j;
-        return current - buffer_begin;
+        packet->nb_messages = i; // fix the number of message
+        message->nb_updates = j; // fix the number of updates
+        return buffer.size(); // we consumed it all (and a bit more)
       }
 
       if(std::find(all_fields.begin(), all_fields.end(), static_cast<feed::field>(update->field)) == all_fields.end())

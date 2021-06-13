@@ -17,6 +17,8 @@ namespace feed
 {
 struct server;
 
+namespace detail
+{
 struct session : public std::enable_shared_from_this<session>
 {
   asio::ip::tcp::socket socket;
@@ -26,28 +28,58 @@ struct session : public std::enable_shared_from_this<session>
 
   boost::leaf::awaitable<boost::leaf::result<void>> operator()() noexcept;
 };
+}
 
-struct server
+class state_map
 {
-  asio::io_context &service;
-  asio::ip::udp::socket updates_socket;
-  asio::ip::udp::endpoint updates_endpoint;
-  asio::ip::tcp::acceptor snapshot_acceptor;
+public:
+  void reset(instrument_id_type instrument, instrument_state state = {}) noexcept { states[instrument] = {state, state.updates}; }
 
+  auto update(const std::vector<std::tuple<instrument_id_type, instrument_state>> &states, auto &&continuation) noexcept
+  {
+    asio::mutable_buffer buffer(&storage, detail::packet_max_size);
+    auto *packet = new(buffer.data()) detail::packet {static_cast<std::uint8_t>(states.size()), {}};
+
+    auto current = buffer + offsetof(detail::packet, message);
+    for(auto &&[instrument, new_state]: states)
+    {
+      auto &[state, accumulated_updates] = this->states[instrument];
+      visit_state([&state = state](auto field, auto value) { update_state(state, field, value); }, new_state);
+      state.sequence_id = new_state.sequence_id;
+      current += detail::encode_message(instrument, state, current);
+      accumulated_updates |= std::exchange(state.updates, {});
+    }
+
+    return continuation(asio::buffer(buffer, static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data())));
+  }
+
+  instrument_state at(instrument_id_type instrument) const noexcept
+  {
+    const auto it = states.find(instrument);
+    if(it == states.end())
+      return {};
+    auto result = it->second.state;
+    result.updates = it->second.accumulated_updates;
+    return result;
+  }
+
+private:
   struct state
   {
     instrument_state state;
     decltype(instrument_state::updates) accumulated_updates;
   };
 
+  std::aligned_storage_t<detail::packet_max_size, alignof(detail::packet)> storage;
   std::unordered_map<instrument_id_type, state> states {};
+};
 
-  server(asio::io_context &service):
-    service(service), updates_socket(service), snapshot_acceptor(service)
-  {
-  }
+class server : public state_map
+{
+public:
+  server(asio::io_context &service) noexcept: service(service), updates_socket(service), snapshot_acceptor(service) { }
 
-  boost::leaf::result<void> connect(const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint)
+  boost::leaf::result<void> connect(const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint) noexcept
   {
     this->updates_endpoint = updates_endpoint;
 
@@ -59,44 +91,19 @@ struct server
     return boost::leaf::success();
   }
 
-  void reset(instrument_id_type instrument, instrument_state state = {}) { states[instrument] = {state, state.updates}; }
-
-  boost::leaf::awaitable<boost::leaf::result<void>> update(const std::vector<std::tuple<instrument_id_type, instrument_state>> &states)
+  boost::leaf::awaitable<boost::leaf::result<void>> update(const std::vector<std::tuple<instrument_id_type, instrument_state>> &states) noexcept
   {
-    std::aligned_storage_t<detail::packet_max_size, alignof(detail::packet)> storage;
-    auto packet = new(&storage) detail::packet {static_cast<std::uint8_t>(states.size()), {}};
-    asio::mutable_buffer buffer(&packet->message, sizeof(storage) - offsetof(detail::packet, message));
-
-    auto current = buffer;
-    for(auto &&[instrument, new_state]: states)
-    {
-      auto &[state, accumulated_updates] = this->states[instrument];
-      visit_state([&state = state](auto field, auto value) { update_state(state, field, value); }, new_state);
-      state.sequence_id = new_state.sequence_id;
-      current += detail::encode_message(instrument, state, current);
-      accumulated_updates |= std::exchange(state.updates, {});
-    }
-
-    co_await updates_socket.async_send_to(buffer, updates_endpoint, boost::leaf::use_awaitable);
-    BOOST_LEAF_ASIO_CO_TRY(co_await updates_socket.async_send_to(buffer, updates_endpoint, _));
+    BOOST_LEAF_ASIO_CO_TRY(co_await state_map::update(states, [&](auto &&buffer) { return updates_socket.async_send_to(buffer, updates_endpoint, _); }));
     co_return boost::leaf::success();
   }
 
-  instrument_state snapshot(instrument_id_type instrument) const noexcept
-  {
-    const auto it = states.find(instrument);
-    if(it == states.end())
-      return {};
-    auto result = it->second.state;
-    result.updates = it->second.accumulated_updates;
-    return result;
-  }
+  instrument_state snapshot(instrument_id_type instrument) const noexcept { return at(instrument); }
 
   boost::leaf::awaitable<boost::leaf::result<void>> accept() noexcept
   {
     asio::ip::tcp::socket socket(service);
     BOOST_LEAF_ASIO_CO_TRY(co_await snapshot_acceptor.async_accept(socket, _));
-    auto session_ptr = std::make_shared<session>(std::move(socket), boilerplate::make_strict_not_null(this));
+    auto session_ptr = std::make_shared<detail::session>(std::move(socket), boilerplate::make_strict_not_null(this));
     asio::co_spawn(
       service,
       [&]() noexcept -> boost::leaf::awaitable<void>
@@ -112,9 +119,15 @@ struct server
 
     co_return boost::leaf::success();
   }
+
+private:
+  asio::io_context &service;
+  asio::ip::udp::socket updates_socket;
+  asio::ip::udp::endpoint updates_endpoint;
+  asio::ip::tcp::acceptor snapshot_acceptor;
 };
 
-inline boost::leaf::awaitable<boost::leaf::result<void>> session::operator()() noexcept
+inline boost::leaf::awaitable<boost::leaf::result<void>> detail::session::operator()() noexcept
 {
   const auto self(shared_from_this());
 

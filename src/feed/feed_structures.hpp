@@ -76,7 +76,11 @@ enum struct field : std::uint8_t { BOOST_PP_SEQ_FOR_EACH(DECLARE_ENUM, _, FEED_F
 template<field value>
 using field_c = std::integral_constant<field, value>;
 
-#define DECLARE_CONSTANT(r, data, elem) using BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c) = field_c<field::BOOST_PP_TUPLE_ELEM(0, elem)>;
+#define DECLARE_CONSTANT_TYPE(r, data, elem) using BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c) = field_c<field::BOOST_PP_TUPLE_ELEM(0, elem)>;
+BOOST_PP_SEQ_FOR_EACH(DECLARE_CONSTANT_TYPE, _, FEED_FIELDS)
+#undef DECLARE_CONSTANT_TYPE
+
+#define DECLARE_CONSTANT(r, data, elem) constexpr BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c) BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _v) {};
 BOOST_PP_SEQ_FOR_EACH(DECLARE_CONSTANT, _, FEED_FIELDS)
 #undef DECLARE_CONSTANT
 

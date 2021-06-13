@@ -20,6 +20,18 @@
 #include <functional>
 #include <string_view>
 
+#ifndef __AFL_FUZZ_TESTCASE_LEN
+ssize_t fuzz_len;
+#  define __AFL_FUZZ_TESTCASE_LEN fuzz_len
+unsigned char fuzz_buf[1024000];
+#  define __AFL_FUZZ_TESTCASE_BUF fuzz_buf
+#  define __AFL_FUZZ_INIT() void sync(void);
+#  define __AFL_LOOP(x) ((fuzz_len = read(0, fuzz_buf, sizeof(fuzz_buf))) > 0 ? 1 : 0)
+#  define __AFL_INIT() sync()
+#endif
+
+__AFL_FUZZ_INIT();
+
 #if defined(BOOST_NO_EXCEPTIONS)
 namespace boost
 {
@@ -40,103 +52,28 @@ void throw_exception(const exception_type &exception)
 
 using namespace std::chrono_literals;
 
-namespace fuzz
+namespace backtest
 {
-// deterministic executor
-class executor
+
+namespace detail
 {
-public:
-  using action_type = func::function<void(void)>;
-
-  static std::unique_ptr<executor> instance;
-
-  void add(const std::chrono::steady_clock::duration &delay, const action_type &action) { actions.emplace(nano_clock::now() + delay, action); }
-
-  void poll()
-  {
-    if(actions.empty())
-      return;
-
-    const auto first = actions.begin(), last = actions.upper_bound(nano_clock::now() = first->first);
-    std::for_each(first, last, [&](const auto &value) { value.second(); });
-    actions.erase(first, last);
-  }
-
-private:
-  static constexpr std::chrono::steady_clock::duration granularity = 1us;
-  boost::container::flat_multimap<nano_clock::time_point, action_type> actions;
-};
-
-std::unique_ptr<executor> executor::instance;
-
-struct feeder
-{
-  fuzz::generator gen;
-  network_clock::time_point current_timestamp;
-  std::uniform_int_distribution<network_clock::rep> clock_distribution {0, 1'000'000'000};
-
-  static std::unique_ptr<feeder> instance;
-
-  boost::leaf::awaitable<boost::leaf::result<feed::instrument_state>> on_snapshot_request(feed::instrument_id_type instrument) noexcept
-  {
-    co_return BOOST_LEAF_NEW_ERROR(std::make_error_code(std::errc::io_error)); // TODO
-  }
-
-  boost::leaf::result<void> on_update_poll(func::function<void(network_clock::time_point, asio::const_buffer &&)> continuation) noexcept
-  {
-    std::aligned_storage<feed::detail::message_max_size, alignof(feed::message)> buffer_storage;
-    std::byte *const first = reinterpret_cast<std::byte *>(&buffer_storage), *last = first, *const end = first + sizeof(buffer_storage);
-
-    for(;;)
-    {
-      const auto filled = gen.fill(asio::buffer(last, end - last));
-      last += filled.size();
-
-      current_timestamp += network_clock::duration(clock_distribution(gen));
-
-      auto buffer = asio::buffer(first, last - first);
-      const auto sanitized = feed::detail::sanitize(
-        boilerplate::overloaded {
-          [&](auto field, feed::price_t value) { return value; },
-          [&](auto field, feed::quantity_t value) { return value; },
-        },
-        buffer);
-      continuation(current_timestamp, buffer);
-
-      last = std::copy(first + sanitized, last, first);
-    }
-  }
-
-  auto make_snapshot_requester() noexcept
-  {
-    return [this](feed::instrument_id_type instrument) noexcept { return on_snapshot_request(instrument); };
-  }
-
-  auto make_update_source() noexcept
-  {
-    return [this](func::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept { return on_update_poll(continuation); };
-  }
-};
-
-std::unique_ptr<feeder> feeder::instance;
+std::unique_ptr<fuzz::executor> executor_instance;
+std::unique_ptr<fuzz::feeder> feeder_instance;
 
 struct stream_send
 {
   void operator()(const asio::const_buffer &buffer) noexcept {}
 };
+}
 
-} // namespace fuzz
-
-namespace backtest
-{
-snapshot_requester_type make_snapshot_requester() { return fuzz::feeder::instance->make_snapshot_requester(); }
-update_source_type make_update_source() { return fuzz::feeder::instance->make_update_source(); }
-send_stream_type make_stream_send() { return fuzz::stream_send {}; }
+snapshot_requester_type make_snapshot_requester() { return detail::feeder_instance->make_snapshot_requester(); }
+update_source_type make_update_source() { return detail::feeder_instance->make_update_source(); }
+send_stream_type make_stream_send() { return detail::stream_send {}; }
 
 using delayed_action = func::function<void(void)>;
 void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady_clock::duration &delay, delayed_action action)
 {
-  return fuzz::executor::instance->add(delay, action);
+  return detail::executor_instance->add(delay, action);
 }
 
 } // namespace backtest
@@ -146,44 +83,62 @@ auto main() -> int
   using namespace std::string_view_literals;
   using namespace logger::literals;
 
+  backtest::detail::executor_instance.reset(new fuzz::executor {});
+
   asio::io_context service(1);
   asio::posix::stream_descriptor command_input(service), command_output(service);
 
   logger::printer printer {};
   logger::logger logger {boilerplate::make_strict_not_null(&printer)};
 
-  boost::leaf::try_handle_all(
-    [&]() -> boost::leaf::result<void>
-    {
-      using namespace config::literals;
+#ifdef __AFL_HAVE_MANUAL_CONTROL
+  __AFL_INIT();
+#endif
 
-      const auto config = "\
+  const unsigned char *afl_buffer = __AFL_FUZZ_TESTCASE_BUF;
+
+  while(__AFL_LOOP(10000))
+  {
+    const int afl_buffer_length = __AFL_FUZZ_TESTCASE_LEN;
+    if(afl_buffer_length < 64)
+      continue; // minimal usefull length
+
+    backtest::detail::feeder_instance.reset(new fuzz::feeder {fuzz::generator(asio::buffer(afl_buffer, afl_buffer_length))});
+
+    boost::leaf::try_handle_all(
+      [&]() -> boost::leaf::result<void> {
+        using namespace config::literals;
+
+        const auto config = "\
 config.subscription <- 'subscription';\n\
+config.feed <- 'feed';\n\
+config.send <- 'send';\n\
 subscription.instrument <- 10;\n\
 subscription.message <- 'cGlwb2xvbG8=';\n\
-subscription.cooldown <- 10;\n\
 subscription.instant_threshold <- 1.0;\n\
+feed.snapshot <- '127.0.0.1:4000';\n\
+send.cooldown <- 10;\n\
 "sv;
-      const auto properties = BOOST_LEAF_TRYX(config::properties::create(config));
+        const auto properties = BOOST_LEAF_TRYX(config::properties::create(config));
 
-      auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
-                                   [&](auto fast_path) -> boost::leaf::result<void>
-                                   {
-                                     while(!service.stopped())
-                                       [[likely]]
-                                       {
-                                         fast_path();
-                                         fuzz::executor::instance->poll();
-                                         if(service.poll())
-                                           fuzz::bad_test(); // the non-deterministic executor is not supposed to be used
-                                         logger.flush();
-                                       }
-                                     return {};
-                                   });
+        auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, boilerplate::make_strict_not_null(&logger),
+                                     [&](auto fast_path) -> boost::leaf::result<void> {
+                                       while(!service.stopped())
+                                         [[likely]]
+                                         {
+                                           fast_path();
+                                           backtest::detail::executor_instance->poll();
+                                           if(service.poll())
+                                             fuzz::bad_test(); // the non-deterministic executor is not supposed to be used
+                                           logger.flush();
+                                         }
+                                       return {};
+                                     });
 
-      BOOST_LEAF_CHECK(run());
-      return {};
-    },
-    make_handlers(std::ref(printer)));
-  return 0;
+        BOOST_LEAF_CHECK(run());
+        return {};
+      },
+      make_handlers(std::ref(printer)));
+    return 0;
+  }
 }

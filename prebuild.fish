@@ -3,7 +3,9 @@ set DEV_ROOT (realpath (dirname (status --current-filename))/..)
 
 set -ax PYTHONPATH $DEV_ROOT/dependencies
 
+#set -x GENJUTSU_C_TOOLSET gcc
 set -x GENJUTSU_C_TOOLSET clang
+#set -x GENJUTSU_C_TOOLSET afl
 ./prjdef
 ./ppf/prjdef
 

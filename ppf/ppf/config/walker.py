@@ -4,7 +4,7 @@ from functools import singledispatchmethod, reduce
 from contextlib import suppress
 from uuid import uuid4
 
-from .base import Config, Object, Value
+from .types import Config, Object, Value
 
 
 DeferredWalker = Union[str, 'Walker']

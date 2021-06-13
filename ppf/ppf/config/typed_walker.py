@@ -6,7 +6,7 @@ from uuid import uuid4
 from functools import partial
 from itertools import chain
 
-from .base import Config, Object, Value
+from .types import Config, Object, Value
 from .walker import Walker, as_value, as_str, WalkerValue
 
 

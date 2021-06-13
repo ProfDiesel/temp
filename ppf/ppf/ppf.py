@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Awaitable, Callable, Dict, Final, Optional, cast
 
 from . import config_objects as confobj
-from .config.base import Config
+from .config.types import Config
 from .config.marshalling import marshall_walker, unmarshall_walker
 
 LOGGER: logging.Logger = logging.getLogger('Fairy')

@@ -42,6 +42,33 @@ void throw_exception(const exception_type &exception)
 } // namespace asio::detail
 #endif // defined(ASIO_NO_EXCEPTIONS)
 
+
+struct up_encoder
+{
+  up_encoder(){}
+  ~up_encoder(){}
+};
+
+///////////////////////////////////////////////////////////////////////////////
+extern "C" up_encoder *up_encoder_new()
+{
+
+}
+
+///////////////////////////////////////////////////////////////////////////////
+extern "C" void up_encoder_free(up_encoder *self) { delete self; }
+
+///////////////////////////////////////////////////////////////////////////////
+extern "C" std::size_t up_encoder_encode(up_encoder *self, std::uint64_t timestamp, const up_update_state *states, std::size_t nb_states, std::byte *buffer,
+                                         std::size_t buffer_size)
+{
+
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
 const auto handlers = std::tuple {[](const boost::leaf::e_source_location &location, const std::error_code &error_code) -> boost::leaf::awaitable<void> {
                                     std::clog << location.file << ":" << location.line << " - error_code " << error_code.value() << ":" << error_code.message()
                                               << "\n";

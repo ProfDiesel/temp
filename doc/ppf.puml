@@ -1,0 +1,56 @@
+@startuml C4_Elements
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+!define DEVICONS https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons2
+!include DEVICONS/python.puml
+!include DEVICONS/cplusplus_line.puml
+
+!define FONT_AWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+!include FONT_AWESOME/exchange_alt.puml
+
+!global $PERSON_BG_COLOR = "#006800"
+!global $PERSON_BORDER_COLOR = "#008A00"
+!global $SYSTEM_BG_COLOR = "#009900"
+!global $SYSTEM_BORDER_COLOR = "#008A00"
+!global $CONTAINER_BG_COLOR = "#00B300"
+!global $CONTAINER_BORDER_COLOR = "#00A600"
+UpdateElementStyle("person", $PERSON_BG_COLOR, $ELEMENT_FONT_COLOR, $PERSON_BORDER_COLOR)
+UpdateElementStyle("system", $SYSTEM_BG_COLOR, $ELEMENT_FONT_COLOR, $SYSTEM_BORDER_COLOR)
+UpdateElementStyle("container", $CONTAINER_BG_COLOR, $ELEMENT_FONT_COLOR, $CONTAINER_BORDER_COLOR)
+
+LAYOUT_TOP_DOWN()
+HIDE_STEREOTYPE()
+' LAYOUT_WITH_LEGEND()
+
+Person(trader, "Trader")
+Person_Ext(aps, "APS")
+
+Container(ppf, "Ppf", "python", $sprite="python")
+BiRel(trader, ppf, "gui")
+BiRel(aps, ppf, "gui")
+
+System_Ext(external, "External App.", "")
+
+ContainerQueue(up, "Up", "")
+Rel_U(up, external, "feed")
+
+Container_Boundary(down_dust, "down+") {
+  ContainerQueue(down, "Down", "")
+  Container(dust, "Dust", "c++", "pulls the plug", $sprite="cplusplus_line")
+}
+Rel_R(dust, ppf, "request")
+Rel_L(ppf, dust, "command")
+Rel_U(up, dust, "feed")
+
+System(exchange, "Exchange", "orders goes here", $sprite="exchange_alt")
+Rel_U(exchange, up, "feed")
+Rel_D(down, exchange, "order")
+
+Rel(external, down, "order")
+Rel(dust, down, "pull order")
+Rel(dust, exchange, "pull order")
+
+Lay_L(ppf, dust)
+Lay_L(dust, external)
+
+@enduml
