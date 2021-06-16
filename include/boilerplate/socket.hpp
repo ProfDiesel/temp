@@ -160,7 +160,7 @@ public:
   }
 #endif   // defined(USE_TCPDIRECT)
 
-  [[using gnu: always_inline, flatten, hot]] inline auto operator()(auto &continuation) noexcept -> boost::leaf::result<void>
+  [[using gnu: always_inline, flatten, hot]] inline auto operator()(auto &&continuation) noexcept -> boost::leaf::result<void>
   {
 #if defined(USE_TCPDIRECT)
     ::zf_reactor_perform(static_stack::instance().stack.get());
@@ -180,7 +180,7 @@ public:
     unsigned int timestamp_flags;
     BOOST_LEAF_RC_TRY(::zfur_pkt_get_timestamp(zock_.get(), &msg.msg, &timestamp, 0, &timestamp_flags));
 
-    continuation(to_time_point<network_clock>(timestamp), asio::const_buffer(msg.msg.iov[0].iov_base, msg.msg.iov[0].iov_len));
+    std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(timestamp), asio::const_buffer(msg.msg.iov[0].iov_base, msg.msg.iov[0].iov_len));
 
 #elif defined(LINUX)
       // recvmmsg timeout parameter is buggy
@@ -205,12 +205,12 @@ public:
 
     const auto timestamp = get_timestamp(&msgvec_[0].msg_hdr);
     for(auto i = 0; i < nb_messages_read; ++i)
-      continuation(timestamp, asio::const_buffer(buffers_[i].data(), msgvec_[i].msg_len));
+      std::forward<decltype(continuation)>(continuation)(timestamp, asio::const_buffer(buffers_[i].data(), msgvec_[i].msg_len));
 
 #else  // defined(LINUX)
     asio::const_buffer buffer(buffer_.data(), buffer_size);
     const auto msg_length = receive(buffer_);
-    continuation({}, buffer_);
+    std::forward<decltype(continuation)>(continuation)({}, buffer_);
 #endif // defined(LINUX)
 
     return {};

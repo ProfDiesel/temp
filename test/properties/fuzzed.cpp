@@ -2,6 +2,7 @@
 #include "handlers.hpp"
 #include "model/wiring.hpp"
 
+#include "backtest_harness.hpp"
 #include "fuzz_test_harness.hpp"
 
 #include <boilerplate/pointers.hpp>
@@ -19,6 +20,7 @@
 #include <chrono>
 #include <functional>
 #include <string_view>
+#include <vector>
 
 #ifndef __AFL_FUZZ_TESTCASE_LEN
 ssize_t fuzz_len;
@@ -57,20 +59,14 @@ namespace backtest
 
 namespace detail
 {
-std::unique_ptr<fuzz::executor> executor_instance;
-std::unique_ptr<fuzz::feeder> feeder_instance;
-
-struct stream_send
-{
-  void operator()(const asio::const_buffer &buffer) noexcept {}
-};
-}
+std::unique_ptr<deterministic_executor> executor_instance;
+std::unique_ptr<buffer_feeder> feeder_instance;
+} // namespace detail
 
 snapshot_requester_type make_snapshot_requester() { return detail::feeder_instance->make_snapshot_requester(); }
 update_source_type make_update_source() { return detail::feeder_instance->make_update_source(); }
-send_stream_type make_stream_send() { return detail::stream_send {}; }
+send_stream_type make_stream_send() { return [](auto &&...){}; }
 
-using delayed_action = func::function<void(void)>;
 void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady_clock::duration &delay, delayed_action action)
 {
   return detail::executor_instance->add(delay, action);
@@ -83,7 +79,7 @@ auto main() -> int
   using namespace std::string_view_literals;
   using namespace logger::literals;
 
-  backtest::detail::executor_instance.reset(new fuzz::executor {});
+  backtest::detail::executor_instance.reset(new backtest::deterministic_executor {});
 
   asio::io_context service(1);
   asio::posix::stream_descriptor command_input(service), command_output(service);
@@ -103,7 +99,8 @@ auto main() -> int
     if(afl_buffer_length < 64)
       continue; // minimal usefull length
 
-    backtest::detail::feeder_instance.reset(new fuzz::feeder {fuzz::generator(asio::buffer(afl_buffer, afl_buffer_length))});
+    std::vector mutable_buffer(afl_buffer, afl_buffer + afl_buffer_length);
+    backtest::detail::feeder_instance.reset(new backtest::buffer_feeder(asio::buffer(mutable_buffer)));
 
     boost::leaf::try_handle_all(
       [&]() -> boost::leaf::result<void> {

@@ -19,8 +19,8 @@ void throw_exception(const exception_type &exception)
 } // namespace asio::detail
 #endif // defined(ASIO_NO_EXCEPTIONS)
 
-#include "common/config_reader.hpp"
-#include "common/properties_dispatch.hpp"
+#include "config/config_reader.hpp"
+#include "config/dispatch.hpp"
 #include "model/automata.hpp"
 #include "model/payload.hpp"
 #include "trigger/trigger.hpp"

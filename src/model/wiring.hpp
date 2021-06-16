@@ -1,8 +1,7 @@
 #pragma once
 
-#include "../common/config_reader.hpp"
-#include "../common/properties_dispatch.hpp"
-#include "../common/socket.hpp"
+#include "../config/config_reader.hpp"
+#include "../config/dispatch.hpp"
 #include "../feed/feed.hpp"
 #include "../trigger/trigger_dispatcher.hpp"
 #include "automata.hpp"
@@ -14,6 +13,7 @@
 #include <boilerplate/logger.hpp>
 #include <boilerplate/piped_continuation.hpp>
 #include <boilerplate/pointers.hpp>
+#include <boilerplate/socket.hpp>
 
 #include <asio/awaitable.hpp>
 #include <asio/buffer.hpp>
@@ -52,9 +52,9 @@
 #if defined(BACKTEST_HARNESS)
 namespace backtest
 {
-using snapshot_requester_type = func::function<boost::leaf::awaitable<boost::leaf::result<feed::instrument_state>>(feed::instrument_id_type)>;
-using update_source_type = func::function<boost::leaf::result<void>(func::function<void(network_clock::time_point, const asio::const_buffer &)>)>;
-using send_stream_type = func::function<void(const asio::const_buffer &)>;
+using snapshot_requester_type = std::function<boost::leaf::awaitable<boost::leaf::result<feed::instrument_state>>(feed::instrument_id_type)>;
+using update_source_type = std::function<boost::leaf::result<void>(std::function<void(const network_clock::time_point&, const asio::const_buffer &)>)>;
+using send_stream_type = std::function<void(const asio::const_buffer &)>;
 
 snapshot_requester_type make_snapshot_requester();
 update_source_type make_update_source();
@@ -251,10 +251,10 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
   auto receive = (
     {
 #if defined(BACKTEST_HARNESS)
-      auto updates_source = backtest::make_update_source();
+      auto update_source = backtest::make_update_source();
 #else
       const auto [updates_host, updates_port] = (config::address)*feed["update"_hs];
-      auto updates_source = BOOST_LEAF_TRYX(
+      auto update_source = BOOST_LEAF_TRYX(
 #  if defined(LINUX) && !defined(USE_TCPDIRECT)
         multicast_udp_reader::create(service, updates_host, updates_port, feed["spin_duration"].get_or(1'000ns), feed["timestamping"].get_or(false))
 #  else
@@ -265,10 +265,11 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 
       const auto spin_count = std::min(std::size_t(feed["spin_count"_hs].get_or(1)), std::size_t(1));
 
-      [updates_source = std::move(updates_source), spin_count](auto &&continuation) mutable noexcept
+      [update_source = std::move(update_source), spin_count](auto &&continuation) mutable noexcept
       {
+        using namespace piped_continuation;
         for(auto n = spin_count; n; --n)
-          (std::ref(updates_source) |= continuation)();
+          (std::ref(update_source) |= std::forward<decltype(continuation)>(continuation))();
       };
     });
 
@@ -409,7 +410,7 @@ request.instrument = {}\n\n");
     [&]() noexcept
     {
       warm_up();
-      with_mca_markers(std::ref(receive) |= decode |= trigger_ |= std::ref(send_));
+      with_mca_markers(receive |= decode |= trigger_ |= std::ref(send_));
     });
 }
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../common/config_reader.hpp"
+#include "../config/config_reader.hpp"
 
 #include <boilerplate/leaf.hpp>
 

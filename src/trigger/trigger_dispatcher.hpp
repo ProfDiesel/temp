@@ -5,8 +5,8 @@
 #include <boilerplate/piped_continuation.hpp>
 #include <boilerplate/pointers.hpp>
 
-#include "../common/config_reader.hpp"
-#include "../common/walker.hpp"
+#include "../config/config_reader.hpp"
+#include "../config/walker.hpp"
 #include "../feed/feed.hpp"
 
 #include "trigger.hpp"

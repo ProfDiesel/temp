@@ -2,7 +2,7 @@
 
 #include "../feed/feed.hpp"
 #include "config_reader.hpp"
-#include "properties_dispatch.hpp"
+#include "dispatch.hpp"
 
 #include <boilerplate/boilerplate.hpp>
 #include <boilerplate/leaf.hpp>

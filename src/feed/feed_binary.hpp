@@ -102,7 +102,8 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
     message = reinterpret_cast<const struct message *>(reinterpret_cast<const std::byte *>(message) + sizeof(*message)
                                                          + message->nb_updates * sizeof(update));
   };
-  for(auto [i, message] = std::tuple {0, &packet->message}; i < packet->nb_messages; ++i, advance(message))
+  auto *message = &packet->message;
+  for(auto i = 0; i < packet->nb_messages; ++i, advance(message))
   {
     const auto instrument_closure = message_header_handler(message->instrument.value(), message->sequence_id.value());
     if(UNLIKELY(!instrument_closure))

@@ -1,21 +1,22 @@
 #pragma once
 
-#include <chrono>
+#include "feed/feed.hpp"
+
 #include <boilerplate/chrono.hpp>
-#include "feed_binary.hpp"
+
+#include <chrono>
+#include <functional>
 
 namespace backtest
 {
 
 struct event final
 {
-  nano_clock::time_point timestamp;
+  network_clock::rep timestamp;
   feed::detail::packet packet;
-} __attribute__((packed));
 
-class scenario
-{
-};
+  auto time_point() const noexcept { return network_clock::time_point(network_clock::duration(timestamp)); }
+} __attribute__((packed));
 
 class deterministic_executor
 {
@@ -39,41 +40,37 @@ private:
   boost::container::flat_multimap<nano_clock::time_point, action_type> actions;
 };
 
-struct feeder
+class buffer_feeder
 {
-  fuzz::generator gen;
-  network_clock::time_point current_timestamp;
-
-  static constexpr auto max_nb_message_per_packet = 3;
-  static constexpr auto input_buffer_size = feed::detail::packet_header_size + max_nb_message_per_packet * feed::detail::message_max_size;
+public:
+  buffer_feeder(const asio::mutable_buffer &buffer) noexcept: buffer_(buffer) {}
 
   boost::leaf::awaitable<boost::leaf::result<feed::instrument_state>> on_snapshot_request(feed::instrument_id_type instrument) noexcept
   {
     co_return BOOST_LEAF_NEW_ERROR(std::make_error_code(std::errc::io_error)); // TODO
   }
 
-  boost::leaf::result<void> on_update_poll(func::function<void(network_clock::time_point, asio::const_buffer &&)> continuation) noexcept
+  boost::leaf::result<void> on_update_poll(auto &&continuation) noexcept
   {
-    std::aligned_storage<input_buffer_size, alignof(feed::message)> buffer_storage;
-    std::byte *const first = reinterpret_cast<std::byte *>(&buffer_storage), *last = first, *const end = first + input_buffer_size;
+    if(buffer_.size() < sizeof(event))
+      return BOOST_LEAF_NEW_ERROR(std::make_error_code(std::errc::io_error));
+
+    auto *current = reinterpret_cast<const event*>(buffer_.data());
+    current_timestamp_ = std::max(current_timestamp_, current->time_point());
+    buffer_ += offsetof(event, packet);
 
     for(;;)
     {
-      const auto filled = gen.fill(asio::buffer(last, end - last));
-      last += filled.size();
-
-      current_timestamp += std::chrono::nanoseconds(gen.get<std::uint32_t>());
-
-      auto buffer = asio::buffer(first, last - first);
       const auto sanitized = feed::detail::sanitize(boilerplate::overloaded {
                                                       [&](auto field, feed::price_t value) { return value; },
                                                       [&](auto field, feed::quantity_t value) { return value; },
                                                     },
-                                                    buffer);
-      continuation(current_timestamp, buffer);
-
-      last = std::copy(first + sanitized, last, first);
+                                                    buffer_);
+      std::forward<decltype(continuation)>(continuation)(current_timestamp_, buffer_);
+      buffer_ += sanitized;
     }
+
+    return boost::leaf::success();
   }
 
   auto make_snapshot_requester() noexcept
@@ -83,9 +80,12 @@ struct feeder
 
   auto make_update_source() noexcept
   {
-    return [this](func::function<void(network_clock::time_point, const asio::const_buffer &)> continuation) noexcept { return on_update_poll(continuation); };
+    return [this](auto &&continuation) noexcept { return on_update_poll(std::forward<decltype(continuation)>(continuation)); };
   }
-};
 
+private:
+  network_clock::time_point current_timestamp_;
+  asio::mutable_buffer buffer_;
+};
 
 } // namespace backtest
