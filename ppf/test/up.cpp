@@ -45,15 +45,11 @@ void throw_exception(const exception_type &exception)
 
 struct up_encoder
 {
-  up_encoder(){}
-  ~up_encoder(){}
+  feed::state_map state_map;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" up_encoder *up_encoder_new()
-{
-
-}
+extern "C" up_encoder *up_encoder_new() { return new up_encoder{}; }
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" void up_encoder_free(up_encoder *self) { delete self; }
@@ -62,7 +58,13 @@ extern "C" void up_encoder_free(up_encoder *self) { delete self; }
 extern "C" std::size_t up_encoder_encode(up_encoder *self, std::uint64_t timestamp, const up_update_state *states, std::size_t nb_states, std::byte *buffer,
                                          std::size_t buffer_size)
 {
-
+    return self->state_map.update(std::vector {std::tuple {instrument, state}},
+                     [&](auto &&result)
+                     {
+                       if(result.size() < buffer_size)
+                         std::copy_n(static_cast<const std::byte*>(result.data()), result.size(), buffer);
+                       return result.size();
+                     });
 }
 
 ///////////////////////////////////////////////////////////////////////////////

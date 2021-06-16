@@ -63,3 +63,16 @@ class Up:
 
     def flush(self):
         self.__server.push_update(self.__to_flush)
+
+
+class Encoder:
+    def __init__(self):
+        self.__buffer = bytearray(256)
+        self.encoder = cppyy.gbl.up.make_encoder()
+
+    def encode(self, timestamp, states):
+        n = self.encoder.encode(timestamp, states, self.__buffer, len(self.__buffer))
+        if n > len(self.__buffer):
+            self.__buffer = bytearray(n)
+            self.encoder.encode(timestamp, states, self.__buffer, n)
+        return n

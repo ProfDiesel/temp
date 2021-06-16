@@ -410,7 +410,7 @@ request.instrument = {}\n\n");
     [&]() noexcept
     {
       warm_up();
-      with_mca_markers(receive |= decode |= trigger_ |= std::ref(send_));
+      with_mca_markers(std::ref(receive) |= decode |= trigger_ |= std::ref(send_));
     });
 }
 

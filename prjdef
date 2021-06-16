@@ -108,11 +108,9 @@ with env('test/properties'):
     config_properties_fuzzable_exe = Executable(
         'config_properties', objects=(Cxx('config_properties.cpp', pch=pch),)
     )
-    fuzz_input_generator_exe = Executable('fuzz_input_generator', objects=(Cxx('fuzz_input_generator.cpp', pch=pch),))
     fuzzable_exe = Executable('fuzzable', objects=(Cxx('fuzzed.cpp', pch=pch),))
-    backtest_harness = SharedObject('backtest_harness', objects=(Cxx('backtest_harness.cpp', pic=True),))
 
-Alias('test', (test_exe, fuzz_input_generator_exe, fuzzable_exe, backtest_harness))
+Alias('test', (test_exe, fuzzable_exe))
 
 with env('playground'):
     #Apply(CxxDef('ASIO_ENABLE_HANDLER_TRACKING'))

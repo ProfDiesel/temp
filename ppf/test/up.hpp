@@ -47,6 +47,11 @@ private:
     std::unique_ptr<::up_encoder, deleter> self;
 };
 
+auto make_encoder()
+{
+  return encoder();
+}
+
 class server
 {
 public:
@@ -61,9 +66,9 @@ private:
     std::unique_ptr<::up_server, deleter> self;
 };
 
- auto make_server(const std::string &snapshot_address, const std::string &snapshot_service, const std::string &updates_address, const std::string &updates_service)
- {
-   return server(snapshot_address, snapshot_service, updates_address, updates_service);
- }
-
+auto make_server(const std::string &snapshot_address, const std::string &snapshot_service, const std::string &updates_address, const std::string &updates_service)
+{
+  return server(snapshot_address, snapshot_service, updates_address, updates_service);
 }
+
+} // namespace up
