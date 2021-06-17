@@ -11,6 +11,8 @@
 #include <asio/ip/udp.hpp>
 #include <asio/use_future.hpp>
 
+#include <boost/range/iterator_range.hpp>
+
 #include <iostream>
 #include <string_view>
 #include <thread>
@@ -58,7 +60,11 @@ extern "C" void up_encoder_free(up_encoder *self) { delete self; }
 extern "C" std::size_t up_encoder_encode(up_encoder *self, std::uint64_t timestamp, const up_update_state *states, std::size_t nb_states, std::byte *buffer,
                                          std::size_t buffer_size)
 {
-    return self->state_map.update(std::vector {std::tuple {instrument, state}},
+  std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
+  states_.reserve(nb_states);
+  for(auto &&[instrument, state]: boost::make_iterator_range_n(states, nb_states))
+    states_.emplace_back(instrument, state);
+  return self->state_map.update(states_,
                      [&](auto &&result)
                      {
                        if(result.size() < buffer_size)

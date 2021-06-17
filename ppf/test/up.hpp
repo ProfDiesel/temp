@@ -4,7 +4,7 @@
 #include <string_view>
 #include <vector>
 
-struct encoder;
+struct up_encoder;
 struct up_server;
 
 struct up_update_state
@@ -41,7 +41,7 @@ public:
   encoder(): self(::up_encoder_new()) {}
 
   std::size_t encode(const std::uint64_t timestamp, const std::vector<::up_update_state> &states, std::byte *buffer, std::size_t buffer_size)
-  { return ::up_encoder_encode(self.get(), states.data(), states.size(), buffer, buffer_size); }
+  { return ::up_encoder_encode(self.get(), timestamp, states.data(), states.size(), buffer, buffer_size); }
 
 private:
     std::unique_ptr<::up_encoder, deleter> self;
