@@ -60,10 +60,10 @@ inline auto encode_message(instrument_id_type instrument, const instrument_state
   const auto needed_bytes = sizeof(message) + sizeof(update) * (nb_updates - 1);
   if(buffer.size() >= needed_bytes)
   {
-  auto *message = new(buffer.data()) (struct message) {.instrument = endian::big_uint16_buf_t(instrument),
+    auto *message = new(buffer.data()) (struct message) {.instrument = endian::big_uint16_buf_t(instrument),
                                               .sequence_id = endian::big_uint32_buf_t(state.sequence_id),
                                               .nb_updates = nb_updates};
-  visit_state([&update = message->update]( auto field, auto value) mutable { update = encode_update(field, value); }, state);
+    visit_state([update = &message->update] (auto field, auto value) mutable { *update++ = encode_update(field, value); }, state);
   }
 
   return needed_bytes;

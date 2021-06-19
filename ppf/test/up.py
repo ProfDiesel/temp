@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path, PurePath
-from typing import Dict, Type
+from typing import Dict, Type, Any
 import shlex
 import json
 import re
@@ -34,6 +34,11 @@ update_state = cppyy.gbl.up.update_state
 states_vector = cppyy.gbl.std.vector[update_state]
 
 
+def apply(state: update_state, **fields):
+    for field, value in fields.items():
+        feed.update_state_poly['double'](state.state, getattr(feed.field, field), float(value))
+
+
 class Up:
     def __init__(self, snapshot: Address, update: Address):
         snapshot_host, snapshot_port = snapshot
@@ -57,9 +62,8 @@ class Up:
 
     def update(self, timestamp, instrument, **fields):
         state = self.get_state(instrument)
+        apply(state, **fields)
         self.__to_flush.push_back(state)
-        for field, value in fields.items():
-            feed.update_state_poly['double'](state.state, getattr(feed.field, field), float(value))
 
     def flush(self):
         self.__server.push_update(self.__to_flush)
@@ -68,11 +72,28 @@ class Up:
 class Encoder:
     def __init__(self):
         self.__buffer = bytearray(256)
-        self.encoder = cppyy.gbl.up.make_encoder()
+        self.__encoder = cppyy.gbl.up.make_encoder()
+        self.__sequence_ids: Dict[instrment_type, int] = {}
 
-    def encode(self, timestamp, states):
-        n = self.encoder.encode(timestamp, states, self.__buffer, len(self.__buffer))
+    def __next_sequence_id(self, instrument: instrument_type) -> int:
+        result = self.__sequence_ids.setdefault(instrument, 0)
+        self.__sequence_ids[instrument] = result + 1
+        return result
+
+    @property
+    def buffer(self):
+        return self.__buffer
+
+    def encode(self, timestamp, updates: Dict[instrument_type, Dict[str, Any]]):
+        to_flush = states_vector()
+        for instrument, fields in updates.items():
+            state = update_state(instrument)
+            state.state.sequence_id = self.__next_sequence_id(instrument)
+            apply(state, **fields)
+            to_flush.push_back(state)
+
+        n = self.__encoder.encode(timestamp, to_flush, self.__buffer, len(self.__buffer))
         if n > len(self.__buffer):
             self.__buffer = bytearray(n)
-            self.encoder.encode(timestamp, states, self.__buffer, n)
+            self.__encoder.encode(timestamp, to_flush, self.__buffer, n)
         return n
