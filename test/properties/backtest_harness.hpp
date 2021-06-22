@@ -7,16 +7,9 @@
 #include <chrono>
 #include <functional>
 
+
 namespace backtest
 {
-
-struct event final
-{
-  network_clock::rep timestamp;
-  feed::detail::packet packet;
-
-  auto time_point() const noexcept { return network_clock::time_point(network_clock::duration(timestamp)); }
-} __attribute__((packed));
 
 class deterministic_executor
 {
@@ -52,23 +45,20 @@ public:
 
   boost::leaf::result<void> on_update_poll(auto &&continuation) noexcept
   {
-    if(buffer_.size() < sizeof(event))
+    if(buffer_.size() < sizeof(feed::detail::event))
       return BOOST_LEAF_NEW_ERROR(std::make_error_code(std::errc::io_error));
 
-    auto *current = reinterpret_cast<const event*>(buffer_.data());
-    current_timestamp_ = std::max(current_timestamp_, current->time_point());
-    buffer_ += offsetof(event, packet);
+    auto *current = reinterpret_cast<const feed::detail::event*>(buffer_.data());
+    current_timestamp_ = std::max(current_timestamp_, network_clock::time_point(std::chrono::duration_cast<network_clock::duration>(std::chrono::nanoseconds(current->timestamp))));
+    buffer_ += offsetof(feed::detail::event, packet);
 
-    for(;;)
-    {
-      const auto sanitized = feed::detail::sanitize(boilerplate::overloaded {
-                                                      [&](auto field, feed::price_t value) { return value; },
-                                                      [&](auto field, feed::quantity_t value) { return value; },
-                                                    },
-                                                    buffer_);
-      std::forward<decltype(continuation)>(continuation)(current_timestamp_, buffer_);
-      buffer_ += sanitized;
-    }
+    const auto sanitized = feed::detail::sanitize(boilerplate::overloaded {
+                                                    [&](auto field, feed::price_t value) { return value; },
+                                                    [&](auto field, feed::quantity_t value) { return value; },
+                                                  },
+                                                  buffer_);
+    std::forward<decltype(continuation)>(continuation)(current_timestamp_, buffer_);
+    buffer_ += sanitized;
 
     return boost::leaf::success();
   }

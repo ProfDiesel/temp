@@ -13,6 +13,7 @@
 
 #include <unordered_map>
 
+
 namespace feed
 {
 struct server;
@@ -43,11 +44,11 @@ public:
     auto current = buffer + offsetof(detail::packet, message);
     for(auto &&[instrument, new_state]: states)
     {
-      auto &[state, accumulated_updates] = this->states[instrument];
+      auto &[state, valid_updates] = this->states[instrument];
       visit_state([&state = state](auto field, auto value) { update_state(state, field, value); }, new_state);
       state.sequence_id = new_state.sequence_id;
       current += detail::encode_message(instrument, state, current);
-      accumulated_updates |= std::exchange(state.updates, {});
+      valid_updates |= std::exchange(state.updates, {});
     }
 
     return continuation(asio::buffer(buffer, static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data())));

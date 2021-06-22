@@ -48,7 +48,6 @@ class Trigger:
     instant_threshold: float
     threshold: Optional[float]
     period: Optional[int]
-    cooldown: int
 
 
 @walker_type
@@ -56,6 +55,7 @@ class Send:
     fd: int
     datagram: Optional[Address]
     disposable_payload: bool
+    cooldown: int
 
 
 @walker_type

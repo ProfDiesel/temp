@@ -13,6 +13,7 @@
 
 #include <boost/range/iterator_range.hpp>
 
+#include <cstring>
 #include <iostream>
 #include <string_view>
 #include <thread>
@@ -57,7 +58,7 @@ extern "C" up_encoder *up_encoder_new() { return new up_encoder{}; }
 extern "C" void up_encoder_free(up_encoder *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" std::size_t up_encoder_encode(up_encoder *self, std::uint64_t timestamp, const up_update_state *states, std::size_t nb_states, std::byte *buffer,
+extern "C" std::size_t up_encoder_encode(up_encoder *self, std::uint64_t timestamp, const up_update_state *states, std::size_t nb_states, void *buffer,
                                          std::size_t buffer_size)
 {
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
@@ -67,9 +68,13 @@ extern "C" std::size_t up_encoder_encode(up_encoder *self, std::uint64_t timesta
   return self->state_map.update(states_,
                      [&](auto &&result)
                      {
-                       if(result.size() < buffer_size)
-                         std::copy_n(static_cast<const std::byte*>(result.data()), result.size(), buffer);
-                       return result.size();
+                       const auto size = result.size() + offsetof(feed::detail::event, packet);
+                       if(size < buffer_size)
+                       {
+                         auto *target = new (buffer) feed::detail::event { timestamp };
+                         std::memcpy(&target->packet, result.data(), result.size());
+                       }
+                       return size;
                      });
 }
 

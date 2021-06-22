@@ -76,7 +76,7 @@ struct parse_error
 };
 
 template<typename continuation_type, typename iterator_type>
-static boost::leaf::result<bool> parse(const continuation_type &continuation, iterator_type first, iterator_type last)
+static boost::leaf::result<void> parse(const continuation_type &continuation, iterator_type first, iterator_type last)
 {
   namespace x3 = boost::spirit::x3;
   using namespace x3_ext;
@@ -97,7 +97,7 @@ static boost::leaf::result<bool> parse(const continuation_type &continuation, it
   static const auto assignment = x3::rule<class assignment_class, assignment_type>("assignment")
     = '"' >> x3::lexeme[-(object_name >> ".") >> expect(field_name)] >> expect('"') >> expect(":") >> expect(value);
 
-  static const auto assignment_with_action = assignment[(
+  static const auto assignment_with_action = expect(assignment)[(
       [&](auto &context)
       {
         auto &[object, field, value] = x3::_attr(context);
@@ -105,14 +105,17 @@ static boost::leaf::result<bool> parse(const continuation_type &continuation, it
       })];
   
   //const auto grammar = *(!x3::eoi >> assignment_with_action >> expect(";"));
-  const auto grammar = assignment_with_action % ',';
+  const auto grammar = assignment_with_action % ',' >> expect(x3::eoi);
 
   return boost::leaf::try_handle_some(
-    [&]()
+    [&]() -> boost::leaf::result<void>
     {
       boost::leaf::error_monitor monitor;
       auto it = first;
-      return (x3::phrase_parse(it, last, grammar, discard) && (it == last)) ? boost::leaf::result<bool> {true} : monitor.check();
+      if(!x3::phrase_parse(it, last, grammar, discard))
+        return monitor.check();
+      ASSERTS(it == last);
+      return boost::leaf::success();
     },
     [&](const expectation_failure<iterator_type> &error /*, const boost::leaf::e_source_location &location*/)
     {

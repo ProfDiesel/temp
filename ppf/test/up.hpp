@@ -15,7 +15,7 @@ struct up_update_state
 
 extern "C" up_encoder *up_encoder_new();
 extern "C" void up_encoder_free(up_encoder *self);
-extern "C" std::size_t up_encoder_encode(up_encoder *self, std::uint64_t timestamp, const up_update_state *states, std::size_t nb_states, std::byte *buffer,
+extern "C" std::size_t up_encoder_encode(up_encoder *self, std::uint64_t timestamp, const up_update_state *states, std::size_t nb_states, void *buffer,
                                          std::size_t buffer_size);
 
 extern "C" up_server *up_server_new(const char *snapshot_host, const char *snapshot_service, const char *updates_host, const char *updates_service);
@@ -40,7 +40,7 @@ class encoder
 public:
   encoder(): self(::up_encoder_new()) {}
 
-  std::size_t encode(const std::uint64_t timestamp, const std::vector<::up_update_state> &states, std::byte *buffer, std::size_t buffer_size)
+  std::size_t encode(const std::uint64_t timestamp, const std::vector<::up_update_state> &states, void *buffer, std::size_t buffer_size)
   { return ::up_encoder_encode(self.get(), timestamp, states.data(), states.size(), buffer, buffer_size); }
 
 private:

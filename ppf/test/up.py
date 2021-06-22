@@ -96,4 +96,4 @@ class Encoder:
         if n > len(self.__buffer):
             self.__buffer = bytearray(n)
             self.__encoder.encode(timestamp, to_flush, self.__buffer, n)
-        return n
+        return memoryview(self.__buffer[:n])

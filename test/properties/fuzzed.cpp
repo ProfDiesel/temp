@@ -28,8 +28,8 @@ ssize_t fuzz_len;
 unsigned char fuzz_buf[1024000];
 #  define __AFL_FUZZ_TESTCASE_BUF fuzz_buf
 #  define __AFL_FUZZ_INIT() void sync(void);
-#  define __AFL_LOOP(x) ((fuzz_len = read(0, fuzz_buf, sizeof(fuzz_buf))) > 0 ? 1 : 0)
-#  define __AFL_INIT() sync()
+#  define __AFL_LOOP(x) ((fuzz_len = ::read(STDIN_FILENO, fuzz_buf, sizeof(fuzz_buf))) > 0 ? 1 : 0)
+#  define __AFL_INIT() (::sync())
 #endif
 
 __AFL_FUZZ_INIT();
@@ -107,14 +107,29 @@ auto main() -> int
         using namespace config::literals;
 
         const auto config = "\
-config.subscription <- 'subscription';\n\
-config.feed <- 'feed';\n\
-config.send <- 'send';\n\
-subscription.instrument <- 10;\n\
-subscription.message <- 'cGlwb2xvbG8=';\n\
-subscription.instant_threshold <- 1.0;\n\
-feed.snapshot <- '127.0.0.1:4000';\n\
-send.cooldown <- 10;\n\
+\"config.type\" : \"dust\", \
+\"config.feed\" : \"feed\", \
+\"config.send\" : \"send\", \
+\"config.command_out_fd\" : 1.0, \
+\"config.subscription\" : \"subscription\", \
+\"feed.snapshot\" : \"127.0.0.1:4400\", \
+\"feed.update\" : \"239.255.0.1:4401\", \
+\"feed.type\" : \"feed\", \
+\"send.type\" : \"send\", \
+\"send.fd\" : 14.0, \
+\"send.disposable_payload\" : 0.0, \
+\"send.cooldown\" : 2000000.0, \
+\"subscription.type\" : \"subscription\", \
+\"subscription.trigger\" : \"trigger\", \
+\"subscription.payload\" : \"payload\", \
+\"trigger.type\" : \"trigger\", \
+\"trigger.instrument\" : 42.0, \
+\"trigger.instant_threshold\" : 2.0, \
+\"trigger.threshold\" : 3.0, \
+\"trigger.period\" : 10.0, \
+\"payload.type\" : \"payload\", \
+\"payload.message\" : \"eyJpbnN0cnVtZW50IjogNDIsICJjb250ZW50IjogImhpdCAjMCJ9\", \
+\"payload.datagram\" : \"eyJpbnN0cnVtZW50IjogNDIsICJjb250ZW50IjogImRhdGFncmFtIGhpdCAjMCJ9\" \
 "sv;
         const auto properties = BOOST_LEAF_TRYX(config::properties::create(config));
 

@@ -76,7 +76,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
   const auto send = config["send"_hs];
   const auto subscription = config["subscription"_hs];
 
-  auto spawn = [&](auto coroutine, auto name)
+  auto spawn = [&](auto &&coroutine, auto name)
   {
     using namespace logger::literals;
     asio::co_spawn(
@@ -87,7 +87,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
           {
             logger->log(logger::debug, "coroutine=\"{}\" started"_format, name);
-            BOOST_LEAF_CO_TRY(co_await coroutine());
+            BOOST_LEAF_CO_TRY(co_await std::forward<decltype(coroutine)>(coroutine)());
             logger->log(logger::debug, "coroutine=\"{}\" exited"_format, name);
       	    co_return boost::leaf::success();
           },

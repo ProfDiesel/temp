@@ -43,6 +43,13 @@ struct packet final
 } __attribute__((packed));
 static_assert(sizeof(packet) == 13); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
+struct event final
+{
+  std::uint64_t timestamp;
+  struct packet packet;
+} __attribute__((packed));
+static_assert(sizeof(event) == 21); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+
 struct snapshot_request final
 {
   endian::big_uint16_buf_t instrument {};
@@ -135,7 +142,7 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
   for(auto [i, message] = std::tuple {0, &packet->message}; i < packet->nb_messages; ++i, message = advance(message))
   {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    if(current = reinterpret_cast<std::byte *>(message); current > buffer_end)
+    if(current = reinterpret_cast<std::byte *>(message); current >= buffer_end)
     {
       packet->nb_messages = i; // fix the number of message
       return buffer.size(); // we consumed it all (and a bit more)
@@ -144,7 +151,7 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
     for(auto [j, update] = std::tuple {0, &message->update}; j < message->nb_updates; ++j, ++update)
     {
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      if(current = reinterpret_cast<std::byte *>(update); current > buffer_end)
+      if(current = reinterpret_cast<std::byte *>(update); current >= buffer_end)
       {
         packet->nb_messages = i; // fix the number of message
         message->nb_updates = j; // fix the number of updates
