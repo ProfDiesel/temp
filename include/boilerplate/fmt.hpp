@@ -29,9 +29,12 @@ struct fmt::formatter<std::thread::id, char_type_> : fmt::formatter<const char *
   template<typename context_type>
   auto format(const std::thread::id &id, context_type &context) requires std::is_same_v<std::thread::native_handle_type, pthread_t>
   {
+    fmt::basic_memory_buffer<char_type_> buffer;
+    fmt::detail::format_value(buffer, id, context.locale());
+
     std::array<char, 16> thread_name {};
     ::pthread_getname_np(*reinterpret_cast<const pthread_t *>(&id), thread_name.data(), 16);
-    return format_to(context.out(), /*FMT_COMPILE*/ ("{}({})"), id, thread_name.data());
+    return format_to(context.out(), /*FMT_COMPILE*/ ("{}({})"), buffer.data(), thread_name.data());
   }
 };
 

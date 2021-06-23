@@ -77,6 +77,9 @@ auto main() -> int
   logger_thread logger_thread;
   auto logger = boilerplate::make_strict_not_null(&logger_thread.logger);
 
+  logger->log(logger::info, "lwpid={} Starting."_format, std::this_thread::get_id());
+  logger->flush();
+
   asio::signal_set signals(service, SIGINT, SIGTERM);
   signals.async_wait(
     [&](auto error_code, auto signal_number)
@@ -106,12 +109,14 @@ auto main() -> int
                                          service.poll();
                                          logger->flush();
                                        }
-                                     return {};
+                                     logger->log(logger::info, "Executor stopped.");
+                                     return boost::leaf::success();
                                    });
 
       BOOST_LEAF_CHECK(run());
       return {};
     },
     make_handlers(std::ref(logger_thread.printer)));
+
   return 0;
 }

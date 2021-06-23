@@ -79,6 +79,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
   auto spawn = [&](auto &&coroutine, auto name)
   {
     using namespace logger::literals;
+    logger->log(logger::debug, "coroutine=\"{}\" spawned"_format, name);
     asio::co_spawn(
       service,
       [&]() noexcept -> boost::leaf::awaitable<void>
@@ -195,11 +196,14 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 
   const auto commands = [&](auto &command_input) noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
   {
+    using namespace logger::literals;
+
     std::string command_buffer;
     command_buffer.clear();
 
     for(;;)
     {
+      logger->log(logger::debug, "awaiting commands");
       auto bytes_transferred = BOOST_LEAF_ASIO_CO_TRYX(
         co_await asio::async_read_until(command_input, asio::dynamic_buffer(command_buffer), "\n\n", _));
 
@@ -209,6 +213,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
       using namespace dispatch::literals;
       const auto properties = BOOST_LEAF_CO_TRYX(config::properties::create(command_buffer));
       const auto entrypoint = properties["entrypoint"_hs];
+      logger->log(logger::debug, "command=\"{}\" command recieved"_format, entrypoint["type"_hs]);
       switch(dispatch_hash(entrypoint["type"_hs])) // TODO
       {
       case "payload"_h:

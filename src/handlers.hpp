@@ -33,6 +33,12 @@ inline auto make_handlers(auto &&printer) noexcept
                                missing_field.field.data());
                        std::abort();
                      },
+                     [printer](const std::error_code &error_code, const boost::leaf::e_source_location &location, std::string_view statement)
+                     {
+                       printer(logger::critical, "location=\"{}:{} {}\" statement={}, code={} {}"_format, location.file, location.line, location.function, 
+                               statement, error_code.value(), error_code.message());
+                       std::abort();
+                     },
                      [printer](const std::error_code &error_code, const boost::leaf::e_source_location &location)
                      {
                        printer(logger::critical, "location=\"{}:{} {}\" code={} {}"_format, location.file, location.line, location.function, error_code.value(),

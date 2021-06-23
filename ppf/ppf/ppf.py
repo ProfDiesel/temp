@@ -73,6 +73,11 @@ class Subprocess:
         LOGGER.debug('send="%s"', data.replace('"', '\\"'))
         out.write(data.encode() + b'\n\n')
         await out.drain()
+        LOGGER.debug('sent')
+
+
+    async def wait(self):
+        return await self.__process.wait()
 
 
 class Fairy:
@@ -127,6 +132,7 @@ class Fairy:
         if self.__process is None:
             return
         await self.__process.send(confobj.Quit('entrypoint'))
+        await self.__process.wait()
 
     async def __on_request(self, request: confobj.Request) -> bool:
         if isinstance(request, confobj.Quit):
