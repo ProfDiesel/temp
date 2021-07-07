@@ -1,4 +1,4 @@
-from .up import Encoder
+from .tori.up import Encoder
 from pathlib import Path
 
 e = Encoder()

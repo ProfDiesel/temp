@@ -1,26 +1,27 @@
 Socket: tester writev (LD_PRELOAD)
 
 Trigger: normalized_move_trigger
+Trigger: polymorphic_trigger_dispatcher, use boost-ext/te
 
 Config: Pre-hashed strings
-Config: walker: article 'overload by return value'
 Config: faire une unité de compil séparée avec le parser
-Config: SFINAE pour le is_istream
 
 Logger: n'autoriser que les types triviaux (sauf explicite) -> fonction unique de fmt / push dans logger
 Logger: pour les types complexes, push d'observer_ptr gérés en QSBR
 
 Tests: UB + Address Sanitizer
-Tests: Fuzzer sur les triggers / LQ2
 Tests: Crux (crux.galois.com)
 Tests: Mull: mull.readthedocs.io
 
-Model: supprimer l'appel à hof::fix
 Model: polymorphic_trigger: pointeur sur fonction uniquement pour le trigger, méthodes virtuelles pour reset et warm_up
-Model: handler LEAF global qui logggue
+
+Feed: decoder PCAP, decoder Wireshark
 
 S'assurer qu'avec Onload, on ne passe jamais dans le scheduler du système
 Restaurer les const
 
 Genjutsu: variant dynamiques: déterminées par une liste de flags (similaire aux dependencies)
+
+feed_server.hpp: finir play()
+backtest_harness.hpp: buffer_feeder::on_snapshot_request, ajouter une state_map
 

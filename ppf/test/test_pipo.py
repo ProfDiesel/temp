@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from typing import Final
 
 from .tori import Tori
-from .down import Message
+from .tori.down import Message
 
 from ppf.ppf import Fairy
 from ppf.config.marshalling import unmarshall_walker

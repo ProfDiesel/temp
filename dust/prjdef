@@ -1,0 +1,126 @@
+#!/usr/bin/env genjutsu
+# vim: set filetype=python
+
+from genjutsu import Apply, Default, Alias, env, main
+from genjutsu_toolsets.c import Cxx, SharedObject, Executable, IncludeDir, CxxDef, Pch
+from genjutsu_toolsets.filesystem import Copy
+from precompiled_header_generator import GeneratedPch
+from þirdparty import ThirdParty
+
+thirdparties = {thirdparty:
+    ThirdParty(thirdparty)
+    for thirdparty in (
+        'asio_nortti',
+        'boost_nortti',
+        'doctest',
+        'fmt',
+        'frozen_nortti',
+        'gsl',
+        'leaf_nortti_nothreads',
+        'observer-ptr-lite',
+        'openonload',
+        'rangeless',
+        'robin_hood',
+        'stdfunc_nortti',
+        'ut',
+    )
+}
+
+boilerplate = Prjdef('../boilerplate')
+feed = Prjdef('../feed')
+
+Apply(
+    IncludeDir('include'),
+    CxxDef('__USE_PRECOMPILED_HEADER__'),
+    boilerplate.FLAGS,
+    feed.FLAGS,
+    (thirdparty.FLAGS for thirdparty in thirdparties.values()),
+)
+
+Apply(CxxDef('LINUX'))
+
+Apply(CxxDef('LEAN_AND_MEAN'))
+Apply(CxxDef('LOGGER_FMT_COMPILE'))
+Apply(CxxDef('LOGGER_SYSLOG_FORMAT'))
+# Apply(CxxDef('BOOST_SPIRIT_X3_DEBUG'))
+
+#pch = GeneratedPch('precompiled_header', sources=('src/main.cpp',), pch_gen_project=Prjdef('../../precompiled_header_generator'))
+pch = GeneratedPch('precompiled_header', sources=('src/main.cpp',))
+#pch = Pch('precompiled_header')
+
+Copy(
+    Cxx('src/feed/feed.hpp', pch=pch, preprocess_only=True),
+    'preprocessed/feed/feed.hpp',
+)
+
+Default(Alias('ppf', (Executable('ppf', objects=(Cxx('src/main.cpp', pch=pch),)),)))
+
+with env():
+    Apply(CxxDef('USE_TCPDIRECT'))
+    Copy(preprocessed := Cxx('src/main.cpp', pch=pch, preprocess_only=True, quick_build_alias=None), 'preprocessed/main.i') # to be used by clang dump-record-layouts
+    Copy(object_ := Cxx(preprocessed, pch=pch, compile_only=True, quick_build_alias=None), 'preprocessed/main.s') # to be used by llvm-mca
+    #Alias('ppf_ol', (Executable('ppf_ol', objects=(object_, *thirdparties['openonload'].ARCHIVES)),))
+
+with env('benchmark'):
+    Apply(ThirdParty('benchmark').FLAGS)
+
+    with env('integration'):
+        Apply(IncludeDir('src'))
+        traversal_benchmark_exe = Executable(
+            'traversal_benchmark', objects=(Cxx('traversal.cpp', pch=pch),)
+        )
+
+    with env('unit'):
+        Apply(IncludeDir('src'))
+        string_dispatch_benchmark_exe = Executable(
+            'string_dispatch_benchmark', objects=(Cxx('string_dispatch.cpp', pch=pch),)
+        )
+
+# Alias('benchmark', (traversal_benchmark_exe, string_dispatch_benchmark_exe))
+Alias('benchmark', (traversal_benchmark_exe,))
+
+with env('contrib/production/smartbulb'):
+    smartbulb_lib = SharedObject(
+        'smartbulb', objects=(Cxx('smartbulb.cpp', pch=pch, pic=True),)
+    )
+
+with env('contrib/production/mlockall'):
+    mlockall_lib = SharedObject(
+        'mlockall', objects=(Cxx('mlockall.cpp', pch=pch, pic=True),)
+    )
+
+with env('contrib/production/tsc_calibrate'):
+    tsc_calibrate_exe = Executable(
+        'tsc_calibrate', objects=(Cxx('tsc_calibrate.cpp', pch=pch),)
+    )
+
+with env('contrib/notebook'):
+    Apply(IncludeDir('src'))
+    trigger_helper_lib = SharedObject(
+        'trigger_helper', objects=(Cxx('trigger_helper.cpp', pch=pch, pic=True),)
+    )
+    trigger_helper_test = Executable(
+        'trigger_helper_test',
+        objects=(Cxx('trigger_helper.cpp', name='trigger_helper_test', pch=pch, flags=(CxxDef('TEST'),), quick_build_alias=None),)
+    )
+
+Alias('contrib', (smartbulb_lib, mlockall_lib, trigger_helper_lib, trigger_helper_test, tsc_calibrate_exe))
+
+with env('test/unit'):
+    Apply(IncludeDir('src'))
+    test_exe = Executable('tests', objects=(Cxx('starter.cpp', pch=pch),))
+
+with env('test/properties'):
+    Apply(IncludeDir('src'), CxxDef('BACKTEST_HARNESS'))
+    config_properties_fuzzable_exe = Executable(
+        'config_properties', objects=(Cxx('config_properties.cpp', pch=pch),)
+    )
+    fuzzable_exe = Executable('fuzzable', objects=(Cxx('fuzzed.cpp', pch=pch),))
+
+Alias('test', (test_exe, fuzzable_exe))
+
+with env('playground'):
+    #Apply(CxxDef('ASIO_ENABLE_HANDLER_TRACKING'))
+    leaf_coro = Executable('leaf_coro', objects=(Cxx('leaf_coro.cpp', pch=pch),))
+
+Alias('leaf_coro', (leaf_coro,))
