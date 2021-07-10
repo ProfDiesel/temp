@@ -17,7 +17,6 @@
 
 #include <unordered_map>
 
-
 namespace feed
 {
 struct server;
@@ -33,12 +32,12 @@ struct session : public std::enable_shared_from_this<session>
 
   boost::leaf::awaitable<boost::leaf::result<void>> operator()() noexcept;
 };
-}
+} // namespace detail
 
 class server : public state_map
 {
 public:
-  server(asio::io_context &service) noexcept: service(service), updates_socket(service), snapshot_acceptor(service) { }
+  server(asio::io_context &service) noexcept: service(service), updates_socket(service), snapshot_acceptor(service) {}
 
   boost::leaf::result<void> connect(const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint) noexcept
   {
@@ -52,7 +51,8 @@ public:
     return boost::leaf::success();
   }
 
-  boost::leaf::awaitable<boost::leaf::result<void>> update(const auto &states) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>> 
+  boost::leaf::awaitable<boost::leaf::result<void>>
+  update(const auto &states) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>>
   {
     BOOST_LEAF_ASIO_CO_TRY(co_await state_map::update(states, [&](auto &&buffer) { return updates_socket.async_send_to(buffer, updates_endpoint, _); }));
     co_return boost::leaf::success();
@@ -94,13 +94,13 @@ inline boost::leaf::awaitable<boost::leaf::result<void>> detail::session::operat
   const auto self(shared_from_this());
 
   detail::snapshot_request request;
-  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_read(socket, asio::buffer(&request, sizeof(request)), _)) != sizeof(request))                                                                    \
+  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_read(socket, asio::buffer(&request, sizeof(request)), _)) != sizeof(request))
     co_return std::make_error_code(std::errc::io_error); // TODO
 
   std::array<char, 128> buffer;
   const auto actual_length = feed::detail::encode_message(request.instrument.value(), server->snapshot(request.instrument.value()),
                                                           asio::mutable_buffer(buffer.data(), buffer.size()));
-  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_write(socket, asio::buffer(buffer.data(), actual_length), _)) != actual_length)                                                                    \
+  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_write(socket, asio::buffer(buffer.data(), actual_length), _)) != actual_length)
     co_return std::make_error_code(std::errc::io_error); // TODO
 
   co_return boost::leaf::success();
@@ -108,19 +108,22 @@ inline boost::leaf::awaitable<boost::leaf::result<void>> detail::session::operat
 
 boost::leaf::awaitable<boost::leaf::result<void>> replay(auto &&co_continuation, auto &&co_wait_until, asio::const_buffer buffer)
 {
-  const auto *current = reinterpret_cast<const feed::detail::event*>(buffer.data());
+  const auto *current = reinterpret_cast<const feed::detail::event *>(buffer.data());
   const auto timestamp_0 = network_clock::time_point(std::chrono::nanoseconds(current->timestamp));
 
   boost::container::flat_map<instrument_id_type, instrument_state> states;
   while(buffer.size() > sizeof(feed::detail::event))
   {
-    const auto *current = reinterpret_cast<const feed::detail::event*>(buffer.data());
+    const auto *current = reinterpret_cast<const feed::detail::event *>(buffer.data());
     const auto timestamp = network_clock::time_point(std::chrono::nanoseconds(current->timestamp));
     BOOST_LEAF_ASIO_CO_TRY(co_await co_wait_until(timestamp - timestamp_0));
     buffer += offsetof(feed::detail::event, packet);
 
     states.clear();
-    const auto decoded = feed::detail::decode([](auto instrument_id, auto sequence_id) { return instrument_id; }, [&states](const auto &timestamp, const auto &update, const auto &instrument_closure){ update_state(states[instrument_closure], update); }, timestamp, buffer);
+    const auto decoded = feed::detail::decode([](auto instrument_id, auto sequence_id) { return instrument_id; },
+                                              [&states](const auto &timestamp, const auto &update, const auto &instrument_closure)
+                                              { update_state(states[instrument_closure], update); },
+                                              timestamp, buffer);
 
     BOOST_LEAF_CO_TRY(co_await co_continuation(states));
 
