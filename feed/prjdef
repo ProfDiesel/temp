@@ -1,11 +1,11 @@
 #!/usr/bin/env genjutsu
 # vim: set filetype=python
 
-from genjutsu import Apply, Default, Alias
-from genjutsu_toolsets.c import Cxx, SharedObject, Executable, IncludeDir, CxxDef, Pch
+from genjutsu_toolsets.c import Cxx, IncludeDir
 from genjutsu_toolsets.filesystem import Copy
-from precompiled_header_generator import GeneratedPch
 from þirdparty import ThirdParty
+
+from pathlib import Path
 
 thirdparties = {thirdparty:
     ThirdParty(thirdparty)
@@ -19,30 +19,9 @@ thirdparties = {thirdparty:
     )
 }
 
-boilerplate = Prjdef('../boilerplate')
-
 FLAGS = (
     IncludeDir(Path(__file__).parent / 'include'),
-    CxxDef('__USE_PRECOMPILED_HEADER__'),
-    boilerplate.FLAGS,
     *(thirdparty.FLAGS for thirdparty in thirdparties.values()),
 )
 
-Apply(FLAGS)
-
-Apply(CxxDef('LINUX'))
-
-Apply(CxxDef('LEAN_AND_MEAN'))
-Apply(CxxDef('LOGGER_FMT_COMPILE'))
-Apply(CxxDef('LOGGER_SYSLOG_FORMAT'))
-
-pch = GeneratedPch('precompiled_header', sources=('src/feedlib.cpp',))
-
-Copy(
-    Cxx('include/feed/feed.hpp', pch=pch, preprocess_only=True),
-    'preprocessed/feed/feed.hpp',
-)
-
-Default(Alias('feedlib', (SharedObject('feedlib', objects=(Cxx('src/feedlib.cpp', pch=pch, pic=True),)),)))
-
-Alias('up_test', (Executable('up_test', objects=(Cxx('test/tori/up.cpp', name='up_test', flags=(CxxDef('TEST'),), quick_build_alias=None),)),))
+Copy(Cxx('include/feed/feed.hpp', preprocess_only=True), 'preprocessed/feed/feed.hpp')

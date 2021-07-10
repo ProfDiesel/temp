@@ -1,10 +1,7 @@
 #!/usr/bin/env genjutsu
 # vim: set filetype=python
 
-from genjutsu import Apply, Default, Alias, env, main
-from genjutsu_toolsets.c import Cxx, SharedObject, Executable, IncludeDir, CxxDef, Pch
-from genjutsu_toolsets.filesystem import Copy
-from precompiled_header_generator import GeneratedPch
+from genjutsu_toolsets.c import IncludeDir
 from þirdparty import ThirdParty
 
 from pathlib import Path
