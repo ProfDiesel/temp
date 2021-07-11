@@ -1,6 +1,6 @@
 #pragma once
 
-#include "feed_structures.hpp"
+#include <feed/feed_structures.hpp>
 
 #include <boilerplate/boilerplate.hpp>
 #include <boilerplate/chrono.hpp>

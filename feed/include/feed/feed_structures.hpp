@@ -1,6 +1,6 @@
 #pragma once
 
-#include "feed_fields.hpp"
+#include <feed/feed_fields.hpp>
 
 #include <boilerplate/contracts.hpp>
 #if !defined(LEAN_AND_MEAN)

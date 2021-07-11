@@ -1,6 +1,6 @@
 #pragma once
 
-#include "feed.hpp"
+#include <feed/feed.hpp>
 
 #include <boilerplate/leaf.hpp>
 #include <boilerplate/logger.hpp>

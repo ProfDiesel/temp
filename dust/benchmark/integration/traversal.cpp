@@ -3,7 +3,7 @@
 #include "model/wiring.hpp"
 
 #include "feed/feed.hpp"
-#include "feed/feed_server.hpp"
+#include "feed/binary/feed_server.hpp"
 
 #include <benchmark/benchmark.h>
 

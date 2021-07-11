@@ -1,6 +1,6 @@
-#include <feed/feed_server.hpp>
+#include <feed/binary/feed_server.hpp>
 #include <feed/feed_structures.hpp>
-#include <feed/feedlibpp.hpp>
+#include <feed/feedlib.h>
 
 #include <boilerplate/leaf.hpp>
 
@@ -159,6 +159,9 @@ struct up_future
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+extern "C" up_future *up_future_new() { return new up_future {}; }
+
+///////////////////////////////////////////////////////////////////////////////
 extern "C" void up_future_free(up_future *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -249,7 +252,7 @@ extern "C" up_future *up_server_push_update(up_server *self, const up_state *con
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
   std::for_each_n(states, nb_states, [&](const auto *state) { states_.emplace_back(state->instrument, state->state); });
-  auto *const result = new up_future();
+  auto *const result = up_future_new();
   asio::co_spawn(
     self->service,
     [&, states = std::move(states_)]() noexcept -> boost::leaf::awaitable<void>
@@ -264,7 +267,7 @@ extern "C" up_future *up_server_replay(up_server *self, const void *buffer, std:
   using clock_t = std::chrono::steady_clock;
   using timer_t = asio::basic_waitable_timer<clock_t>;
 
-  auto *const result = new up_future();
+  auto *const result = up_future_new();
   asio::co_spawn(
     self->service,
     [&]() noexcept -> boost::leaf::awaitable<void>

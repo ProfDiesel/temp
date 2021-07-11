@@ -51,6 +51,7 @@ extern "C"
 
   struct up_future;
 
+  up_future *up_future_new();
   void up_future_free(up_future *self);
   bool up_future_is_set(const up_future *self);
   bool up_future_is_ok(const up_future *self);

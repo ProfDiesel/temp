@@ -8,8 +8,8 @@
 
 #include <fmt/format.h>
 
-#include "feed_structures.hpp"
-#include "feed_binary.hpp"
+#include <feed/feed_structures.hpp>
+#include <feed/binary/feed_binary.hpp>
 
 template<feed::field field, typename char_type>
 struct fmt::formatter<feed::field_c<field>, char_type> : fmt::formatter<const char *, char_type>

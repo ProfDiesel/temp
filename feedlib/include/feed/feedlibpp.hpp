@@ -90,6 +90,8 @@ private:
 class future
 {
 public:
+  future(): self(::up_future_new()) {}
+
   bool is_set() const noexcept { return ::up_future_is_set(self.get()); }
   operator bool() const noexcept { return ::up_future_is_ok(self.get()); }
   std::string_view message() const noexcept { return ::up_future_message(self.get()); }
