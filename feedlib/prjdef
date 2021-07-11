@@ -40,6 +40,6 @@ Apply(CxxDef('LOGGER_SYSLOG_FORMAT'))
 
 pch = GeneratedPch('precompiled_header', sources=('src/feedlib.cpp',))
 
-Default(Alias('feedlib', (SharedObject('feedlib', objects=(Cxx('src/feedlib.cpp', pch=pch, pic=True),)),)))
+Default(Alias('feedlib', feedlib := (SharedObject('feedlib', objects=(Cxx('src/feedlib.cpp', pch=pch, pic=True),)),)))
 
-Alias('up_test', (Executable('up_test', objects=(Cxx('test/tori/up.cpp', name='up_test', flags=(CxxDef('TEST'),), quick_build_alias=None),)),))
+Alias('player', (Executable('player', objects=(Cxx('src/player.cpp', pch=pch, pic=True), feedlib)),))

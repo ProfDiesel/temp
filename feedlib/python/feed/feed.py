@@ -1,10 +1,11 @@
 import asyncio
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import cppyy
-from ppf.config_objects import Address
+
+Address = Tuple[str, Union[int, str]]
 
 root = Path(__file__).parent / '../..'
 flavour = 'debug'
