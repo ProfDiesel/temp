@@ -4,7 +4,7 @@
 from itertools import chain
 from pathlib import Path
 
-from genjutsu_toolsets.c import Cxx, IncludeDir
+from genjutsu_toolsets.c import Cxx, Executable, IncludeDir
 from genjutsu_toolsets.filesystem import Copy
 from þirdparty import ThirdParty
 
@@ -26,3 +26,5 @@ FLAGS = (
 )
 
 Copy(Cxx('include/feed/feed.hpp', preprocess_only=True, flags=FLAGS), 'preprocessed/feed/feed.hpp')
+
+Alias('test', (Executable('test', objects=(Cxx('test/main.cpp', pic=True),)),))

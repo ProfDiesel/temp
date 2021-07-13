@@ -13,10 +13,12 @@
 #include <boost/range/iterator_range.hpp>
 
 #include <cstring>
+#include <limits>
 #include <iostream>
 #include <string_view>
 #include <thread>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -60,10 +62,23 @@ extern "C" up_state *up_state_new(up_instrument_id_t instrument) { return new up
 extern "C" void up_state_free(up_state *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_state_update_float(up_state *self, int8_t field, float value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
+extern "C" up_sequence_id_t up_state_get_sequence_id(up_state *self) { return self->state.sequence_id; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_state_update_uint(up_state *self, int8_t field, uint32_t value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
+extern "C" void up_state_set_sequence_id(up_state *self, up_sequence_id_t sequence_id) { self->state.sequence_id = sequence_id; }
+
+///////////////////////////////////////////////////////////////////////////////
+extern "C" uint64_t up_state_get_bitset(const up_state *self)
+{
+  static_assert(decltype(self->state.updates)().size() <= std::numeric_limits<unsigned long long>::digits);
+  return self->state.updates.to_ullong();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+extern "C" void up_state_update_float(up_state *self, up_field_t field, float value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
+
+///////////////////////////////////////////////////////////////////////////////
+extern "C" void up_state_update_uint(up_state *self, up_field_t field, uint32_t value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -106,8 +121,8 @@ extern "C" std::size_t up_encoder_encode(up_encoder *self, up_timestamp_t timest
 
 struct up_decoder
 {
-  std::function<void(std::uint8_t, float)> on_update_float;
-  std::function<void(std::uint8_t, uint)> on_update_uint;
+  std::function<void(up_field_t, float)> on_update_float;
+  std::function<void(up_field_t, uint)> on_update_uint;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -127,11 +142,11 @@ extern "C" std::size_t up_decoder_decode(up_decoder *self, const void *buffer, s
                           {
                             if constexpr(std::is_same_v<decltype(value), feed::price_t>)
                             {
-                              self->on_update_float(static_cast<uint8_t>(field()), value);
+                              self->on_update_float(static_cast<up_field_t>(field()), value);
                             }
                             else if constexpr(std::is_same_v<decltype(value), feed::quantity_t>)
                             {
-                              self->on_update_uint(static_cast<uint8_t>(field()), value);
+                              self->on_update_uint(static_cast<up_field_t>(field()), value);
                             }
                             else
                             {
@@ -220,9 +235,11 @@ struct up_server
               = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
             const auto updates_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, _));
             BOOST_LEAF_CO_TRY(server.connect(*snapshot_addresses.begin(), *updates_addresses.begin()));
+            future->value = up_future::ok_v;
+
             while(!quit.test(std::memory_order_acquire))
               BOOST_LEAF_CO_TRY(co_await server.accept());
-            future->value = up_future::ok_v;
+
             co_return boost::leaf::success();
           },
           make_handlers(future));

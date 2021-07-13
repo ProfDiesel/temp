@@ -2,25 +2,28 @@ import asyncio
 from functools import singledispatchmethod
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple, Union
+import json
 
 import cppyy
+
 
 Address = Tuple[str, Union[int, str]]
 
 root = Path(__file__).parent / '../..'
 flavour = 'debug'
-with (root / 'compile_commands.json').open() as commands_file:
-    for command in json.load(commands_file):
-        if (root / f'build/{flavour}/test/pic/up.o').resolve() == Path(command['output']).resolve():
-            for arg in shlex.split(command['command']):
-                if match := re.match('(-I|-isystem)(?P<directory>.*)', arg):
-                    cppyy.add_include_path(match.groupdict()['directory'])
-cppyy.add_include_path(str(root / 'include'))
-cppyy.cppdef('#include "feed/feedlibpp.hpp"')
-cppyy.load_library(str(root / f'_build/{flavour}/libfeedlib.so'))
+#with (root / 'compile_commands.json').open() as commands_file:
+#    for command in json.load(commands_file):
+#        if (root / f'build/{flavour}/test/pic/up.o').resolve() == Path(command['output']).resolve():
+#            for arg in shlex.split(command['command']):
+#                if match := re.match('(-I|-isystem)(?P<directory>.*)', arg):
+#                    cppyy.add_include_path(match.groupdict()['directory'])
+cppyy.add_include_path(str(root / 'feedlib/include'))
+cppyy.cppdef('#include <feed/feedlibpp.hpp>')
+cppyy.load_library(str(root / f'feedlib/_build/{flavour}/libfeedlib.so'))
 
-from cppyy.gbl import up  # pylint: disable=import-error
+from cppyy.gbl import up, up_field # pylint: disable=import-error
 from cppyy.ll import set_signals_as_exception
+from cppyy.gbl.std import move as _move
 
 set_signals_as_exception(True)
 
@@ -29,21 +32,36 @@ Instrument = int
 Field = int
 Timestamp = int
 
+
 class State:
     def __init__(self, instrument: Instrument):
         self.__state = up.state(instrument)
 
     def update(self, field: Field, value: float):
-        self.__state.update(field, value)
+        self.__state.update_float(field, value)
 
     def update_uint(self, field: Field, value: int):
         self.__state.update(field, value)
+
+    @property
+    def sequence_id(self):
+        return self.__state.get_sequence_id()
+
+    @sequence_id.setter
+    def sequence_id(self, sequence_id):
+        self.__state.set_sequence_id(sequence_id)
+
+    @property
+    def _wrapped(self):
+        return self.__state
+
+states_vector = cppyy.gbl.std.vector[up.state]
 
 
 class Encoder:
     def __init__(self):
         self.__buffer = bytearray(256)
-        self.__encoder = up.make_encoder()
+        self.__encoder = up.encoder()
         self.__sequence_ids: Dict[Instrument, int] = {}
 
     def __next_sequence_id(self, instrument: Instrument) -> int:
@@ -58,10 +76,11 @@ class Encoder:
     def encode(self, timestamp, updates: Dict[Instrument, Dict[str, Any]]):
         to_flush = states_vector()
         for instrument, fields in updates.items():
-            state = update_state(instrument)
-            state.state.sequence_id = self.__next_sequence_id(instrument)
-            apply(state, **fields)
-            to_flush.push_back(state)
+            state = State(instrument)
+            state.sequence_id = self.__next_sequence_id(instrument)
+            for field, value in fields.items():
+                state.update(getattr(up_field, field), float(value))
+            to_flush.push_back(_move(state._wrapped))
 
         n = self.__encoder.encode(timestamp, to_flush, self.__buffer, len(self.__buffer))
         if n > len(self.__buffer):

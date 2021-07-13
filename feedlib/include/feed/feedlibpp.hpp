@@ -27,6 +27,7 @@ using ptr = std::unique_ptr<value_type, deleter>;
 // state
 
 using instrument_id_t = ::up_instrument_id_t;
+using sequence_id_t = ::up_sequence_id_t;
 using field_t = ::up_field_t;
 using timestamp_t = ::up_timestamp_t;
 
@@ -34,6 +35,11 @@ class state
 {
 public:
   explicit state(instrument_id_t instrument) noexcept : self(::up_state_new(instrument)) {}
+
+  sequence_id_t get_sequence_id() { return ::up_state_get_sequence_id(self.get()); }
+  void set_sequence_id(sequence_id_t sequence_id) { ::up_state_set_sequence_id(self.get(), sequence_id); }
+
+  std::uint64_t get_bitset() { return ::up_state_get_bitset(self.get()); }
 
   auto get_float(field_t field) const noexcept { return ::up_state_get_float(self.get(), field); }
   auto get_uint(field_t field) const noexcept { return ::up_state_get_uint(self.get(), field); }

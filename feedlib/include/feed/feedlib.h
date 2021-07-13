@@ -9,8 +9,16 @@ extern "C"
 #endif // defined(__cplusplus)
 
   typedef uint16_t up_instrument_id_t;
-  typedef int8_t up_field_t;
+  typedef uint32_t up_sequence_id_t;
   typedef uint64_t up_timestamp_t;
+
+  typedef enum up_field
+  {
+    b0 = 1,
+    bq0 = 2,
+    o0 = 3,
+    oq0 = 4
+  } up_field_t;
 
   //
   // state
@@ -19,7 +27,9 @@ extern "C"
 
   up_state *up_state_new(up_instrument_id_t instrument);
   void up_state_free(up_state *self);
-  uint64_t up_state_bitset(const up_state *self);
+  up_sequence_id_t up_state_get_sequence_id(up_state *self);
+  void up_state_set_sequence_id(up_state *self, up_sequence_id_t sequence_id);
+  uint64_t up_state_get_bitset(const up_state *self);
   float up_state_get_float(const up_state *self, up_field_t field);
   uint32_t up_state_get_uint(const up_state *self, up_field_t field);
   void up_state_update_float(up_state *self, up_field_t field, float value);
