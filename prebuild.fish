@@ -13,5 +13,7 @@ set -x GENJUTSU_C_TOOLSET clang
 ./feed/prjdef
 ./feedlib/prjdef
 
+./playground/prjdef
+
 ninja -f dust/_build/debug/build.ninja -t compdb cxx > dust/compile_commands.json
 ninja -f feed/_build/debug/build.ninja -t compdb cxx > feed/compile_commands.json

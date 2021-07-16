@@ -120,10 +120,10 @@ class LeafContext:
 
     def to_string(self) -> str:
         if not len(self.slots):
-            return '[no slot]'
+            return f'slot: [no slot] active:{self.value["is_active_"]}'
         first_slot = self.slots[0].current()
         first_slot_addr = int(first_slot.value.address) if first_slot is not None else 0
-        return f'{first_slot_addr:016x} {self.value["is_active_"]}'
+        return f'slot: {first_slot_addr:016x} active:{self.value["is_active_"]}'
 
     def display_hint(self) -> Literal['array', 'map', 'string']:
         return 'array'
@@ -134,9 +134,12 @@ class LeafPolymorphicContext:
         self.value = value
 
     def to_string(self) -> str:
-        poly_type = self.value.dynamic_type.template_argument(0).reference()
-        actual = LeafContext(self.value.dynamic_cast(poly_type))
-        return f'{actual.to_string()} id: {int(self.value["captured_id_"]["value_"])}'
+        try:
+            poly_type = self.value.dynamic_type.template_argument(0).reference()
+            actual = self.value.dynamic_cast(poly_type)
+        except:
+            actual = self.value
+        return f'{LeafContext(actual).to_string()} id: {int(self.value["captured_id_"]["value_"])}'
 
 def _leaf_printer_collection():
     collection = gdb.printing.RegexpCollectionPrettyPrinter('boost::leaf')
@@ -161,9 +164,8 @@ class AsioFrame:
 
     def to_string(self) -> str:
         result: str = f'{self.value["coro_"]}'
-        ctx: int = self.value['ctx_']['__ptr_']
-        if int(ctx):
-            result = f'{result} ctx: {ctx.dereference().format_string()}'
+        # ctx: int = self.value['ctx_']['__ptr_']
+        # result = f'{result} ctx: {ctx.dereference().format_string() if int(ctx) else "[no ctx]"}'
         thread: int = int(self.value['attached_thread_'])
         if thread:
             result = f'{result} - thr: {thread:016x}'
@@ -188,6 +190,8 @@ class AsioThread:
 
     def to_string(self) -> str:
         result = f'{int(self.value.address):016x}'
+        ctx: int = self.value['ctx_']['__ptr_']
+        result = f'{result} ctx: {ctx.dereference().format_string() if int(ctx) else "[no ctx]"}'
         if int(self.value.address) == int(self.current().value.address):
             return ansi(result, R.style_high)
         else:
