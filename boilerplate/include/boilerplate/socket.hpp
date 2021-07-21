@@ -115,7 +115,7 @@ struct vma_api
 private:
   [[nodiscard]] boost::leaf::result<void> init()
   {
-	  ptr = ::vma_get_api();
+    ptr = ::vma_get_api();
     if(!ptr)
       return BOOST_LEAF_NEW_ERROR();
 
@@ -233,11 +233,11 @@ public:
 
 #elif defined(USE_LIBVMA)
 
-		const std::size_t nb_completions = vma_api::instance().socketxtreme_poll(vma_ring_fd_, completions_.data(), completions_.size(), 0);
+    const std::size_t nb_completions = vma_api::instance().socketxtreme_poll(vma_ring_fd_, completions_.data(), completions_.size(), 0);
     std::for_each_n(completions_.begin(), nb_completions, [&](auto &&completion) {
       assert(completion.event & VMA_SOCKETXTREME_PACKET);
       const auto &packet = completion.packet;
-  	  assert(packet.num_bufs = 1);
+      assert(packet.num_bufs = 1);
       std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(packet.hw_timestamp), asio::const_buffer(packet.buff_lst->payload, packet.total_len));
     });
     std::for_each_n(completions_.begin(), nb_completions, [&](auto &&completion) {
@@ -245,7 +245,7 @@ public:
     });
 
 #elif defined(USE_RECVMMSG)
-      // recvmmsg timeout parameter is buggy
+    // recvmmsg timeout parameter is buggy
     auto spin_duration = spin_duration_;
     const std::size_t nb_messages_read = BOOST_LEAF_ERRNO_TRYX(::recvmmsg(native_handle(), msgvec_.data(), nb_messages, MSG_WAITFORONE, &spin_duration), _ > 0);
 
