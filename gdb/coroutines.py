@@ -98,7 +98,7 @@ class LeafSlot:
         return int(self.value['top_']) != 0
 
     def to_string(self):
-        return f'{self.value["value_"]} {self.value["enable_deep_frame_deactivation_"]}' if is_valid else 'invalid'
+        return f'{self.value["value_"]} {self.value["enable_deep_frame_deactivation_"]}' if self.is_valid else 'invalid'
 
     def current(self) -> Optional[gdb.Value]:
         return self.current_(self.value.type.template_argument(0))
@@ -164,8 +164,8 @@ class AsioFrame:
 
     def to_string(self) -> str:
         result: str = f'{self.value["coro_"]}'
-        # ctx: int = self.value['ctx_']['__ptr_']
-        # result = f'{result} ctx: {ctx.dereference().format_string() if int(ctx) else "[no ctx]"}'
+        ctx: int = self.value['ctx_']['__ptr_']
+        result = f'{result} ctx: {ctx.dereference().format_string() if int(ctx) else "[no ctx]"}'
         thread: int = int(self.value['attached_thread_'])
         if thread:
             result = f'{result} - thr: {thread:016x}'
@@ -180,7 +180,10 @@ class AsioThread:
 
     @property
     def frames(self) -> Iterable[gdb.Value]:
-        current = self.value['top_of_stack_']
+        frame = self.value['bottom_of_stack_']['frame_']
+        if not frame:
+            return
+        current = frame['top_of_stack_']
         while current:
             yield current
             current = current['caller_']
@@ -268,7 +271,7 @@ def print_context(arg: str, from_tty: bool):
     if current is None:
         return
     print(current.to_string())
-    for slot in next(current.slots).chain:
+    for slot in current.slots[0].chain:
         print(slot.to_string())
 
 @command

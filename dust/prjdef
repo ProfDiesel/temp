@@ -17,6 +17,7 @@ thirdparties = {thirdparty:
         'frozen_nortti',
         'gsl',
         'leaf_nortti_nothreads',
+        'libvma',
         'observer-ptr-lite',
         'openonload',
         'rangeless',
@@ -53,13 +54,21 @@ Copy(
     'preprocessed/feed/feed.hpp',
 )
 
-Default(Alias('ppf', (Executable('ppf', objects=(Cxx('src/main.cpp', pch=pch),)),)))
+Default(Alias('dust', (Executable('dust', objects=(Cxx('src/main.cpp', pch=pch),)),)))
 
 with env():
     Apply(CxxDef('USE_TCPDIRECT'))
     Copy(preprocessed := Cxx('src/main.cpp', pch=pch, preprocess_only=True, quick_build_alias=None), 'preprocessed/main.i') # to be used by clang dump-record-layouts
-    Copy(object_ := Cxx(preprocessed, pch=pch, compile_only=True, quick_build_alias=None), 'preprocessed/main.s') # to be used by llvm-mca
-    #Alias('ppf_ol', (Executable('ppf_ol', objects=(object_, *thirdparties['openonload'].ARCHIVES)),))
+    Copy(compiled_ := Cxx(preprocessed, pch=pch, compile_only=True, quick_build_alias=None), 'preprocessed/main.s') # to be used by llvm-mca
+    Alias('dust_onload', (Executable('dust_onload', objects=(compiled_, *thirdparties['openonload'].ARCHIVES)),))
+
+with env():
+    Apply(CxxDef('USE_LIBVMA'))
+    Alias('dust_vma', (Executable('dust_vma', objects=(Cxx('src/main.cpp', name='main_vma', pch=pch, quick_build_alias=None),)),))
+
+with env():
+    Apply(CxxDef('USE_RECVMMSG'))
+    Alias('dust_recvmmsg', (Executable('dust_recvmmsg', objects=(Cxx('src/main.cpp', name='main_recvmmsg', pch=pch, quick_build_alias=None),)),))
 
 with env('benchmark'):
     Apply(ThirdParty('benchmark').FLAGS)
@@ -118,9 +127,3 @@ with env('test/properties'):
     fuzzable_exe = Executable('fuzzable', objects=(Cxx('fuzzed.cpp', pch=pch),))
 
 Alias('test', (test_exe, fuzzable_exe))
-
-with env('playground'):
-    #Apply(CxxDef('ASIO_ENABLE_HANDLER_TRACKING'))
-    leaf_coro = Executable('leaf_coro', objects=(Cxx('leaf_coro.cpp', pch=pch),))
-
-Alias('leaf_coro', (leaf_coro,))

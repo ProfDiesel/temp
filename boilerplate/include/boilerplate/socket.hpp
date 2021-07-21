@@ -10,6 +10,10 @@
 #include <asio/ip/multicast.hpp>
 #include <asio/ip/udp.hpp>
 
+#if defined(USE_TCPDIRECT) || defined(USE_LIBVMA)
+#include <boost/noncopyable.hpp>
+#endif
+
 #include <gsl/util>
 
 #include <iostream>
@@ -25,6 +29,10 @@
 #  include <etherfabric/vi.h>
 #  include <zf/zf.h>
 #endif // defined(USE_TCPDIRECT)
+
+#if defined(USE_LIBVMA)
+#  include <vma/vma_extra.h>
+#endif // defined(USE_LIBVMA)
 
 #if defined(USE_TCPDIRECT)
 
@@ -47,7 +55,11 @@ struct static_stack
   ::ef_pio pio;
 
   // set -x ZF_ATTR "interface=enp4s0f0;log_level=3:ctpio_mode=ct;rx_timestamping=1"
-  static_stack() noexcept { init(); }
+  static_stack() noexcept
+  {
+    const auto r = init();
+    assert(r);
+  }
 
   static const auto &instance() noexcept
   {
@@ -56,7 +68,7 @@ struct static_stack
   }
 
 private:
-  boost::leaf::result<void> init()
+  [[nodiscard]] boost::leaf::result<void> init()
   {
     BOOST_LEAF_RC_TRY(::zf_init());
 
@@ -83,13 +95,42 @@ private:
 
 #endif // defined(USE_TCPDIRECT)
 
+#if defined(USE_LIBVMA)
+struct vma_api 
+{
+  ::vma_api_t *ptr = nullptr;
+
+  vma_api() noexcept
+  {
+    const auto r = init();
+    assert(r);
+  }
+
+  static const auto &instance() noexcept
+  {
+    static vma_api instance;
+    return *instance.ptr;
+  }
+
+private:
+  [[nodiscard]] boost::leaf::result<void> init()
+  {
+	  ptr = ::vma_get_api();
+    if(!ptr)
+      return BOOST_LEAF_NEW_ERROR();
+
+    return boost::leaf::success();
+  }
+};
+#endif
+
 using namespace std::chrono_literals;
 
 //
 //
 // UDP multicast reader
 #if defined(USE_TCPDIRECT)
-class multicast_udp_reader final
+class multicast_udp_reader final : public boost::noncopyable
 #else
 class multicast_udp_reader final : public asio::ip::udp::socket
 #endif
@@ -100,33 +141,32 @@ class multicast_udp_reader final : public asio::ip::udp::socket
   static constexpr auto nb_messages = 32;
 
 public:
-#if defined(USE_TCPDIRECT)
+#if defined(LINUX) && !defined(USE_TCPDIRECT) && !defined(USE_LIBVMA)
+  static boost::leaf::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port,
+                                                     const std::chrono::nanoseconds &spin_duration = {}, bool timestamping = false) noexcept
+#else  // defined(LINUX)) && !defined(USE_TCPDIRECT) && !defined(USE_LIBVMA)
   static boost::leaf::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
+#endif // defined(LINUX)) && !defined(USE_TCPDIRECT) && !defined(USE_LIBVMA)
   {
-    const asio::ip::udp::endpoint addr = BOOST_LEAF_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _))->endpoint();
+    const asio::ip::udp::endpoint endpoint = BOOST_LEAF_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _)).begin()->endpoint();
+
+#if defined(USE_TCPDIRECT)
 
     ::zfur *zock_ = nullptr;
     BOOST_LEAF_RC_TRY(::zfur_alloc(&zock_, static_stack::instance().stack.get(), static_stack::instance().attr.get()));
     zock_ptr zock {zock_};
 
-    BOOST_LEAF_RC_TRY(::zfur_addr_bind(zock.get(), const_cast<sockaddr *>(addr.data()), sizeof(*addr.data()), nullptr, 0, 0));
+    BOOST_LEAF_RC_TRY(::zfur_addr_bind(zock.get(), const_cast<sockaddr *>(endpoint.data()), sizeof(*endpoint.data()), nullptr, 0, 0));
 
     return multicast_udp_reader(std::move(zock));
-  }
+
 #else
-#  if defined(LINUX)
-  static boost::leaf::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port,
-                                                     const std::chrono::nanoseconds &spin_duration = {}, bool timestamping = false) noexcept
-#  else  // defined(LINUX)
-  static boost::leaf::result<multicast_udp_reader> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
-#  endif // defined(LINUX)
-  {
-    const auto endpoint = BOOST_LEAF_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _)).begin()->endpoint();
+
     asio::ip::udp::socket socket {service};
     BOOST_LEAF_EC_TRY(socket.open(endpoint.protocol(), _));
     BOOST_LEAF_EC_TRY(socket.set_option(asio::ip::udp::socket::reuse_address(true), _));
 
-#  if defined(LINUX)
+#  if defined(LINUX) && !defined(USE_LIBVMA)
     using busy_poll = asio::detail::socket_option::integer<SOL_SOCKET, SO_BUSY_POLL>;
     using incoming_cpu = asio::detail::socket_option::integer<SOL_SOCKET, SO_INCOMING_CPU>;
     // NOLINTNEXTLINE(hicpp-signed-bitwise)
@@ -148,18 +188,26 @@ public:
     BOOST_LEAF_EC_TRY([&]() {
       _ = std::error_code(::setsockopt(socket.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &as_timeval, sizeof(as_timeval)), std::generic_category());
     }());
-#  endif // defined(LINUX)
+#  endif // defined(LINUX) && !defined(USE_LIBVMA)
 
     socket.bind(endpoint);
     BOOST_LEAF_EC_TRY(socket.set_option(asio::ip::multicast::join_group(endpoint.address()), _));
 
-#  if defined(LINUX)
+#  if defined(USE_LIBVMA)
+    int vma_ring_fd = 0;
+    const auto rc = vma_api::instance().get_socket_rings_fds(socket.native_handle(), &vma_ring_fd, 1);
+    if(rc < 0)
+      return BOOST_LEAF_NEW_ERROR();
+
+    return multicast_udp_reader(std::move(socket), vma_ring_fd);
+#  elif defined(USE_RECVMMSG)
     return multicast_udp_reader(std::move(socket), spin_duration);
-#  else  // defined(LINUX)
+#  else  // defined(USE_RECVMMSG)
     return multicast_udp_reader(std::move(socket));
-#  endif // defined(LINUX)
-  }
+#  endif // defined(USE_LIBVMA)
+
 #endif   // defined(USE_TCPDIRECT)
+  }
 
   [[using gnu: always_inline, flatten, hot]] inline auto operator()(auto &&continuation) noexcept -> boost::leaf::result<void>
   {
@@ -183,10 +231,23 @@ public:
 
     std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(timestamp), asio::const_buffer(msg.msg.iov[0].iov_base, msg.msg.iov[0].iov_len));
 
-#elif defined(LINUX)
+#elif defined(USE_LIBVMA)
+
+		const std::size_t nb_completions = vma_api::instance().socketxtreme_poll(vma_ring_fd_, completions_.data(), completions_.size(), 0);
+    std::for_each_n(completions_.begin(), nb_completions, [&](auto &&completion) {
+      assert(completion.event & VMA_SOCKETXTREME_PACKET);
+      auto &packet = completion.packet;
+  	  assert(packet.num_bufs = 1);
+      std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(packet.hw_timestamp), asio::const_buffer(packet.buff_lst->payload, packet.total_len));
+    });
+    std::for_each_n(completions_.begin(), nb_completions, [&](auto &&completion) {
+      vma_api::instance().socketxtreme_free_vma_packets(&completion.packet, 1);
+    });
+
+#elif defined(USE_RECVMMSG)
       // recvmmsg timeout parameter is buggy
     auto spin_duration = spin_duration_;
-    const auto nb_messages_read = BOOST_LEAF_ERRNO_TRYX(::recvmmsg(native_handle(), msgvec_.data(), nb_messages, MSG_WAITFORONE, &spin_duration), _ > 0);
+    const std::size_t nb_messages_read = BOOST_LEAF_ERRNO_TRYX(::recvmmsg(native_handle(), msgvec_.data(), nb_messages, MSG_WAITFORONE, &spin_duration), _ > 0);
 
     const auto get_timestamp = [](msghdr *msg)
     {
@@ -205,14 +266,14 @@ public:
     };
 
     const auto timestamp = get_timestamp(&msgvec_[0].msg_hdr);
-    for(auto i = 0; i < nb_messages_read; ++i)
+    for(std::size_t i = 0; i != nb_messages_read; ++i)
       std::forward<decltype(continuation)>(continuation)(timestamp, asio::const_buffer(buffers_[i].data(), msgvec_[i].msg_len));
 
-#else  // defined(LINUX)
+#else  // defined(USE_TCPDIRECT)
     asio::const_buffer buffer(buffer_.data(), buffer_size);
     const auto msg_length = receive(buffer_);
-    std::forward<decltype(continuation)>(continuation)({}, buffer_);
-#endif // defined(LINUX)
+    std::forward<decltype(continuation)>(continuation)({}, asio::buffer(buffer_.data(), msg_length));
+#endif // defined(USE_TCPDIRECT)
 
     return {};
   }
@@ -223,8 +284,15 @@ private:
 
   zock_ptr zock_;
 
-  explicit multicast_udp_reader(zock_ptr &&zock): zock_(std::move(zock)) {}
-#elif defined(LINUX)
+  explicit multicast_udp_reader(zock_ptr &&zock) noexcept: zock_(std::move(zock)) {}
+
+#elif defined(USE_LIBVMA)
+  const int vma_ring_fd_;
+  std::array<vma_completion_t, 16> completions_;
+
+  multicast_udp_reader(asio::ip::udp::socket && socket, int vma_ring_fd) noexcept: asio::ip::udp::socket(std::move(socket)), vma_ring_fd_(vma_ring_fd) {}
+
+#elif defined(USE_RECVMMSG)
   const std::timespec spin_duration_;
 
   std::array<std::array<char, buffer_size>, nb_messages> buffers_ {};
@@ -243,14 +311,14 @@ private:
   }
   std::array<mmsghdr, nb_messages> msgvec_ = make_msgvec(iovecs_, std::make_index_sequence<nb_messages>());
 
-  multicast_udp_reader(asio::ip::udp::socket &&socket, const std::chrono::nanoseconds &spin_duration):
+  multicast_udp_reader(asio::ip::udp::socket &&socket, const std::chrono::nanoseconds &spin_duration) noexcept:
     asio::ip::udp::socket(std::move(socket)), spin_duration_(to_timespec(spin_duration))
   {
   }
-#else  // defined(LINUX)
+#else  // defined(USE_RECVMMSG)
   std::array<char, buffer_size> buffer_ {};
 
-  explicit multicast_udp_reader(asio::ip::udp::socket && socket): asio::ip::udp::socket(std::move(socket)) {}
+  explicit multicast_udp_reader(asio::ip::udp::socket && socket) noexcept: asio::ip::udp::socket(std::move(socket)) {}
 #endif // defined(USE_TCPDIRECT)
 };
 
@@ -258,15 +326,15 @@ private:
 //
 // UDP writer
 #if defined(USE_TCPDIRECT)
-class udp_writer final
+class udp_writer final : public boost::noncopyable
 #else
 class udp_writer final : public asio::ip::udp::socket
 #endif
 {
 public:
-#if defined(USE_TCPDIRECT)
   static boost::leaf::result<udp_writer> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
   {
+#if defined(USE_TCPDIRECT)
     const asio::ip::udp::endpoint addr_local(asio::ip::udp::v4(), 0),
       addr_remote = BOOST_LEAF_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _))->endpoint();
 
@@ -276,43 +344,44 @@ public:
     zock_ptr zock {zock_};
 
     return udp_writer(std::move(zock));
-  }
 #else // defined(USE_TCPDIRECT)
-  static boost::leaf::result<udp_writer> create(asio::io_context &service, std::string_view address, std::string_view port) noexcept
-  {
     const auto endpoint = BOOST_LEAF_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _)).begin()->endpoint();
     asio::ip::udp::socket socket {service};
     BOOST_LEAF_EC_TRY(socket.connect(endpoint, _));
     return udp_writer {std::move(socket)};
-  }
 #endif
+  }
 
-#if defined(USE_TCPDIRECT)
   [[using gnu: always_inline, flatten, hot]] inline boost::leaf::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
   {
+#if defined(USE_TCPDIRECT)
     ::zfut_send_single(zock_.get(), buffer.data(), buffer.size());
 
     ::zf_pkt_report reports[1];
     int count = 1;
     BOOST_LEAF_RC_TRY(::zfut_get_tx_timestamps(zock_.get(), reports, &count));
     return UNLIKELY(count > 0) ? to_time_point<network_clock>(reports[0].timestamp) : network_clock::time_point();
-  }
-  [[using gnu: noinline, cold]] boost::leaf::result<network_clock::time_point> send_blank(const asio::const_buffer &buffer) noexcept
-  {
-    ::zfut_send_single_warm(zock_.get(), buffer.data(), buffer.size());
-    return network_clock::time_point();
-  }
+#elif defined(USE_LIBVMA)
+    ::send(native_handle(), buffer.data(), buffer.size(), 0);
+    return network_clock::now();
 #else  // defined(USE_TCPDIRECT)
-  [[using gnu: always_inline, flatten, hot]] inline boost::leaf::result<network_clock::time_point> send(const asio::const_buffer &buffer) noexcept
-  {
     BOOST_LEAF_EC_TRY(asio::ip::udp::socket::send(buffer, 0, _));
     return network_clock::now();
+#endif
   }
-  [[using gnu: noinline, cold]] boost::leaf::result<network_clock::time_point> send_blank([[maybe_unused]] const asio::const_buffer &) noexcept
+
+  [[using gnu: noinline, cold]] boost::leaf::result<network_clock::time_point> send_blank(const asio::const_buffer &buffer) noexcept
   {
-    return network_clock::now();
+#if defined(USE_TCPDIRECT)
+    ::zfut_send_single_warm(zock_.get(), buffer.data(), buffer.size());
+    return network_clock::time_point();
+#elif defined(USE_LIBVMA)
+    ::send(native_handle(), buffer.data(), buffer.size(), VMA_SND_FLAGS_DUMMY);
+    return network_clock::time_point();
+#else  // defined(USE_TCPDIRECT)
+    return network_clock::time_point();
+#endif
   }
-#endif // defined(USE_TCPDIRECT)
 
 private:
 #if defined(USE_TCPDIRECT)

@@ -260,11 +260,11 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 #else
       const auto [updates_host, updates_port] = (config::address)*feed["update"_hs];
       auto update_source = BOOST_LEAF_TRYX(
-#  if defined(LINUX) && !defined(USE_TCPDIRECT)
+#  if defined(LINUX) && !defined(USE_TCPDIRECT) && !defined(USE_LIBVMA)
         multicast_udp_reader::create(service, updates_host, updates_port, feed["spin_duration"].get_or(1'000ns), feed["timestamping"].get_or(false))
 #  else
         multicast_udp_reader::create(service, updates_host, updates_port)
-#  endif // defined(LINUX) && !defined(USE_TCPDIRECT)
+#  endif // defined(LINUX) && !defined(USE_TCPDIRECT) && !defined(USE_LIBVMA)
       );
 #endif   // defined(BACKTEST_HARNESS)
 
