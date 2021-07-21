@@ -58,17 +58,17 @@ Default(Alias('dust', (Executable('dust', objects=(Cxx('src/main.cpp', pch=pch),
 
 with env():
     Apply(CxxDef('USE_TCPDIRECT'))
-    Copy(preprocessed := Cxx('src/main.cpp', pch=pch, preprocess_only=True, quick_build_alias=None), 'preprocessed/main.i') # to be used by clang dump-record-layouts
+    Copy(preprocessed := Cxx('src/main.cpp', name='main_tcpdirect', pch=pch, preprocess_only=True), 'preprocessed/main.i') # to be used by clang dump-record-layouts
     Copy(compiled_ := Cxx(preprocessed, pch=pch, compile_only=True, quick_build_alias=None), 'preprocessed/main.s') # to be used by llvm-mca
     Alias('dust_onload', (Executable('dust_onload', objects=(compiled_, *thirdparties['openonload'].ARCHIVES)),))
 
 with env():
     Apply(CxxDef('USE_LIBVMA'))
-    Alias('dust_vma', (Executable('dust_vma', objects=(Cxx('src/main.cpp', name='main_vma', pch=pch, quick_build_alias=None),)),))
+    Alias('dust_vma', (Executable('dust_vma', objects=(Cxx('src/main.cpp', name='main_vma', pch=pch),)),))
 
 with env():
     Apply(CxxDef('USE_RECVMMSG'))
-    Alias('dust_recvmmsg', (Executable('dust_recvmmsg', objects=(Cxx('src/main.cpp', name='main_recvmmsg', pch=pch, quick_build_alias=None),)),))
+    Alias('dust_recvmmsg', (Executable('dust_recvmmsg', objects=(Cxx('src/main.cpp', name='main_recvmmsg', pch=pch),)),))
 
 with env('benchmark'):
     Apply(ThirdParty('benchmark').FLAGS)

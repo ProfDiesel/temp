@@ -184,7 +184,7 @@ public:
       BOOST_LEAF_EC_TRY(socket.set_option(network_timestamping(true), _));
 
     // recvmmsg timeout parameter is buggy
-    auto as_timeval = to_timeval(spin_duration);
+    const auto as_timeval = to_timeval(spin_duration);
     BOOST_LEAF_EC_TRY([&]() {
       _ = std::error_code(::setsockopt(socket.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &as_timeval, sizeof(as_timeval)), std::generic_category());
     }());
@@ -221,7 +221,7 @@ public:
     } msg;
 
     ::zfur_zc_recv(zock_.get(), &msg.msg, 0);
-    auto _ = gsl::finally([&]() { ::zfur_zc_recv_done(zock_.get(), &msg.msg); });
+    const auto _ = gsl::finally([&]() { ::zfur_zc_recv_done(zock_.get(), &msg.msg); });
     if(!msg.msg.iovcnt)
       return {};
 
@@ -236,7 +236,7 @@ public:
 		const std::size_t nb_completions = vma_api::instance().socketxtreme_poll(vma_ring_fd_, completions_.data(), completions_.size(), 0);
     std::for_each_n(completions_.begin(), nb_completions, [&](auto &&completion) {
       assert(completion.event & VMA_SOCKETXTREME_PACKET);
-      auto &packet = completion.packet;
+      const auto &packet = completion.packet;
   	  assert(packet.num_bufs = 1);
       std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(packet.hw_timestamp), asio::const_buffer(packet.buff_lst->payload, packet.total_len));
     });
@@ -272,7 +272,7 @@ public:
 #else  // defined(USE_TCPDIRECT)
     asio::const_buffer buffer(buffer_.data(), buffer_size);
     const auto msg_length = receive(buffer_);
-    std::forward<decltype(continuation)>(continuation)({}, asio::buffer(buffer_.data(), msg_length));
+    std::forward<decltype(continuation)>(continuation)({}, asio::const_buffer(buffer_.data(), msg_length));
 #endif // defined(USE_TCPDIRECT)
 
     return {};
