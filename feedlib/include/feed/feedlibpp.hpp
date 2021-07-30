@@ -117,7 +117,7 @@ public:
   server(std::string_view snapshot_address, std::string_view snapshot_service, std::string_view updates_address, std::string_view updates_service, future &future) noexcept
   : self(::up_server_new(snapshot_address.data(), snapshot_service.data(), updates_address.data(), updates_service.data(), future.get())) {}
 
-  std::size_t poll() noexcept { return ::up_server_poll(self.get()); }
+  std::size_t poll(future &future) noexcept { return ::up_server_poll(self.get(), future.get()); }
 
   future push_update(const states &states) noexcept { return future::wrap(::up_server_push_update(self.get(), reinterpret_cast<const ::up_state* const*>(states.data()), states.size())); }
   future replay(const void *buffer, std::size_t buffer_size) noexcept { return future::wrap(::up_server_replay(self.get(), buffer, buffer_size)); }

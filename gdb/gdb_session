@@ -4,9 +4,9 @@ dashboard -enable off
 dashboard -layout coroutines source
 dashboard source -style height 7
 
-#set logging file gdb/gdb.out
-#set loggin overwrite on
-#set loggin on
+set logging file ../gdb/gdb.out
+set loggin overwrite on
+set loggin on
 
 #trace asio::detail::awaitable_thread<boost::leaf::executor>::awaitable_thread(asio::awaitable<void, boost::leaf::executor>, boost::leaf::executor const&)
 #trace asio::detail::awaitable_thread<boost::leaf::executor>::awaitable_thread(asio::detail::awaitable_thread<boost::leaf::executor>&&)
@@ -26,12 +26,14 @@ rbreak asio::detail::awaitable_thread<.*>::~awaitable_thread()$
     continue
   end
 
-rbreak ^boost::leaf::context<.*>::activate()
-rbreak ^boost::leaf::context<.*>::deactivate()
-#rbreak boost::leaf::new_error
+rbreak ^boost::leaf::context<.*>::activate()$
+rbreak ^boost::leaf::context<.*>::deactivate()$
+rbreak ^boost::leaf::new_error
 
-rbreak ^boost::leaf::leaf_detail::slot<.*>::activate()
-rbreak ^boost::leaf::leaf_detail::slot<.*>::deactivate()
+#rbreak ^boost::leaf::leaf_detail::slot<.*>::activate()$
+#rbreak ^boost::leaf::leaf_detail::slot<.*>::deactivate()$
+
+rbreak asio::detail::awaitable_thread<boost::leaf::executor>::pump()$
 
 #run
 #set logging off

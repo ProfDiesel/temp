@@ -106,7 +106,7 @@ auto main() -> int
                                        [[likely]]
                                        {
                                          fast_path();
-                                         service.poll();
+                                         BOOST_LEAF_EC_TRY(service.poll(_));
                                          logger->flush();
                                        }
                                      logger->log(logger::info, "Executor stopped.");

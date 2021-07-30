@@ -15,6 +15,7 @@ thirdparties = {thirdparty:
         'boost_nortti',
         'fmt',
         'leaf_nortti_nothreads',
+        'range-v3',
         'stdfunc_nortti',
         'ut',
     )

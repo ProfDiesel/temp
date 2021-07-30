@@ -21,18 +21,26 @@ int main(int argc, char *argv[])
     ::exit(EXIT_FAILURE);
   }
 
-  up::future result;
+  up::future result, result0;
   up::server server("0.0.0.0", "4400", "0.0.0.0", "4401", result);
 
   while(!result.is_set())
-    server.poll();
+  {
+    server.poll(result0);
+    if(!result0)
+      ::fprintf(stderr, "%s\n", result0.message().data());
+  }
   if(!result)
     ::fprintf(stderr, "%s\n", result.message().data());
 
   result = server.replay(buffer, buffer_size);
 
   while(!result.is_set())
-    server.poll();
+  {
+    server.poll(result0);
+    if(!result0)
+      ::fprintf(stderr, "%s\n", result0.message().data());
+  }
   if(!result)
     ::fprintf(stderr, "%s\n", result.message().data());
 

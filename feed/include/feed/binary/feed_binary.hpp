@@ -23,6 +23,8 @@
 
 #include <boost/endian/conversion.hpp>
 
+#include <range/v3/span.hpp>
+
 #include <std_function/function.h>
 
 #include <algorithm>
@@ -117,7 +119,8 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
     if(UNLIKELY(!instrument_closure))
       continue;
 
-    std::for_each_n(&message->update, message->nb_updates, [&](auto &update) { update_handler(timestamp, update, instrument_closure); });
+    for(auto &&update: ranges::make_span(&message->update, message->nb_updates))
+      update_handler(timestamp, update, instrument_closure);
   }
 
   return reinterpret_cast<const std::byte*>(message) - buffer_begin;

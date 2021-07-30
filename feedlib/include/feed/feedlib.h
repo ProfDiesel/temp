@@ -74,7 +74,7 @@ extern "C"
 
   up_server *up_server_new(const char *snapshot_host, const char *snapshot_service, const char *updates_host, const char *updates_service, up_future *future);
   void up_server_free(up_server *self);
-  size_t up_server_poll(up_server *self);
+  size_t up_server_poll(up_server *self, up_future *future);
   up_future *up_server_push_update(up_server *self, const up_state *const states[], size_t nb_states);
   up_future *up_server_replay(up_server *self, const void *buffer, std::size_t buffer_size);
   void up_server_get_state(up_server *self, up_instrument_id_t instrument, up_state *state);

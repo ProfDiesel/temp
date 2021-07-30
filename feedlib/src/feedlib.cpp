@@ -226,7 +226,7 @@ struct up_server
   {
     asio::co_spawn(
       service,
-      [&]() noexcept -> boost::leaf::awaitable<void>
+      [&, snapshot_host=std::string(snapshot_host), snapshot_service=std::string(snapshot_service), updates_host=std::string(updates_host), updates_service=std::string(updates_service)]() noexcept -> boost::leaf::awaitable<void>
       {
         co_await boost::leaf::co_try_handle_all(
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
@@ -261,7 +261,19 @@ extern "C" up_server *up_server_new(const char *snapshot_host, const char *snaps
 extern "C" void up_server_free(up_server *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" std::size_t up_server_poll(up_server *self) { return self->service.poll(); }
+extern "C" std::size_t up_server_poll(up_server *self, up_future *future)
+{
+  std::error_code error_code;
+  auto result = self->service.poll(error_code);
+  if(error_code)
+  {
+    std::ostringstream os;
+    os << "error_code " << error_code.value() << ":" << error_code.message();
+    future->value = os.str();
+  }
+  future->value = up_future::ok_v;
+  return result;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" up_future *up_server_push_update(up_server *self, const up_state *const states[], std::size_t nb_states)
@@ -272,8 +284,8 @@ extern "C" up_future *up_server_push_update(up_server *self, const up_state *con
   auto *const result = up_future_new();
   asio::co_spawn(
     self->service,
-    [&, states = std::move(states_)]() noexcept -> boost::leaf::awaitable<void>
-    { co_await boost::leaf::co_try_handle_all([&, states = std::move(states)]() { return self->server.update(states); }, make_handlers(result)); },
+    [self, states=std::move(states_), result]() noexcept -> boost::leaf::awaitable<void>
+    { co_await boost::leaf::co_try_handle_all([&]() { return self->server.update(states); }, make_handlers(result)); },
     asio::detached);
   return result;
 }
@@ -287,15 +299,15 @@ extern "C" up_future *up_server_replay(up_server *self, const void *buffer, std:
   auto *const result = up_future_new();
   asio::co_spawn(
     self->service,
-    [&]() noexcept -> boost::leaf::awaitable<void>
+    [self, buffer, buffer_size, result]() noexcept -> boost::leaf::awaitable<void>
     {
       co_await boost::leaf::co_try_handle_all(
         [&]()
         {
-          return feed::replay([self](auto states) { return self->server.update(std::forward<decltype(states)>(states)); },
-                              [self, clock_0 = clock_t::now()](auto timestamp) mutable -> boost::leaf::awaitable<boost::leaf::result<void>>
+          return feed::replay([&](auto states) { return self->server.update(std::forward<decltype(states)>(states)); },
+                              [&, clock_0 = clock_t::now()](auto timestamp) mutable -> boost::leaf::awaitable<boost::leaf::result<void>>
                               {
-                                BOOST_LEAF_ASIO_CO_TRY(co_await timer_t(self->service, timestamp).async_wait(_));
+                                BOOST_LEAF_ASIO_CO_TRY(co_await timer_t(self->service, clock_0 + timestamp).async_wait(_));
                                 co_return boost::leaf::success();
                               },
                               asio::buffer(buffer, buffer_size));

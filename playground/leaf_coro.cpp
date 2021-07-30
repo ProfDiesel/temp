@@ -55,6 +55,7 @@ int main()
       co_return;
     },
     asio::detached);
+
   asio::co_spawn(
     io_context,
     [&]() noexcept -> bl::awaitable<void> {
@@ -76,5 +77,9 @@ int main()
     },
     asio::detached);
 
-  io_context.run();
+  while(!io_context.stopped())
+  {
+    //std::clog << "poll\n";
+    io_context.poll();
+  }
 }

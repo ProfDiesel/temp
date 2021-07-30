@@ -98,7 +98,7 @@ class LeafSlot:
         return int(self.value['top_']) != 0
 
     def to_string(self):
-        return f'{self.value["value_"]} {self.value["enable_deep_frame_deactivation_"]}' if self.is_valid else 'invalid'
+        return f'value:{self.value["value_"]} deep:{self.value["enable_deep_frame_deactivation_"]}' if self.is_valid else 'invalid'
 
     def current(self) -> Optional[gdb.Value]:
         return self.current_(self.value.type.template_argument(0))
@@ -180,10 +180,15 @@ class AsioThread:
 
     @property
     def frames(self) -> Iterable[gdb.Value]:
-        frame = self.value['bottom_of_stack_']['frame_']
-        if not frame:
-            return
-        current = frame['top_of_stack_']
+        try:
+            # asio 1.19
+            frame = self.value['bottom_of_stack_']['frame_']
+            if not frame:
+                return
+            current = frame['top_of_stack_']
+        except gdb.error:
+            # asio 1.18
+            current = self.value['top_of_stack_']
         while current:
             yield current
             current = current['caller_']
@@ -193,9 +198,11 @@ class AsioThread:
 
     def to_string(self) -> str:
         result = f'{int(self.value.address):016x}'
-        ctx: int = self.value['ctx_']['__ptr_']
-        result = f'{result} ctx: {ctx.dereference().format_string() if int(ctx) else "[no ctx]"}'
-        if int(self.value.address) == int(self.current().value.address):
+        with suppress(gdb.error):
+          ctx: int = self.value['ctx_']['__ptr_']
+          result = f'{result} ctx: {ctx} {ctx.dereference().format_string() if int(ctx) else "[no ctx]"}'
+        current = self.current()
+        if current is not None and int(self.value.address) == int(current.value.address):
             return ansi(result, R.style_high)
         else:
             return result

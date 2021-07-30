@@ -16,6 +16,8 @@
 
 #include <gsl/util>
 
+#include <range/v3/view/take.hpp>
+
 #include <iostream>
 #if defined(LINUX)
 #  include <linux/net_tstamp.h>
@@ -234,15 +236,15 @@ public:
 #elif defined(USE_LIBVMA)
 
     const std::size_t nb_completions = vma_api::instance().socketxtreme_poll(vma_ring_fd_, completions_.data(), completions_.size(), 0);
-    std::for_each_n(completions_.begin(), nb_completions, [&](auto &&completion) {
+    for(auto &&completion: completions_ | range::view::take(nb_completions))
+    {
       assert(completion.event & VMA_SOCKETXTREME_PACKET);
       const auto &packet = completion.packet;
       assert(packet.num_bufs = 1);
       std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(packet.hw_timestamp), asio::const_buffer(packet.buff_lst->payload, packet.total_len));
-    });
-    std::for_each_n(completions_.begin(), nb_completions, [&](auto &&completion) {
+    }
+    for(auto &&completion: completions_ | range::view::take(nb_completions))
       vma_api::instance().socketxtreme_free_vma_packets(&completion.packet, 1);
-    });
 
 #elif defined(USE_RECVMMSG)
     // recvmmsg timeout parameter is buggy
