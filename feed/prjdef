@@ -21,11 +21,15 @@ thirdparties = {thirdparty:
     )
 }
 
+boilerplate = Prjdef('../boilerplate')
+
 FLAGS = (
     IncludeDir(Path(__file__).parent / 'include'),
+    boilerplate.FLAGS,
     *(chain.from_iterable(thirdparty.FLAGS for thirdparty in thirdparties.values()))
 )
 
-Copy(Cxx('include/feed/feed.hpp', preprocess_only=True, flags=FLAGS), 'preprocessed/feed/feed.hpp')
+Apply(FLAGS)
+Copy(Cxx('include/feed/feed.hpp', preprocess_only=True), 'preprocessed/feed/feed.hpp')
 
-Alias('test', (Executable('test', objects=(Cxx('test/main.cpp', pic=True),)),))
+Alias('test', (Executable('test_main', objects=(Cxx('test/main.cpp', pic=True),)),))

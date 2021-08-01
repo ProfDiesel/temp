@@ -195,7 +195,7 @@ def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWa
             walker = source
         else:
             name: str = source if source else f'{type(self).__qualname__}_{uuid4().hex}'
-            object_ = Object(type=type(self).type)
+            object_ = Object(type=type(self)._type)
             config = Config(**{name: object_})
             walker = Walker(config, name, _object=object_)
 
@@ -208,7 +208,7 @@ def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWa
             setattr(self, field_name, value)
 
     def validate(self) -> bool:
-        actual_type: Final[Type[TypedWalker]] = _WALKER_TYPE_REGISTRY[as_str(self['type'])]
+        actual_type: Final[Type[TypedWalker]] = _WALKER_TYPE_REGISTRY[as_str(self['_type'])]
         if not issubclass(actual_type, type(self)):
             return False
         with suppress(ValueError, KeyError):
@@ -219,7 +219,7 @@ def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWa
             return True
         return False
 
-    class_dict = dict(**field_descriptors, _fields=field_descriptors, type=typename, __init__=init, validate=validate)
+    class_dict = dict(**field_descriptors, _fields=field_descriptors, _type=typename, __init__=init, validate=validate)
     result = type(cls.__name__, (*bases, TypedWalker,), class_dict)
     _WALKER_TYPE_REGISTRY[typename] = result
     return result

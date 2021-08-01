@@ -1,13 +1,12 @@
+import re
+from contextlib import suppress
 from functools import reduce
 from operator import or_
-from typing import Iterable, Literal, Optional, Collection, Tuple, Callable, List
-from typing import TYPE_CHECKING, Any
-import re
+from typing import (Set, TYPE_CHECKING, Any, Callable, Collection, Iterable, List,
+                    Literal, Optional, Tuple)
 
 import gdb
 import gdb.printing
-
-
 
 if TYPE_CHECKING:
     import Dashboard
@@ -57,7 +56,7 @@ class CoroutineHandle:
         while not regex.match(current.function().name):
             current = current.older()
             if not current:
-                return
+                return None
         coroutine = current.read_var('this').dereference()
         return cls(coroutine)
 
@@ -85,7 +84,7 @@ class LeafSlot:
         self.value = value
 
     @property
-    def chain(self) -> Iterable['LeafSlots']:
+    def chain(self) -> Iterable['LeafSlot']:
         if not self.is_valid:
             return
         current = self.value
@@ -164,7 +163,7 @@ class AsioFrame:
 
     def to_string(self) -> str:
         result: str = f'{self.value["coro_"]}'
-        ctx: int = self.value['ctx_']['__ptr_']
+        ctx: gdb.Value = self.value['ctx_']['__ptr_']
         result = f'{result} ctx: {ctx.dereference().format_string() if int(ctx) else "[no ctx]"}'
         thread: int = int(self.value['attached_thread_'])
         if thread:
@@ -173,7 +172,7 @@ class AsioFrame:
 
 
 class AsioThread:
-    _thread_ptrs = set()
+    _thread_ptrs: Set[int] = set()
 
     def __init__(self, value: gdb.Value):
         self.value = value
@@ -199,8 +198,8 @@ class AsioThread:
     def to_string(self) -> str:
         result = f'{int(self.value.address):016x}'
         with suppress(gdb.error):
-          ctx: int = self.value['ctx_']['__ptr_']
-          result = f'{result} ctx: {ctx} {ctx.dereference().format_string() if int(ctx) else "[no ctx]"}'
+            ctx: gdb.Value = self.value['ctx_']['__ptr_']
+            result = f'{result} ctx: {ctx} {ctx.dereference().format_string() if int(ctx) else "[no ctx]"}'
         current = self.current()
         if current is not None and int(self.value.address) == int(current.value.address):
             return ansi(result, R.style_high)
@@ -216,7 +215,7 @@ class AsioThread:
         while current.function().name != 'asio::detail::awaitable_thread<boost::leaf::executor>::pump()':
             current = current.older()
             if not current:
-                return
+                return None
         thread = current.read_var('this').dereference()
         return cls(thread)
 
@@ -233,9 +232,9 @@ class AsioThread:
         cls._thread_ptrs = set()
 
     @classmethod
-    def threads(cls):
+    def threads(cls) -> Iterable['AsioThread']:
         type_ = gdb.lookup_type('asio::detail::awaitable_thread<boost::leaf::executor>').pointer()
-        return (gdb.Value(ptr).cast(type_).dereference() for ptr in cls._thread_ptrs)
+        return (cls(gdb.Value(ptr).cast(type_).dereference()) for ptr in cls._thread_ptrs)
 
 
 def _on_new_inferior(inferior: gdb.Inferior):
@@ -270,7 +269,7 @@ def unregister_thread(arg: str, from_tty: bool):
 @command
 def print_threads(arg: str, from_tty: bool):
     for thread in AsioThread.threads():
-        print(thread.format_string())
+        print(thread.value.format_string())
 
 @command
 def print_context(arg: str, from_tty: bool):
@@ -301,11 +300,11 @@ class AsioThreadPanel(Dashboard.Module):
     ) -> Collection[str]:
         out = []
 
-        for thread in AsioThread.threads.values():
+        for thread in AsioThread.threads():
             out.append(thread.to_string())
             for n, frame in thread.children():
                 out.append(
-                    f'{ansi(str(n), R.style_high if n == "0" else R.style_low)}: {frame.format_string()}'
+                    f'{ansi(str(n), R.style_high if n == "0" else R.style_low)}: {frame}'
                 )
         return out
 
@@ -319,6 +318,3 @@ def ipython(arg: gdb.Value, from_tty: bool):
     """ iptython console --existing kernel-XXX.json """
     import IPython
     IPython.embed_kernel()
-
-
-

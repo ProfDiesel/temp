@@ -16,3 +16,6 @@ llvm-mca-13 build/low_overhead/preprocessed/main.s -o build/low_overhead/bin/src
 # dump struct layouts
 ninja $PWD/build/low_overhaed/preprocessed/main.i
 clang-13 -cc1 -x c++ -std=gnu++20 -fdump-record-layouts build/low_overhead/preprocessed/main.i > build/struct_layouts.txt
+
+# complexity / duplication metrics
+lizard --working_threads (nproc) --modified --extension duplicate src

@@ -40,4 +40,5 @@ Apply(CxxDef('LEAN_AND_MEAN'))
 Apply(CxxDef('LOGGER_FMT_COMPILE'))
 Apply(CxxDef('LOGGER_SYSLOG_FORMAT'))
 
-Default(Executable('leaf_coro', objects=(Cxx('leaf_coro.cpp'),)))
+Executable('leaf', objects=(Cxx('leaf.cpp'),))
+Executable('leaf_coro', objects=(Cxx('leaf_coro.cpp'),))

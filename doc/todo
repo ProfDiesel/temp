@@ -25,3 +25,12 @@ Genjutsu: variant dynamiques: déterminées par une liste de flags (similaire au
 feed_server.hpp: finir play()
 backtest_harness.hpp: buffer_feeder::on_snapshot_request, ajouter une state_map
 
+
+
+https://github.com/compudj/librseq
+https://easyperf.net/blog/2019/02/09/Top-Down-performance-analysis-methodology
+https://easyperf.net/blog/2019/04/03/Precise-timing-of-machine-code-with-Linux-perf
+https://github.com/andikleen/pmu-tools
+https://github.com/dry-python
+
+https://github.com/Refinitiv/Real-Time-SDK
