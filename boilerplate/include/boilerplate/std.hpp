@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <experimental/type_traits>
 
 namespace std

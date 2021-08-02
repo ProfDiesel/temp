@@ -7,7 +7,7 @@ ninja -f build/debug/build.ninja -t compdb cxx exe | jq '[.[] | select(.command 
 
 set -x CXX (realpath (which clang++-13))
 clang-tidy-13 -p . -extra-arg=-stdlib==libc++ src/main.cpp 2>&1 | tee build/clang-tidy.log
-cppcheck -j($nproc) --project=compile_commands.json -include build/default/preprocessed/feed/feed.hpp -D__USE_PREPROCESSED_FEED__HPP__ --enable=all --inconclusive --bug-hunting --check-config --xml --clang=clang-12 2> build/cppcheck.xml
+cppcheck -j($nproc) --project=compile_commands.json -include build/default/preprocessed/feed/feed.hpp -D__USE_PREPROCESSED_FEED__HPP__ --enable=all --inconclusive --bug-hunting --check-config --xml --clang=clang-13 2> build/cppcheck.xml
 iwyu_tool -p . --verbose
 
 ninja $PWD/build/low_overhaed/preprocessed/main.s

@@ -46,11 +46,11 @@ using quantity_t = std::uint32_t;
 namespace literals
 {
 #if defined(LEAN_AND_MEAN)
-  inline price_t operator""_p(long double value) { return static_cast<price_t>(value); };
+  inline price_t operator""_p(long double value) { return static_cast<price_t>(value); }
 #elif defined(__clang__) // defined(LEAN_AND_MEAN)
-  inline price_t operator""_p(long double value) { return price_t(static_cast<float>(value)); };
+  inline price_t operator""_p(long double value) { return price_t(static_cast<float>(value)); }
 #else  // defined(__clang__)
-  inline price_t operator""_p(long double value) { return price_t(reinterpret_cast<std::decimal::decimal32::__decfloat32 &>(value)); };
+  inline price_t operator""_p(long double value) { return price_t(reinterpret_cast<std::decimal::decimal32::__decfloat32 &>(value)); }
 #endif // defined(__clang__)
 }
 
@@ -215,7 +215,7 @@ static_assert(sizeof(message) == 12); // NOLINT(cppcoreguidelines-avoid-magic-nu
 
 struct instrument_state final
 {
-#define DECLARE_FIELD(r, data, elem) BOOST_PP_TUPLE_ELEM(2, elem) BOOST_PP_TUPLE_ELEM(0, elem);
+#define DECLARE_FIELD(r, data, elem) BOOST_PP_TUPLE_ELEM(2, elem) BOOST_PP_TUPLE_ELEM(0, elem) {};
   BOOST_PP_SEQ_FOR_EACH(DECLARE_FIELD, _, FEED_FIELDS)
 #undef DECLARE_FIELD
   std::bitset<BOOST_PP_SEQ_SIZE(FEED_FIELDS)> updates;

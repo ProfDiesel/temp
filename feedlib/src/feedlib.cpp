@@ -86,7 +86,7 @@ extern "C" void up_state_update_uint(up_state *self, up_field_t field, uint32_t 
 
 struct up_encoder
 {
-  feed::state_map state_map;
+  feed::state_map state_map {};
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -101,9 +101,9 @@ extern "C" std::size_t up_encoder_encode(up_encoder *self, up_timestamp_t timest
 {
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
-  std::for_each_n(states, nb_states, [&](const auto *state) { states_.emplace_back(state->instrument, state->state); });
+  std::for_each_n(states, nb_states, [&](const auto *state) noexcept { states_.emplace_back(state->instrument, state->state); });
   return self->state_map.update(states_,
-                                [&](auto &&result)
+                                [&](auto &&result) noexcept
                                 {
                                   const auto size = result.size() + offsetof(feed::detail::event, packet);
                                   if(size < buffer_size)
@@ -134,11 +134,11 @@ extern "C" void up_decoder_free(up_decoder *self) { delete self; }
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" std::size_t up_decoder_decode(up_decoder *self, const void *buffer, std::size_t buffer_size)
 {
-  return feed::decode([](auto instrument_id, auto sequence_id) { return instrument_id; },
+  return feed::decode([](auto instrument_id, auto sequence_id) noexcept { return instrument_id; },
                       [self](auto timestamp, auto update, auto instrument_id)
                       {
                         visit_update(
-                          [self](auto field, auto value)
+                          [self](auto field, auto value) noexcept
                           {
                             if constexpr(std::is_same_v<decltype(value), feed::price_t>)
                             {
@@ -197,13 +197,13 @@ namespace
 
 auto make_handlers(up_future *future)
 {
-  return std::tuple {[future](const boost::leaf::e_source_location &location, const std::error_code &error_code)
+  return std::tuple {[future](const boost::leaf::e_source_location &location, const std::error_code &error_code) noexcept
                      {
                        std::ostringstream os;
                        os << location.file << ":" << location.line << " - error_code " << error_code.value() << ":" << error_code.message();
                        future->value = os.str();
                      },
-                     [future](const boost::leaf::error_info &error_info)
+                     [future](const boost::leaf::error_info &error_info) noexcept
                      {
                        std::ostringstream os;
                        os << error_info;
@@ -216,7 +216,7 @@ auto make_handlers(up_future *future)
 ///////////////////////////////////////////////////////////////////////////////
 struct up_server
 {
-  asio::io_context service;
+  asio::io_context service {};
   struct feed::server server;
   std::atomic_flag quit = false;
 
@@ -285,7 +285,7 @@ extern "C" up_future *up_server_push_update(up_server *self, const up_state *con
   asio::co_spawn(
     self->service,
     [self, states=std::move(states_), result]() noexcept -> boost::leaf::awaitable<void>
-    { co_await boost::leaf::co_try_handle_all([&]() { return self->server.update(states); }, make_handlers(result)); },
+    { co_await boost::leaf::co_try_handle_all([&]() noexcept { return self->server.update(states); }, make_handlers(result)); },
     asio::detached);
   return result;
 }
@@ -302,7 +302,7 @@ extern "C" up_future *up_server_replay(up_server *self, const void *buffer, std:
     [self, buffer, buffer_size, result]() noexcept -> boost::leaf::awaitable<void>
     {
       co_await boost::leaf::co_try_handle_all(
-        [&]()
+        [&]() noexcept
         {
           return feed::replay([&](auto states) { return self->server.update(std::forward<decltype(states)>(states)); },
                               [&, clock_0 = clock_t::now()](auto timestamp) mutable -> boost::leaf::awaitable<boost::leaf::result<void>>

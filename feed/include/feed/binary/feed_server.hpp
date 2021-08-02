@@ -26,9 +26,9 @@ namespace detail
 struct session : public std::enable_shared_from_this<session>
 {
   asio::ip::tcp::socket socket;
-  boilerplate::not_null_observer_ptr<server> server;
+  boilerplate::not_null_observer_ptr<server> server_ptr;
 
-  session(asio::ip::tcp::socket &&socket, boilerplate::not_null_observer_ptr<struct server> server) noexcept: socket(std::move(socket)), server(server) {}
+  session(asio::ip::tcp::socket &&socket, boilerplate::not_null_observer_ptr<server> server_ptr) noexcept: socket(std::move(socket)), server_ptr(server_ptr) {}
 
   boost::leaf::awaitable<boost::leaf::result<void>> operator()() noexcept;
 };
@@ -37,7 +37,7 @@ struct session : public std::enable_shared_from_this<session>
 class server : public state_map
 {
 public:
-  server(asio::io_context &service) noexcept: service(service), updates_socket(service), snapshot_acceptor(service) {}
+  server(asio::io_context &service) noexcept: service(service), updates_socket(service), updates_endpoint(), snapshot_acceptor(service) {}
 
   boost::leaf::result<void> connect(const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint) noexcept
   {
@@ -67,10 +67,9 @@ public:
     auto session_ptr = std::make_shared<detail::session>(std::move(socket), boilerplate::make_strict_not_null(this));
     asio::co_spawn(
       service,
-      [&]() noexcept -> boost::leaf::awaitable<void>
+      [session_ptr]() mutable noexcept -> boost::leaf::awaitable<void>
       {
-        auto result = co_await(*session_ptr)();
-        if(!result)
+        if(const auto result = co_await (*session_ptr)(); !result)
         {
           // TODO : add logger
           using namespace logger::literals;
@@ -94,14 +93,12 @@ inline boost::leaf::awaitable<boost::leaf::result<void>> detail::session::operat
   const auto self(shared_from_this());
 
   detail::snapshot_request request;
-  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_read(socket, asio::buffer(&request, sizeof(request)), _)) != sizeof(request))
-    co_return std::make_error_code(std::errc::io_error); // TODO
+  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_read(socket, asio::buffer(&request, sizeof(request)), _));
 
   std::array<char, 128> buffer;
-  const auto actual_length = feed::detail::encode_message(request.instrument.value(), server->snapshot(request.instrument.value()),
+  const auto actual_length = feed::detail::encode_message(request.instrument.value(), server_ptr->snapshot(request.instrument.value()),
                                                           asio::mutable_buffer(buffer.data(), buffer.size()));
-  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_write(socket, asio::buffer(buffer.data(), actual_length), _)) != actual_length)
-    co_return std::make_error_code(std::errc::io_error); // TODO
+  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_write(socket, asio::buffer(buffer.data(), actual_length), _));
 
   co_return boost::leaf::success();
 }

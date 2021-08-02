@@ -82,16 +82,13 @@ inline auto encode_message(instrument_id_type instrument, const instrument_state
 inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_snapshot(asio::ip::tcp::socket &socket, instrument_id_type instrument) noexcept
 {
   const snapshot_request request {.instrument = endian::big_uint16_buf_t(instrument)};
-  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), _)) != sizeof(request))
-    co_return std::make_error_code(std::errc::io_error); // TODO
+  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), _));
 
   std::aligned_storage_t<message_max_size, alignof(struct message)> buffer;
   auto *const message = reinterpret_cast<struct message *>(&buffer);
-  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message, sizeof(struct message)), _)) != sizeof(struct message))
-    co_return std::make_error_code(std::errc::io_error); // TODO
+  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_read(socket, asio::buffer(message, sizeof(struct message)), _));
   const auto remaining = (message->nb_updates - 1) * sizeof(update); // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  if(BOOST_LEAF_ASIO_CO_TRYX(co_await asio::async_read(socket, asio::buffer(message + 1, remaining), _)) != remaining) // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    co_return std::make_error_code(std::errc::io_error); // TODO
+  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_read(socket, asio::buffer(message + 1, remaining), _)); // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
   instrument_state state {.sequence_id = message->sequence_id.value()};
   update_state(state, *message);
@@ -182,7 +179,7 @@ public:
   auto update(const auto &states, auto &&continuation) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>>
   {
     asio::mutable_buffer buffer(&storage, detail::packet_max_size);
-    auto *packet = new(buffer.data()) detail::packet {static_cast<std::uint8_t>(states.size()), {}};
+    new(buffer.data()) detail::packet {static_cast<std::uint8_t>(states.size()), {}};
 
     auto current = buffer + offsetof(detail::packet, message);
     for(auto &&[instrument, new_state]: states)
@@ -194,7 +191,7 @@ public:
       valid_updates |= std::exchange(state.updates, {});
     }
 
-    return continuation(asio::buffer(buffer, static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data())));
+    return continuation(asio::buffer(buffer, static_cast<std::size_t>(static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data()))));
   }
 
   instrument_state at(instrument_id_type instrument) const noexcept
@@ -210,11 +207,11 @@ public:
 private:
   struct state
   {
-    instrument_state state;
-    decltype(instrument_state::updates) accumulated_updates;
+    instrument_state state {};
+    decltype(instrument_state::updates) accumulated_updates {};
   };
 
-  std::aligned_storage_t<detail::packet_max_size, alignof(detail::packet)> storage;
+  std::aligned_storage_t<detail::packet_max_size, alignof(detail::packet)> storage {};
   std::unordered_map<instrument_id_type, state> states {};
 };
 

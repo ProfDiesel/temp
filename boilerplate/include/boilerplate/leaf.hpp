@@ -60,7 +60,7 @@
 #define BOOST_LEAF_ASIO_CO_TRY(...)                                                                                                                            \
   {                                                                                                                                                            \
     std::error_code ec;                                                                                                                                        \
-    auto &&_ = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                           \
+    auto _ = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                             \
     (__VA_ARGS__);                                                                                                                                             \
     if(ec) [[unlikely]]                                                                                                                                        \
       co_return BOOST_LEAF_NEW_ERROR(ec).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                \
@@ -71,7 +71,7 @@
 #define BOOST_LEAF_ASIO_CO_TRYX(...)                                                                                                                           \
   ({                                                                                                                                                           \
     std::error_code ec;                                                                                                                                        \
-    auto &&_ = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                           \
+    auto _ = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                             \
     auto &&result = (__VA_ARGS__);                                                                                                                             \
     if(ec) [[unlikely]]                                                                                                                                        \
       co_return BOOST_LEAF_NEW_ERROR(ec).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                \
@@ -84,7 +84,7 @@
   ({                                                                                                                                                           \
     auto &&_ = (EXPRESSION);                                                                                                                                   \
     if(!(CONDITION)) [[unlikely]]                                                                                                                              \
-      return BOOST_LEAF_NEW_ERROR().load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                     \
+      return BOOST_LEAF_NEW_ERROR().load(BOOST_PP_STRINGIZE(EXPRESSION));                                                                                      \
     std::move(_);                                                                                                                                              \
   })
 // clang-format on
