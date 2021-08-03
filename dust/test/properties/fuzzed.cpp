@@ -103,7 +103,7 @@ auto main() -> int
     backtest::detail::feeder_instance.reset(new backtest::buffer_feeder(asio::buffer(mutable_buffer)));
 
     boost::leaf::try_handle_all(
-      [&]() -> boost::leaf::result<void> {
+      [&]() noexcept -> boost::leaf::result<void> {
         using namespace config::literals;
 
         const auto config = "\

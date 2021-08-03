@@ -10,9 +10,9 @@ auto main() -> int
   using namespace logger::literals;
 
   return leaf::try_handle_all(
-    [&]() -> leaf::result<void> {
+    [&]() noexcept -> leaf::result<void> {
       const auto _ = BOOST_LEAF_TRYX(config::properties::create(std::cin));
     },
-    [&](const leaf::error_info &unmatched) { std::abort(); });
+    [&](const leaf::error_info &unmatched) noexcept { std::abort(); });
 }
 

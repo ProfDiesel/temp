@@ -180,7 +180,7 @@ subscription.message <- 'bWVzc2FnZQo=';\n\
      std::make_optional<bench::message>({.instrument = 42, .state = feed::instrument_state {.b0 = 95.0_p, .bq0 = 10, .o0 = 105.0_p, .oq0 = 10}})});
 
   boost::leaf::try_handle_all(
-    [&]() -> boost::leaf::result<void>
+    [&]() noexcept -> boost::leaf::result<void>
     {
       using namespace config::literals;
 

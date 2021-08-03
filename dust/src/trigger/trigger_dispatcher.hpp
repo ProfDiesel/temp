@@ -215,7 +215,7 @@ TEST_SUITE("trigger_dispatcher")
 \"entrypoint.period\": 10"sv;
 
   boost::leaf::try_handle_all(
-      [&]() -> boost::leaf::result<void> {
+      [&]() noexcept -> boost::leaf::result<void> {
         const auto props = BOOST_LEAF_TRYX(config::properties::create(config));
         auto trigger = BOOST_LEAF_TRYX(make_polymorphic_trigger(props["entrypoint"_hs]));
         auto send = [&](std::int64_t timestamp, feed::price_t price) {
@@ -225,7 +225,7 @@ TEST_SUITE("trigger_dispatcher")
         CHECK(send(13, 20));
         return {};
       },
-      [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
+      [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) noexcept { CHECK(false); });
   }
 }
 

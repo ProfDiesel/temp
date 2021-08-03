@@ -231,14 +231,15 @@ struct up_server
         co_await boost::leaf::co_try_handle_all(
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
           {
-            const auto snapshot_addresses
-              = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
-            const auto updates_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, _));
-            BOOST_LEAF_CO_TRY(server.connect(*snapshot_addresses.begin(), *updates_addresses.begin()));
+            //const auto snapshot_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
+            BOOST_LEAF_ASIO_CO_TRY(const auto snapshot_addresses, co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
+            //const auto updates_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, _));
+            BOOST_LEAF_ASIO_CO_TRY(const auto updates_addresses, co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, _));
+            BOOST_LEAF_CO_TRYV(server.connect(*snapshot_addresses.begin(), *updates_addresses.begin()));
             future->value = up_future::ok_v;
 
             while(!quit.test(std::memory_order_acquire))
-              BOOST_LEAF_CO_TRY(co_await server.accept());
+              BOOST_LEAF_CO_TRYV(co_await server.accept());
 
             co_return boost::leaf::success();
           },
@@ -307,7 +308,7 @@ extern "C" up_future *up_server_replay(up_server *self, const void *buffer, std:
           return feed::replay([&](auto states) { return self->server.update(std::forward<decltype(states)>(states)); },
                               [&, clock_0 = clock_t::now()](auto timestamp) mutable -> boost::leaf::awaitable<boost::leaf::result<void>>
                               {
-                                BOOST_LEAF_ASIO_CO_TRY(co_await timer_t(self->service, clock_0 + timestamp).async_wait(_));
+                                BOOST_LEAF_ASIO_CO_TRYV(co_await timer_t(self->service, clock_0 + timestamp).async_wait(_));
                                 co_return boost::leaf::success();
                               },
                               asio::buffer(buffer, buffer_size));

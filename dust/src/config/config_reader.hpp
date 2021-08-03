@@ -109,7 +109,7 @@ static boost::leaf::result<void> parse(const continuation_type &continuation, it
   const auto grammar = assignment_with_action % ',' >> expect(x3::eoi);
 
   return boost::leaf::try_handle_some(
-    [&]() -> boost::leaf::result<void>
+    [&]() noexcept -> boost::leaf::result<void>
     {
       boost::leaf::error_monitor monitor;
       auto it = first;
@@ -118,7 +118,7 @@ static boost::leaf::result<void> parse(const continuation_type &continuation, it
       ASSERTS(it == last);
       return boost::leaf::success();
     },
-    [&](const expectation_failure<iterator_type> &error /*, const boost::leaf::e_source_location &location*/)
+    [&](const expectation_failure<iterator_type> &error /*, const boost::leaf::e_source_location &location*/) noexcept
     {
       std::string snippet;
       const auto where = error.where.begin();
@@ -405,7 +405,7 @@ TEST_SUITE("config_reader")
 \"a.c\": [\"string\", \"list\"],\n\
 \"a.d\": [0, 1, 2, 3, 4]\n\n"sv;
       boost::leaf::try_handle_all(
-        [&]() -> boost::leaf::result<void>
+        [&]() noexcept -> boost::leaf::result<void>
         {
           const auto result = BOOST_LEAF_TRYX(config::properties::create(config_str));
           const auto a = result["a"_hs];
@@ -416,7 +416,7 @@ TEST_SUITE("config_reader")
           CHECK(*a["d"_hs] == std::vector {0.0, 1.0, 2.0, 3.0, 4.0});
           return {};
         },
-        [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
+        [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) noexcept { CHECK(false); });
     }
     SUBCASE("failure")
     {
@@ -424,18 +424,18 @@ TEST_SUITE("config_reader")
 parsing.fails <- here;\n\n"sv;
       bool success = false;
       boost::leaf::try_handle_all(
-        [&]() -> boost::leaf::result<void>
+        [&]() noexcept -> boost::leaf::result<void>
         {
           BOOST_LEAF_CHECK(config::properties::create(config_str));
           return {};
         },
-        [&](const config::parse_error &error)
+        [&](const config::parse_error &error) noexcept
         {
           CHECK(error.indices == std::pair {std::size_t {17}, std::size_t {24}});
           CHECK(error.which == "value");
           success = true;
         },
-        [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
+        [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) noexcept { CHECK(false); });
       CHECK(success);
     }
     SUBCASE("walker")
@@ -447,7 +447,7 @@ parsing.fails <- here;\n\n"sv;
 \"b.value\": \"string\",\n\
 \"c.next\": [\"a\", \"b\"]\n\n"sv;
       boost::leaf::try_handle_all(
-        [&]() -> boost::leaf::result<void>
+        [&]() noexcept -> boost::leaf::result<void>
         {
           const auto result = BOOST_LEAF_TRYX(config::properties::create(config_str));
           const auto a = result["a"_hs];
@@ -470,7 +470,7 @@ parsing.fails <- here;\n\n"sv;
 
           return {};
         },
-        [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
+        [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) noexcept { CHECK(false); });
     }
   }
 }

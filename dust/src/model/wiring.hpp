@@ -90,17 +90,17 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
           {
             logger->log(logger::debug, "coroutine=\"{}\" started"_format, name);
-            BOOST_LEAF_CO_TRY(co_await std::forward<decltype(coroutine)>(coroutine)());
+            BOOST_LEAF_CO_TRYV(co_await std::forward<decltype(coroutine)>(coroutine)());
             logger->log(logger::debug, "coroutine=\"{}\" exited"_format, name);
       	    co_return boost::leaf::success();
           },
-          [&](const std::error_code &error_code, const boost::leaf::e_source_location location, const std::string &statement)
+          [&](const std::error_code &error_code, const boost::leaf::e_source_location location, const std::string &statement) noexcept
           {
             logger->log(logger::critical, "coroutine=\"{}\" error_code={} error=\"{}\" file=\"{}\" line={} statement=\"{}\" exited"_format, name,
                         error_code.value(), error_code.message(), location.file, location.line, statement);
             service.stop();
           },
-          [&](const boost::leaf::error_info &ei)
+          [&](const boost::leaf::error_info &ei) noexcept
           {
             logger->log(logger::critical, "coroutine=\"{}\" leaf_error_id={} exited"_format, name, ei.error());
             service.stop();
@@ -129,7 +129,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
       const auto [snapshot_host, snapshot_port] = (config::address)*feed["snapshot"_hs];
       const auto snapshot_endpoints = BOOST_LEAF_EC_TRYX(asio::ip::tcp::resolver(service).resolve(snapshot_host, snapshot_port, _));
       auto snapshot_socket = asio::ip::tcp::socket(service);
-      BOOST_LEAF_EC_TRY(asio::connect(snapshot_socket, snapshot_endpoints, _));
+      BOOST_LEAF_EC_TRYV(asio::connect(snapshot_socket, snapshot_endpoints, _));
 #endif // defined(BACKTEST_HARNESS)
 
 #if defined(BACKTEST_HARNESS)
@@ -180,7 +180,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
         spawn(
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
           {
-            BOOST_LEAF_CO_TRY(co_await request_snapshot(&automaton));
+            BOOST_LEAF_CO_TRYV(co_await request_snapshot(&automaton));
             service.stop();
             co_return boost::leaf::success();
           },
@@ -222,7 +222,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
       case "subscribe"_h:
         if constexpr(automata_type::dynamic_subscription)
         {
-          BOOST_LEAF_CO_TRY(co_await with_trigger(entrypoint, logger,
+          BOOST_LEAF_CO_TRYV(co_await with_trigger(entrypoint, logger,
                                                   [&](auto &&trigger_map) noexcept -> boost::leaf::awaitable<void>
                                                   {
                                                     auto trigger
@@ -234,7 +234,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
                                                       .payload = BOOST_LEAF_CO_TRYX(decode_payload<automata_type::send_datagram>(entrypoint)),
                                                       .instrument_id = entrypoint["instrument"_hs]
                                                     };
-                                                    BOOST_LEAF_CO_TRY(co_await request_snapshot(&automaton));
+                                                    BOOST_LEAF_CO_TRYV(co_await request_snapshot(&automaton));
                                                     automata.track(automaton.instrument_id, std::move(automaton));
                                                   }));
         }

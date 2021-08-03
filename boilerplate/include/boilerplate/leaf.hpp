@@ -4,11 +4,15 @@
 
 #include <asio/redirect_error.hpp>
 
-#define BOOST_LEAF_TRY(...)                                                                                                                                    \
+// clang-format off
+#define BOOST_LEAF_TRYV(...)                                                                                                                                   \
   {                                                                                                                                                            \
     if(auto _ = (__VA_ARGS__); _) [[unlikely]]                                                                                                                 \
       return std::error_code {_, std::generic_category()};                                                                                                     \
   }
+// clang-format on
+
+#define BOOST_LEAF_TRY(V, R) BOOST_LEAF_ASSIGN(V, R)
 
 // clang-format off
 #define BOOST_LEAF_TRYX(...)                                                                                                                                   \
@@ -20,12 +24,22 @@
   })
 // clang-format on
 
-#define BOOST_LEAF_CO_TRY(...)                                                                                                                                 \
+// clang-format off
+#define BOOST_LEAF_CO_TRYV(...)                                                                                                                                \
   {                                                                                                                                                            \
     auto &&BOOST_LEAF_TMP = (__VA_ARGS__);                                                                                                                     \
     if(!BOOST_LEAF_TMP)                                                                                                                                        \
       co_return BOOST_LEAF_TMP.error();                                                                                                                        \
   }
+// clang-format on
+
+// clang-format off
+#define BOOST_LEAF_CO_TRY(V, ...)                                                                                                                              \
+  auto &&BOOST_LEAF_TMP = (__VA_ARGS__);                                                                                                                       \
+  if(!BOOST_LEAF_TMP)                                                                                                                                          \
+    co_return BOOST_LEAF_TMP.error();                                                                                                                          \
+  V = std::forward<decltype(BOOST_LEAF_TMP)>(BOOST_LEAF_TMP).value()
+// clang-format on
 
 // clang-format off
 #define BOOST_LEAF_CO_TRYX(...)                                                                                                                                \
@@ -37,13 +51,15 @@
   })
 // clang-format on
 
-#define BOOST_LEAF_EC_TRY(...)                                                                                                                                 \
+// clang-format off
+#define BOOST_LEAF_EC_TRYV(...)                                                                                                                                \
   {                                                                                                                                                            \
     std::error_code _;                                                                                                                                         \
     (__VA_ARGS__);                                                                                                                                             \
     if(_) [[unlikely]]                                                                                                                                         \
       return BOOST_LEAF_NEW_ERROR(_).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                    \
   }
+// clang-format on
 
 // clang-format off
 #define BOOST_LEAF_EC_TRYX(...)                                                                                                                                \
@@ -57,7 +73,7 @@
 // clang-format on
 
 // clang-format off
-#define BOOST_LEAF_ASIO_CO_TRY(...)                                                                                                                            \
+#define BOOST_LEAF_ASIO_CO_TRYV(...)                                                                                                                           \
   {                                                                                                                                                            \
     std::error_code ec;                                                                                                                                        \
     auto _ = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                             \
@@ -65,6 +81,17 @@
     if(ec) [[unlikely]]                                                                                                                                        \
       co_return BOOST_LEAF_NEW_ERROR(ec).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                \
   }
+// clang-format on
+
+#define BOOST_LEAF_EC BOOST_LEAF_TOKEN_PASTE2(BOOST_LEAF_TMP, _ec)
+
+// clang-format off
+#define BOOST_LEAF_ASIO_CO_TRY(V, ...)                                                                                                                         \
+  std::error_code BOOST_LEAF_EC;                                                                                                                               \
+  auto &&BOOST_LEAF_TMP = ({ auto _ = asio::redirect_error(boost::leaf::use_awaitable, BOOST_LEAF_EC); __VA_ARGS__; });                                        \
+  if(BOOST_LEAF_EC) [[unlikely]]                                                                                                                               \
+    co_return BOOST_LEAF_NEW_ERROR(BOOST_LEAF_EC).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                       \
+  V = std::forward<decltype(BOOST_LEAF_TMP)>(BOOST_LEAF_TMP);
 // clang-format on
 
 // clang-format off
@@ -89,7 +116,8 @@
   })
 // clang-format on
 
-#define BOOST_LEAF_RC_TRY(...)                                                                                                                                 \
+// clang-format off
+#define BOOST_LEAF_RC_TRYV(...)                                                                                                                                \
   {                                                                                                                                                            \
     if(auto rc = (__VA_ARGS__); rc < 0) [[unlikely]]                                                                                                           \
       return BOOST_LEAF_NEW_ERROR(std::error_code(-rc, std::generic_category()), BOOST_PP_STRINGIZE(__VA_ARGS__));                                             \

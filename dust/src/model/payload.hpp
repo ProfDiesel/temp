@@ -119,7 +119,7 @@ TEST_SUITE("payload")
   TEST_CASE("decode")
   {
     boost::leaf::try_handle_all(
-      [&]() -> boost::leaf::result<void> {
+      [&]() noexcept -> boost::leaf::result<void> {
         const auto properties = BOOST_LEAF_TRYX(config::properties::create("\
 payloads.message <- 'c3RyZWFtX3BheWxvYWQ=';\
 payloads.datagram <- 'ZGF0YWdyYW1fcGF5bG9hZA==';"sv));
@@ -140,7 +140,7 @@ payloads.datagram <- 'ZGF0YWdyYW1fcGF5bG9hZA==';"sv));
 
         return {};
       },
-      [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) { CHECK(false); });
+      [&]([[maybe_unused]] const boost::leaf::error_info &unmatched) noexcept { CHECK(false); });
   }
 }
 

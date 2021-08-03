@@ -43,10 +43,10 @@ public:
   {
     this->updates_endpoint = updates_endpoint;
 
-    BOOST_LEAF_EC_TRY(snapshot_acceptor.open(snapshot_endpoint.protocol(), _));
-    BOOST_LEAF_EC_TRY(snapshot_acceptor.set_option(asio::ip::tcp::socket::reuse_address(true), _));
-    BOOST_LEAF_EC_TRY(snapshot_acceptor.bind(snapshot_endpoint, _));
-    BOOST_LEAF_EC_TRY(snapshot_acceptor.listen(asio::ip::tcp::socket::max_listen_connections, _));
+    BOOST_LEAF_EC_TRYV(snapshot_acceptor.open(snapshot_endpoint.protocol(), _));
+    BOOST_LEAF_EC_TRYV(snapshot_acceptor.set_option(asio::ip::tcp::socket::reuse_address(true), _));
+    BOOST_LEAF_EC_TRYV(snapshot_acceptor.bind(snapshot_endpoint, _));
+    BOOST_LEAF_EC_TRYV(snapshot_acceptor.listen(asio::ip::tcp::socket::max_listen_connections, _));
 
     return boost::leaf::success();
   }
@@ -54,7 +54,7 @@ public:
   boost::leaf::awaitable<boost::leaf::result<void>>
   update(const auto &states) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>>
   {
-    BOOST_LEAF_ASIO_CO_TRY(co_await state_map::update(states, [&](auto &&buffer) { return updates_socket.async_send_to(buffer, updates_endpoint, _); }));
+    BOOST_LEAF_ASIO_CO_TRYV(co_await state_map::update(states, [&](auto &&buffer) { return updates_socket.async_send_to(buffer, updates_endpoint, _); }));
     co_return boost::leaf::success();
   }
 
@@ -63,18 +63,18 @@ public:
   boost::leaf::awaitable<boost::leaf::result<void>> accept() noexcept
   {
     asio::ip::tcp::socket socket(service);
-    BOOST_LEAF_ASIO_CO_TRY(co_await snapshot_acceptor.async_accept(socket, _));
+    BOOST_LEAF_ASIO_CO_TRYV(co_await snapshot_acceptor.async_accept(socket, _));
     auto session_ptr = std::make_shared<detail::session>(std::move(socket), boilerplate::make_strict_not_null(this));
     asio::co_spawn(
       service,
       [session_ptr]() mutable noexcept -> boost::leaf::awaitable<void>
       {
-        if(const auto result = co_await (*session_ptr)(); !result)
-        {
-          // TODO : add logger
-          using namespace logger::literals;
-          // logger->log(logger::critical, "{}."_format, result.assume_error());
-        }
+        co_await boost::leaf::co_try_handle_all(
+          *session_ptr,
+          [&](const boost::leaf::error_info &unmatched) { 
+            // TODO
+            // logger->log(logger::critical, "leaf_error_id={} exited"_format, ei.error());
+          });
       },
       asio::detached);
 
@@ -93,12 +93,12 @@ inline boost::leaf::awaitable<boost::leaf::result<void>> detail::session::operat
   const auto self(shared_from_this());
 
   detail::snapshot_request request;
-  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_read(socket, asio::buffer(&request, sizeof(request)), _));
+  BOOST_LEAF_ASIO_CO_TRYV(co_await asio::async_read(socket, asio::buffer(&request, sizeof(request)), _));
 
   std::array<char, 128> buffer;
   const auto actual_length = feed::detail::encode_message(request.instrument.value(), server_ptr->snapshot(request.instrument.value()),
                                                           asio::mutable_buffer(buffer.data(), buffer.size()));
-  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_write(socket, asio::buffer(buffer.data(), actual_length), _));
+  BOOST_LEAF_ASIO_CO_TRYV(co_await asio::async_write(socket, asio::buffer(buffer.data(), actual_length), _));
 
   co_return boost::leaf::success();
 }
@@ -113,7 +113,7 @@ boost::leaf::awaitable<boost::leaf::result<void>> replay(auto &&co_continuation,
   {
     const auto *current = reinterpret_cast<const feed::detail::event *>(buffer.data());
     const auto timestamp = network_clock::time_point(std::chrono::nanoseconds(current->timestamp));
-    BOOST_LEAF_ASIO_CO_TRY(co_await std::forward<decltype(co_wait_until)>(co_wait_until)(timestamp - timestamp_0));
+    BOOST_LEAF_ASIO_CO_TRYV(co_await std::forward<decltype(co_wait_until)>(co_wait_until)(timestamp - timestamp_0));
     buffer += offsetof(feed::detail::event, packet);
 
     states.clear();
@@ -122,7 +122,7 @@ boost::leaf::awaitable<boost::leaf::result<void>> replay(auto &&co_continuation,
                                               { update_state(states[instrument_closure], update); },
                                               timestamp, buffer);
 
-    BOOST_LEAF_CO_TRY(co_await std::forward<decltype(co_continuation)>(co_continuation)(states));
+    BOOST_LEAF_CO_TRYV(co_await std::forward<decltype(co_continuation)>(co_continuation)(states));
 
     buffer += decoded;
   }

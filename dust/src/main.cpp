@@ -91,12 +91,12 @@ auto main() -> int
     });
 
   boost::leaf::try_handle_all(
-    [&]() -> boost::leaf::result<void>
+    [&]() noexcept -> boost::leaf::result<void>
     {
       using namespace config::literals;
 
       std::string command_buffer;
-      BOOST_LEAF_EC_TRY(asio::read_until(command_input, asio::dynamic_buffer(command_buffer), "\n\n", _));
+      BOOST_LEAF_EC_TRYV(asio::read_until(command_input, asio::dynamic_buffer(command_buffer), "\n\n", _));
       const auto properties = BOOST_LEAF_TRYX(config::properties::create(command_buffer));
 
       auto run = with_trigger_path(properties["config"_hs], service, command_input, command_output, logger,
@@ -106,7 +106,7 @@ auto main() -> int
                                        [[likely]]
                                        {
                                          fast_path();
-                                         BOOST_LEAF_EC_TRY(service.poll(_));
+                                         BOOST_LEAF_EC_TRYV(service.poll(_));
                                          logger->flush();
                                        }
                                      logger->log(logger::info, "Executor stopped.");

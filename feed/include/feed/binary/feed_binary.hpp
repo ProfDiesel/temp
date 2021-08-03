@@ -82,13 +82,13 @@ inline auto encode_message(instrument_id_type instrument, const instrument_state
 inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_snapshot(asio::ip::tcp::socket &socket, instrument_id_type instrument) noexcept
 {
   const snapshot_request request {.instrument = endian::big_uint16_buf_t(instrument)};
-  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), _));
+  BOOST_LEAF_ASIO_CO_TRYV(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), _));
 
   std::aligned_storage_t<message_max_size, alignof(struct message)> buffer;
   auto *const message = reinterpret_cast<struct message *>(&buffer);
-  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_read(socket, asio::buffer(message, sizeof(struct message)), _));
+  BOOST_LEAF_ASIO_CO_TRYV(co_await asio::async_read(socket, asio::buffer(message, sizeof(struct message)), _));
   const auto remaining = (message->nb_updates - 1) * sizeof(update); // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  BOOST_LEAF_ASIO_CO_TRY(co_await asio::async_read(socket, asio::buffer(message + 1, remaining), _)); // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  BOOST_LEAF_ASIO_CO_TRYV(co_await asio::async_read(socket, asio::buffer(message + 1, remaining), _)); // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
   instrument_state state {.sequence_id = message->sequence_id.value()};
   update_state(state, *message);

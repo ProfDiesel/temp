@@ -34,12 +34,12 @@ extern "C" polymorphic_trigger_dispatcher *_make_trigger(const char *config, cha
   using namespace config::literals;
 
   return boost::leaf::try_handle_all(
-      [&]() -> boost::leaf::result<polymorphic_trigger_dispatcher*> {
+      [&]() noexcept -> boost::leaf::result<polymorphic_trigger_dispatcher*> {
         const auto props = BOOST_LEAF_TRYX(config::properties::create(std::string_view(config)));
         auto walker = props["entrypoint"_hs];
         return new polymorphic_trigger_dispatcher(BOOST_LEAF_TRYX(make_polymorphic_trigger(walker)));
       },
-      [&](const config::parse_error &error, const boost::leaf::e_source_location &location) {
+      [&](const config::parse_error &error, const boost::leaf::e_source_location &location) noexcept {
         if(error_message)
         {
           *error_message = new char[256];
@@ -47,7 +47,7 @@ extern "C" polymorphic_trigger_dispatcher *_make_trigger(const char *config, cha
         }
         return nullptr;
       },
-      [&](const boost::leaf::error_info &unmatched, const std::error_code &error_code, const boost::leaf::e_source_location &location) {
+      [&](const boost::leaf::error_info &unmatched, const std::error_code &error_code, const boost::leaf::e_source_location &location) noexcept {
         if(error_message)
         {
           *error_message = new char[256];
@@ -55,7 +55,7 @@ extern "C" polymorphic_trigger_dispatcher *_make_trigger(const char *config, cha
         }
         return nullptr;
       },
-      [&](const boost::leaf::error_info &unmatched, const boost::leaf::e_source_location &location) {
+      [&](const boost::leaf::error_info &unmatched, const boost::leaf::e_source_location &location) noexcept {
         if(error_message)
         {
           *error_message = new char[256];
@@ -63,7 +63,7 @@ extern "C" polymorphic_trigger_dispatcher *_make_trigger(const char *config, cha
         }
         return nullptr;
       },
-      [&](const boost::leaf::error_info &unmatched) {
+      [&](const boost::leaf::error_info &unmatched) noexcept {
         if(error_message)
         {
           *error_message = new char[256];

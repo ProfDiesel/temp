@@ -72,24 +72,24 @@ struct static_stack
 private:
   [[nodiscard]] boost::leaf::result<void> init()
   {
-    BOOST_LEAF_RC_TRY(::zf_init());
+    BOOST_LEAF_RC_TRYV(::zf_init());
 
     ::zf_attr *attr = nullptr;
-    BOOST_LEAF_RC_TRY(::zf_attr_alloc(&attr));
+    BOOST_LEAF_RC_TRYV(::zf_attr_alloc(&attr));
     this->attr.reset(attr);
 
     ::zf_stack *stack = nullptr;
-    BOOST_LEAF_RC_TRY(::zf_stack_alloc(attr, &stack));
+    BOOST_LEAF_RC_TRYV(::zf_stack_alloc(attr, &stack));
     this->stack.reset(stack);
 
     char *interface = nullptr;
-    BOOST_LEAF_RC_TRY(::zf_attr_get_str(attr, "interface", &interface));
+    BOOST_LEAF_RC_TRYV(::zf_attr_get_str(attr, "interface", &interface));
 
-    BOOST_LEAF_RC_TRY(::ef_driver_open(&dh));
-    BOOST_LEAF_RC_TRY(::ef_pd_alloc_by_name(&pd, dh, interface, EF_PD_DEFAULT));
-    BOOST_LEAF_RC_TRY(::ef_vi_alloc_from_pd(&vi, dh, &pd, dh, -1, 0, -1, nullptr, -1, EF_VI_FLAGS_DEFAULT));
-    BOOST_LEAF_RC_TRY(::ef_pio_alloc(&pio, dh, &pd, -1, dh));
-    BOOST_LEAF_RC_TRY(::ef_pio_link_vi(&pio, dh, &vi, dh));
+    BOOST_LEAF_RC_TRYV(::ef_driver_open(&dh));
+    BOOST_LEAF_RC_TRYV(::ef_pd_alloc_by_name(&pd, dh, interface, EF_PD_DEFAULT));
+    BOOST_LEAF_RC_TRYV(::ef_vi_alloc_from_pd(&vi, dh, &pd, dh, -1, 0, -1, nullptr, -1, EF_VI_FLAGS_DEFAULT));
+    BOOST_LEAF_RC_TRYV(::ef_pio_alloc(&pio, dh, &pd, -1, dh));
+    BOOST_LEAF_RC_TRYV(::ef_pio_link_vi(&pio, dh, &vi, dh));
 
     return boost::leaf::success();
   }
@@ -155,18 +155,18 @@ public:
 #if defined(USE_TCPDIRECT)
 
     ::zfur *zock_ = nullptr;
-    BOOST_LEAF_RC_TRY(::zfur_alloc(&zock_, static_stack::instance().stack.get(), static_stack::instance().attr.get()));
+    BOOST_LEAF_RC_TRYV(::zfur_alloc(&zock_, static_stack::instance().stack.get(), static_stack::instance().attr.get()));
     zock_ptr zock {zock_};
 
-    BOOST_LEAF_RC_TRY(::zfur_addr_bind(zock.get(), const_cast<sockaddr *>(endpoint.data()), sizeof(*endpoint.data()), nullptr, 0, 0));
+    BOOST_LEAF_RC_TRYV(::zfur_addr_bind(zock.get(), const_cast<sockaddr *>(endpoint.data()), sizeof(*endpoint.data()), nullptr, 0, 0));
 
     return multicast_udp_reader(std::move(zock));
 
 #else
 
     asio::ip::udp::socket socket {service};
-    BOOST_LEAF_EC_TRY(socket.open(endpoint.protocol(), _));
-    BOOST_LEAF_EC_TRY(socket.set_option(asio::ip::udp::socket::reuse_address(true), _));
+    BOOST_LEAF_EC_TRYV(socket.open(endpoint.protocol(), _));
+    BOOST_LEAF_EC_TRYV(socket.set_option(asio::ip::udp::socket::reuse_address(true), _));
 
 #  if defined(LINUX) && !defined(USE_LIBVMA)
     using busy_poll = asio::detail::socket_option::integer<SOL_SOCKET, SO_BUSY_POLL>;
@@ -179,21 +179,21 @@ public:
 
     if(spin_duration.count() > 0)
     {
-      BOOST_LEAF_EC_TRY(socket.set_option(busy_poll(int(std::chrono::duration_cast<std::chrono::microseconds>(spin_duration).count())), _));
-      BOOST_LEAF_EC_TRY(socket.set_option(incoming_cpu(cpu), _));
+      BOOST_LEAF_EC_TRYV(socket.set_option(busy_poll(int(std::chrono::duration_cast<std::chrono::microseconds>(spin_duration).count())), _));
+      BOOST_LEAF_EC_TRYV(socket.set_option(incoming_cpu(cpu), _));
     }
     if(timestamping)
-      BOOST_LEAF_EC_TRY(socket.set_option(network_timestamping(true), _));
+      BOOST_LEAF_EC_TRYV(socket.set_option(network_timestamping(true), _));
 
     // recvmmsg timeout parameter is buggy
     const auto as_timeval = to_timeval(spin_duration);
-    BOOST_LEAF_EC_TRY([&]() {
+    BOOST_LEAF_EC_TRYV([&]() {
       _ = std::error_code(::setsockopt(socket.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &as_timeval, sizeof(as_timeval)), std::generic_category());
     }());
 #  endif // defined(LINUX) && !defined(USE_LIBVMA)
 
     socket.bind(endpoint);
-    BOOST_LEAF_EC_TRY(socket.set_option(asio::ip::multicast::join_group(endpoint.address()), _));
+    BOOST_LEAF_EC_TRYV(socket.set_option(asio::ip::multicast::join_group(endpoint.address()), _));
 
 #  if defined(USE_LIBVMA)
     int vma_ring_fd = 0;
@@ -229,7 +229,7 @@ public:
 
     timespec timestamp;
     unsigned int timestamp_flags;
-    BOOST_LEAF_RC_TRY(::zfur_pkt_get_timestamp(zock_.get(), &msg.msg, &timestamp, 0, &timestamp_flags));
+    BOOST_LEAF_RC_TRYV(::zfur_pkt_get_timestamp(zock_.get(), &msg.msg, &timestamp, 0, &timestamp_flags));
 
     std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(timestamp), asio::const_buffer(msg.msg.iov[0].iov_base, msg.msg.iov[0].iov_len));
 
@@ -341,7 +341,7 @@ public:
       addr_remote = BOOST_LEAF_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _))->endpoint();
 
     zfut *zock_ = nullptr;
-    BOOST_LEAF_RC_TRY(::zfut_alloc(&zock_, static_stack::instance().stack.get(), addr_local.data(), sizeof(*addr_local.data()),
+    BOOST_LEAF_RC_TRYV(::zfut_alloc(&zock_, static_stack::instance().stack.get(), addr_local.data(), sizeof(*addr_local.data()),
                                     const_cast<sockaddr *>(addr_remote.data()), sizeof(*addr_remote.data()), 0, static_stack::instance().attr.get()));
     zock_ptr zock {zock_};
 
@@ -349,7 +349,7 @@ public:
 #else // defined(USE_TCPDIRECT)
     const auto endpoint = BOOST_LEAF_EC_TRYX(asio::ip::udp::resolver(service).resolve(address, port, _)).begin()->endpoint();
     asio::ip::udp::socket socket {service};
-    BOOST_LEAF_EC_TRY(socket.connect(endpoint, _));
+    BOOST_LEAF_EC_TRYV(socket.connect(endpoint, _));
     return udp_writer {std::move(socket)};
 #endif
   }
@@ -361,13 +361,13 @@ public:
 
     ::zf_pkt_report reports[1];
     int count = 1;
-    BOOST_LEAF_RC_TRY(::zfut_get_tx_timestamps(zock_.get(), reports, &count));
+    BOOST_LEAF_RC_TRYV(::zfut_get_tx_timestamps(zock_.get(), reports, &count));
     return UNLIKELY(count > 0) ? to_time_point<network_clock>(reports[0].timestamp) : network_clock::time_point();
 #elif defined(USE_LIBVMA)
     ::send(native_handle(), buffer.data(), buffer.size(), 0);
     return network_clock::now();
 #else  // defined(USE_TCPDIRECT)
-    BOOST_LEAF_EC_TRY(asio::ip::udp::socket::send(buffer, 0, _));
+    BOOST_LEAF_EC_TRYV(asio::ip::udp::socket::send(buffer, 0, _));
     return network_clock::now();
 #endif
   }
