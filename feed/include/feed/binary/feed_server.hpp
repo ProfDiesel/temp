@@ -103,7 +103,7 @@ inline boost::leaf::awaitable<boost::leaf::result<void>> detail::session::operat
   co_return boost::leaf::success();
 }
 
-boost::leaf::awaitable<boost::leaf::result<void>> replay(auto &&co_continuation, auto &&co_wait_until, asio::const_buffer buffer)
+boost::leaf::awaitable<boost::leaf::result<void>> replay(auto co_continuation, auto co_wait_until, asio::const_buffer buffer)
 {
   const auto *current = reinterpret_cast<const feed::detail::event *>(buffer.data());
   const auto timestamp_0 = network_clock::time_point(std::chrono::nanoseconds(current->timestamp));
@@ -113,7 +113,7 @@ boost::leaf::awaitable<boost::leaf::result<void>> replay(auto &&co_continuation,
   {
     const auto *current = reinterpret_cast<const feed::detail::event *>(buffer.data());
     const auto timestamp = network_clock::time_point(std::chrono::nanoseconds(current->timestamp));
-    BOOST_LEAF_ASIO_CO_TRYV(co_await std::forward<decltype(co_wait_until)>(co_wait_until)(timestamp - timestamp_0));
+    BOOST_LEAF_ASIO_CO_TRYV(co_await co_wait_until(timestamp - timestamp_0));
     buffer += offsetof(feed::detail::event, packet);
 
     states.clear();
@@ -122,7 +122,7 @@ boost::leaf::awaitable<boost::leaf::result<void>> replay(auto &&co_continuation,
                                               { update_state(states[instrument_closure], update); },
                                               timestamp, buffer);
 
-    BOOST_LEAF_CO_TRYV(co_await std::forward<decltype(co_continuation)>(co_continuation)(states));
+    BOOST_LEAF_CO_TRYV(co_await co_continuation(states));
 
     buffer += decoded;
   }

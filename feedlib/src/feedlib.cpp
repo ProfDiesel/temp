@@ -56,29 +56,29 @@ struct up_state
   feed::instrument_state state;
 };
 
-extern "C" up_state *up_state_new(up_instrument_id_t instrument) { return new up_state {instrument}; }
+extern "C" __attribute__((visibility("default"))) up_state *up_state_new(up_instrument_id_t instrument) { return new up_state {instrument}; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_state_free(up_state *self) { delete self; }
+extern "C" __attribute__((visibility("default"))) void up_state_free(up_state *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" up_sequence_id_t up_state_get_sequence_id(up_state *self) { return self->state.sequence_id; }
+extern "C" __attribute__((visibility("default"))) up_sequence_id_t up_state_get_sequence_id(up_state *self) { return self->state.sequence_id; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_state_set_sequence_id(up_state *self, up_sequence_id_t sequence_id) { self->state.sequence_id = sequence_id; }
+extern "C" __attribute__((visibility("default"))) void up_state_set_sequence_id(up_state *self, up_sequence_id_t sequence_id) { self->state.sequence_id = sequence_id; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" uint64_t up_state_get_bitset(const up_state *self)
+extern "C" __attribute__((visibility("default"))) uint64_t up_state_get_bitset(const up_state *self)
 {
   static_assert(decltype(self->state.updates)().size() <= std::numeric_limits<unsigned long long>::digits);
   return self->state.updates.to_ullong();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_state_update_float(up_state *self, up_field_t field, float value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
+extern "C" __attribute__((visibility("default"))) void up_state_update_float(up_state *self, up_field_t field, float value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_state_update_uint(up_state *self, up_field_t field, uint32_t value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
+extern "C" __attribute__((visibility("default"))) void up_state_update_uint(up_state *self, up_field_t field, uint32_t value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -90,13 +90,13 @@ struct up_encoder
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" up_encoder *up_encoder_new() { return new up_encoder {}; }
+extern "C" __attribute__((visibility("default"))) up_encoder *up_encoder_new() { return new up_encoder {}; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_encoder_free(up_encoder *self) { delete self; }
+extern "C" __attribute__((visibility("default"))) void up_encoder_free(up_encoder *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" std::size_t up_encoder_encode(up_encoder *self, up_timestamp_t timestamp, const up_state *const states[], std::size_t nb_states, void *buffer,
+extern "C" __attribute__((visibility("default"))) std::size_t up_encoder_encode(up_encoder *self, up_timestamp_t timestamp, const up_state *const states[], std::size_t nb_states, void *buffer,
                                          std::size_t buffer_size)
 {
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
@@ -126,13 +126,13 @@ struct up_decoder
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" up_decoder *up_decoder_new(up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint) { return new up_decoder {on_update_float, on_update_uint}; }
+extern "C" __attribute__((visibility("default"))) up_decoder *up_decoder_new(up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint) { return new up_decoder {on_update_float, on_update_uint}; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_decoder_free(up_decoder *self) { delete self; }
+extern "C" __attribute__((visibility("default"))) void up_decoder_free(up_decoder *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" std::size_t up_decoder_decode(up_decoder *self, const void *buffer, std::size_t buffer_size)
+extern "C" __attribute__((visibility("default"))) std::size_t up_decoder_decode(up_decoder *self, const void *buffer, std::size_t buffer_size)
 {
   return feed::decode([](auto instrument_id, auto sequence_id) noexcept { return instrument_id; },
                       [self](auto timestamp, auto update, auto instrument_id)
@@ -174,19 +174,19 @@ struct up_future
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" up_future *up_future_new() { return new up_future {}; }
+extern "C" __attribute__((visibility("default"))) up_future *up_future_new() { return new up_future {}; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_future_free(up_future *self) { delete self; }
+extern "C" __attribute__((visibility("default"))) void up_future_free(up_future *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" bool up_future_is_set(const up_future *self) { return !std::holds_alternative<std::nullopt_t>(self->value); }
+extern "C" __attribute__((visibility("default"))) bool up_future_is_set(const up_future *self) { return !std::holds_alternative<std::nullopt_t>(self->value); }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" bool up_future_is_ok(const up_future *self) { return std::holds_alternative<up_future::ok_t>(self->value); }
+extern "C" __attribute__((visibility("default"))) bool up_future_is_ok(const up_future *self) { return std::holds_alternative<up_future::ok_t>(self->value); }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" const char *up_future_message(const up_future *self) { return std::get<std::string>(self->value).c_str(); }
+extern "C" __attribute__((visibility("default"))) const char *up_future_message(const up_future *self) { return std::get<std::string>(self->value).c_str(); }
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -226,7 +226,7 @@ struct up_server
   {
     asio::co_spawn(
       service,
-      [&, snapshot_host=std::string(snapshot_host), snapshot_service=std::string(snapshot_service), updates_host=std::string(updates_host), updates_service=std::string(updates_service)]() noexcept -> boost::leaf::awaitable<void>
+      [&, future, snapshot_host=std::string(snapshot_host), snapshot_service=std::string(snapshot_service), updates_host=std::string(updates_host), updates_service=std::string(updates_service)]() noexcept -> boost::leaf::awaitable<void>
       {
         co_await boost::leaf::co_try_handle_all(
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
@@ -252,17 +252,17 @@ struct up_server
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" up_server *up_server_new(const char *snapshot_host, const char *snapshot_service, const char *updates_host, const char *updates_service,
+extern "C" __attribute__((visibility("default"))) up_server *up_server_new(const char *snapshot_host, const char *snapshot_service, const char *updates_host, const char *updates_service,
                                     up_future *future)
 {
   return new up_server(snapshot_host, snapshot_service, updates_host, updates_service, future);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" void up_server_free(up_server *self) { delete self; }
+extern "C" __attribute__((visibility("default"))) void up_server_free(up_server *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" std::size_t up_server_poll(up_server *self, up_future *future)
+extern "C" __attribute__((visibility("default"))) std::size_t up_server_poll(up_server *self, up_future *future)
 {
   std::error_code error_code;
   auto result = self->service.poll(error_code);
@@ -277,7 +277,7 @@ extern "C" std::size_t up_server_poll(up_server *self, up_future *future)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" up_future *up_server_push_update(up_server *self, const up_state *const states[], std::size_t nb_states)
+extern "C" __attribute__((visibility("default"))) up_future *up_server_push_update(up_server *self, const up_state *const states[], std::size_t nb_states)
 {
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
@@ -292,7 +292,7 @@ extern "C" up_future *up_server_push_update(up_server *self, const up_state *con
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" up_future *up_server_replay(up_server *self, const void *buffer, std::size_t buffer_size)
+extern "C" __attribute__((visibility("default"))) up_future *up_server_replay(up_server *self, const void *buffer, std::size_t buffer_size)
 {
   using clock_t = std::chrono::steady_clock;
   using timer_t = asio::basic_waitable_timer<clock_t>;
