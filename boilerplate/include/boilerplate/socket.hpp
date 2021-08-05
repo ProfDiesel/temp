@@ -94,7 +94,7 @@ private:
 #endif // defined(USE_TCPDIRECT)
 
 #if defined(USE_LIBVMA)
-struct vma_api 
+struct vma_api
 {
   ::vma_api_t *ptr = nullptr;
 
@@ -271,9 +271,8 @@ public:
       std::forward<decltype(continuation)>(continuation)(timestamp, asio::const_buffer(buffers_[i].data(), msgvec_[i].msg_len));
 
 #else  // defined(USE_TCPDIRECT)
-    asio::const_buffer buffer(buffer_.data(), buffer_size);
-    const auto msg_length = receive(buffer_);
-    std::forward<decltype(continuation)>(continuation)({}, asio::const_buffer(buffer_.data(), msg_length));
+    const auto msg_length = receive(asio::buffer(buffer_.data(), buffer_size));
+    std::forward<decltype(continuation)>(continuation)(network_clock::time_point(), asio::const_buffer(buffer_.data(), msg_length));
 #endif // defined(USE_TCPDIRECT)
 
     return {};
