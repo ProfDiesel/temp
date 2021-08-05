@@ -235,14 +235,14 @@ public:
 #elif defined(USE_LIBVMA)
 
     const std::size_t nb_completions = vma_api::instance().socketxtreme_poll(vma_ring_fd_, completions_.data(), completions_.size(), 0);
-    for(auto &&completion: completions_ | ranges::view::take(nb_completions))
+    for(auto &&completion: completions_ | ranges::views::take(nb_completions))
     {
       assert(completion.events & VMA_SOCKETXTREME_PACKET);
       const auto &packet = completion.packet;
       assert(packet.num_bufs == 1);
       std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(packet.hw_timestamp), asio::const_buffer(packet.buff_lst->payload, packet.total_len));
     }
-    for(auto &&completion: completions_ | ranges::view::take(nb_completions))
+    for(auto &&completion: completions_ | ranges::views::take(nb_completions))
       vma_api::instance().socketxtreme_free_vma_packets(&completion.packet, 1);
 
 #elif defined(USE_RECVMMSG)
