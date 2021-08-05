@@ -1,14 +1,20 @@
 #!/usr/bin/env python
 
 from argparse import ArgumentParser, FileType
+import sys
+
 import dpkt
 
-def main():
+
+def main(argv=None):
     parser = ArgumentParser()
-    parser.add_argument('pcap-file', type=FileType('r', 0))
+    parser.add_argument('pcap-file', nargs='?', type=FileType(), default='-')
     args = parser.parse_args(argv)
 
-    for timestamp, buffer in dpkt.pcap.Reader(args.pcap_file):
+    input_ = getattr(args, 'pcap-file')
+    input_ = getattr(input_, 'buffer', input_)
+
+    for timestamp, buffer in dpkt.pcap.Reader(input_):
         eth = dpkt.ethernet.Ethernet(buffer)
         ip = eth.data
 
@@ -25,10 +31,10 @@ def main():
             udp = ip.data
             if udp.dport == 4401:
                 # up updates
-                udp.data
+                print(udp.data)
             elif udp.dport == 9999:
                 # down datagram
-                udp.data
+                print(udp.data)
 
 if __name__ == '__main__':
     main()

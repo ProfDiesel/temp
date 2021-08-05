@@ -37,11 +37,12 @@ struct session : public std::enable_shared_from_this<session>
 class server : public state_map
 {
 public:
-  server(asio::io_context &service) noexcept: service(service), updates_socket(service), updates_endpoint(), snapshot_acceptor(service) {}
+  server(asio::io_context &service) noexcept: service(service), updates_socket(service), snapshot_acceptor(service) {}
 
   boost::leaf::result<void> connect(const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint) noexcept
   {
-    this->updates_endpoint = updates_endpoint;
+    BOOST_LEAF_EC_TRYV(updates_socket.open(updates_endpoint.protocol(), _));
+    BOOST_LEAF_EC_TRYV(updates_socket.connect(updates_endpoint, _));
 
     BOOST_LEAF_EC_TRYV(snapshot_acceptor.open(snapshot_endpoint.protocol(), _));
     BOOST_LEAF_EC_TRYV(snapshot_acceptor.set_option(asio::ip::tcp::socket::reuse_address(true), _));
@@ -54,7 +55,7 @@ public:
   boost::leaf::awaitable<boost::leaf::result<void>>
   update(const auto &states) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>>
   {
-    BOOST_LEAF_ASIO_CO_TRYV(co_await state_map::update(states, [&](auto &&buffer) { return updates_socket.async_send_to(buffer, updates_endpoint, _); }));
+    BOOST_LEAF_ASIO_CO_TRYV(co_await state_map::update(states, [&](auto &&buffer) { return updates_socket.async_send(buffer, _); }));
     co_return boost::leaf::success();
   }
 
@@ -84,7 +85,6 @@ public:
 private:
   asio::io_context &service;
   asio::ip::udp::socket updates_socket;
-  asio::ip::udp::endpoint updates_endpoint;
   asio::ip::tcp::acceptor snapshot_acceptor;
 };
 
@@ -116,13 +116,13 @@ boost::leaf::awaitable<boost::leaf::result<void>> replay(auto co_continuation, a
     BOOST_LEAF_ASIO_CO_TRYV(co_await co_wait_until(timestamp - timestamp_0));
     buffer += offsetof(feed::detail::event, packet);
 
-    states.clear();
     const auto decoded = feed::detail::decode([](auto instrument_id, auto sequence_id) { return instrument_id; },
                                               [&states](const auto &timestamp, const auto &update, const auto &instrument_closure)
                                               { update_state(states[instrument_closure], update); },
                                               timestamp, buffer);
 
-    BOOST_LEAF_CO_TRYV(co_await co_continuation(states));
+    BOOST_LEAF_CO_TRYV(co_await co_continuation(std::move(states)));
+    states.clear();
 
     buffer += decoded;
   }

@@ -1,0 +1,40 @@
+from genjutsu import Apply, env
+from genjutsu_toolsets.c import Cxx, SharedObject, Executable, IncludeDir, CxxDef
+from þirdparty import ThirdParty
+
+thirdparties = {thirdparty:
+    ThirdParty(thirdparty)
+    for thirdparty in (
+        'boost_nortti',
+    )
+}
+
+Apply(
+    (thirdparty.FLAGS for thirdparty in thirdparties.values()),
+)
+
+with env('production/smartbulb'):
+    smartbulb_lib = SharedObject(
+        'smartbulb', objects=(Cxx('smartbulb.cpp', pic=True),)
+    )
+
+with env('production/mlockall'):
+    mlockall_lib = SharedObject(
+        'mlockall', objects=(Cxx('mlockall.cpp', pic=True),)
+    )
+
+with env('production/tsc_calibrate'):
+    tsc_calibrate_exe = Executable(
+        'tsc_calibrate', objects=(Cxx('tsc_calibrate.cpp'),)
+    )
+
+with env('notebook'):
+    Apply(IncludeDir('src'))
+    trigger_helper_lib = SharedObject(
+        'trigger_helper', objects=(Cxx('trigger_helper.cpp', pic=True),)
+    )
+    trigger_helper_test = Executable(
+        'trigger_helper_test',
+        objects=(Cxx('trigger_helper.cpp', name='trigger_helper_test', flags=(CxxDef('TEST'),), quick_build_alias=None),)
+    )
+

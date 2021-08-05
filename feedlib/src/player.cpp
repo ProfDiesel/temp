@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
   }
 
   up::future result, result0;
-  up::server server("0.0.0.0", "4400", "0.0.0.0", "4401", result);
+  up::server server("0.0.0.0", "4400", "239.255.0.1", "4401", result);
 
   while(!result.is_set())
   {

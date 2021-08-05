@@ -17,9 +17,7 @@ thirdparties = {thirdparty:
         'frozen_nortti',
         'gsl',
         'leaf_nortti_nothreads',
-        'libvma',
         'observer-ptr-lite',
-        'openonload',
         'rangeless',
         'robin_hood',
         'stdfunc_nortti',
@@ -39,8 +37,8 @@ Apply(
 )
 
 Apply(CxxDef('LINUX'))
-
 Apply(CxxDef('LEAN_AND_MEAN'))
+
 Apply(CxxDef('LOGGER_FMT_COMPILE'))
 Apply(CxxDef('LOGGER_SYSLOG_FORMAT'))
 # Apply(CxxDef('BOOST_SPIRIT_X3_DEBUG'))
@@ -57,13 +55,14 @@ Copy(
 Default(Alias('dust', (Executable('dust', objects=(Cxx('src/main.cpp', pch=pch),)),)))
 
 with env():
-    Apply(CxxDef('USE_TCPDIRECT'))
+    onload = ThirdParty('openonload')
+    Apply(CxxDef('USE_TCPDIRECT'), onload.FLAGS)
     Copy(preprocessed := Cxx('src/main.cpp', name='main_tcpdirect', pch=pch, preprocess_only=True), 'preprocessed/main.i') # to be used by clang dump-record-layouts
     Copy(compiled_ := Cxx(preprocessed, pch=pch, compile_only=True, quick_build_alias=None), 'preprocessed/main.s') # to be used by llvm-mca
-    Alias('dust_onload', (Executable('dust_onload', objects=(compiled_, *thirdparties['openonload'].ARCHIVES)),))
+    Alias('dust_onload', (Executable('dust_onload', objects=(compiled_, onload.ARCHIVES)),))
 
 with env():
-    Apply(CxxDef('USE_LIBVMA'))
+    Apply(CxxDef('USE_LIBVMA'), ThirdParty('libvma').FLAGS)
     Alias('dust_vma', (Executable('dust_vma', objects=(Cxx('src/main.cpp', name='main_vma', pch=pch),)),))
 
 with env():
@@ -85,35 +84,7 @@ with env('benchmark'):
             'string_dispatch_benchmark', objects=(Cxx('string_dispatch.cpp', pch=pch),)
         )
 
-# Alias('benchmark', (traversal_benchmark_exe, string_dispatch_benchmark_exe))
-Alias('benchmark', (traversal_benchmark_exe,))
-
-with env('contrib/production/smartbulb'):
-    smartbulb_lib = SharedObject(
-        'smartbulb', objects=(Cxx('smartbulb.cpp', pch=pch, pic=True),)
-    )
-
-with env('contrib/production/mlockall'):
-    mlockall_lib = SharedObject(
-        'mlockall', objects=(Cxx('mlockall.cpp', pch=pch, pic=True),)
-    )
-
-with env('contrib/production/tsc_calibrate'):
-    tsc_calibrate_exe = Executable(
-        'tsc_calibrate', objects=(Cxx('tsc_calibrate.cpp', pch=pch),)
-    )
-
-with env('contrib/notebook'):
-    Apply(IncludeDir('src'))
-    trigger_helper_lib = SharedObject(
-        'trigger_helper', objects=(Cxx('trigger_helper.cpp', pch=pch, pic=True),)
-    )
-    trigger_helper_test = Executable(
-        'trigger_helper_test',
-        objects=(Cxx('trigger_helper.cpp', name='trigger_helper_test', pch=pch, flags=(CxxDef('TEST'),), quick_build_alias=None),)
-    )
-
-Alias('contrib', (smartbulb_lib, mlockall_lib, trigger_helper_lib, trigger_helper_test, tsc_calibrate_exe))
+Alias('benchmark', (traversal_benchmark_exe, string_dispatch_benchmark_exe))
 
 with env('test/unit'):
     Apply(IncludeDir('src'))

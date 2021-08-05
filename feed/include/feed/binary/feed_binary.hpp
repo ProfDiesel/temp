@@ -191,7 +191,7 @@ public:
       valid_updates |= std::exchange(state.updates, {});
     }
 
-    return continuation(asio::buffer(buffer, static_cast<std::size_t>(static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data()))));
+    return std::forward<decltype(continuation)>(continuation)(asio::buffer(buffer, static_cast<std::size_t>(static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data()))));
   }
 
   instrument_state at(instrument_id_type instrument) const noexcept

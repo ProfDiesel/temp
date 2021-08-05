@@ -4,7 +4,7 @@
 
 #include <asio/buffer.hpp>
 
-#include <boost/noncopyable.hpp>
+//#include <boost/noncopyable.hpp>
 #include <boost/leaf/result.hpp>
 
 #include <limits>

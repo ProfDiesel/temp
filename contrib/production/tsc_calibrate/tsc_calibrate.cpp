@@ -1,5 +1,4 @@
-#include <boilerplate/chrono.hpp>
-
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
