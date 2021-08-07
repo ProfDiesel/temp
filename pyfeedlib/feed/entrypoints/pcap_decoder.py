@@ -9,10 +9,15 @@ from ..feed import Decoder, Field
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('pcap-file', type=FileType('r', 0))
+    parser.add_argument('pcap-file', nargs='?', type=FileType(), default='-')
+    parser.add_argument('--unbuffered', action='store_true')
     parser.add_argument('--snaphsot-port', type=int, default=4400)
     parser.add_argument('--updates-port', type=int, default=4401)
     args = parser.parse_args(argv)
+
+    input_ = getattr(args, 'pcap-file')
+    if args.unbuffered:
+        input_ = getattr(input_, 'buffer', input_)
 
     def on_update_float(field: Field, value: float):
         pass
@@ -22,7 +27,7 @@ def main():
 
     decoder = Decoder(on_update_float=on_update_float, on_update_uint=on_update_uint)
 
-    for timestamp, buffer in dpkt.pcap.Reader(args.pcap_file):
+    for timestamp, buffer in dpkt.pcap.Reader(input_):
         eth = dpkt.ethernet.Ethernet(buffer)
         ip = eth.data
 

@@ -1,7 +1,6 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
+#include <stdint.h>
 
 #if defined(__cplusplus)
 extern "C"
@@ -43,7 +42,7 @@ extern "C"
 
   up_encoder *up_encoder_new();
   void up_encoder_free(up_encoder *self);
-  size_t up_encoder_encode(up_encoder *self, up_timestamp_t timestamp, const up_state *const states[], size_t nb_states, void *buffer, size_t buffer_size);
+  unsigned int up_encoder_encode(up_encoder *self, up_timestamp_t timestamp, const up_state *const states[], unsigned int nb_states, void *buffer, unsigned int buffer_size);
 
   //
   // decoder
@@ -54,7 +53,7 @@ extern "C"
 
   up_decoder *up_decoder_new(up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint);
   void up_decoder_free(up_decoder *self);
-  size_t up_decoder_decode(up_decoder *self, const void *buffer, size_t buffer_size);
+  unsigned int up_decoder_decode(up_decoder *self, const void *buffer, unsigned int buffer_size);
 
   //
   // future
@@ -74,9 +73,9 @@ extern "C"
 
   up_server *up_server_new(const char *snapshot_host, const char *snapshot_service, const char *updates_host, const char *updates_service, up_future *future);
   void up_server_free(up_server *self);
-  size_t up_server_poll(up_server *self, up_future *future);
-  up_future *up_server_push_update(up_server *self, const up_state *const states[], size_t nb_states);
-  up_future *up_server_replay(up_server *self, const void *buffer, std::size_t buffer_size);
+  unsigned int up_server_poll(up_server *self, up_future *future);
+  up_future *up_server_push_update(up_server *self, const up_state *const states[], unsigned int nb_states);
+  up_future *up_server_replay(up_server *self, const void *buffer, unsigned int buffer_size);
   void up_server_get_state(up_server *self, up_instrument_id_t instrument, up_state *state);
 
 #if defined(__cplusplus)
