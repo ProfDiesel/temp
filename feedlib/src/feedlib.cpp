@@ -96,8 +96,8 @@ extern "C" __attribute__((visibility("default"))) up_encoder *up_encoder_new() {
 extern "C" __attribute__((visibility("default"))) void up_encoder_free(up_encoder *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) std::size_t up_encoder_encode(up_encoder *self, up_timestamp_t timestamp, const up_state *const states[], std::size_t nb_states, void *buffer,
-                                         std::size_t buffer_size)
+extern "C" __attribute__((visibility("default"))) size_t up_encoder_encode(up_encoder *self, up_timestamp_t timestamp, const up_state *const states[], size_t nb_states, void *buffer,
+                                         size_t buffer_size)
 {
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
@@ -132,7 +132,7 @@ extern "C" __attribute__((visibility("default"))) up_decoder *up_decoder_new(up_
 extern "C" __attribute__((visibility("default"))) void up_decoder_free(up_decoder *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) std::size_t up_decoder_decode(up_decoder *self, const void *buffer, std::size_t buffer_size)
+extern "C" __attribute__((visibility("default"))) size_t up_decoder_decode(up_decoder *self, const void *buffer, size_t buffer_size)
 {
   return feed::decode([](auto instrument_id, auto sequence_id) noexcept { return instrument_id; },
                       [self](auto timestamp, auto update, auto instrument_id)
@@ -262,7 +262,7 @@ extern "C" __attribute__((visibility("default"))) up_server *up_server_new(const
 extern "C" __attribute__((visibility("default"))) void up_server_free(up_server *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) std::size_t up_server_poll(up_server *self, up_future *future)
+extern "C" __attribute__((visibility("default"))) size_t up_server_poll(up_server *self, up_future *future)
 {
   std::error_code error_code;
   auto result = self->service.poll(error_code);
@@ -277,7 +277,7 @@ extern "C" __attribute__((visibility("default"))) std::size_t up_server_poll(up_
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) up_future *up_server_push_update(up_server *self, const up_state *const states[], std::size_t nb_states)
+extern "C" __attribute__((visibility("default"))) up_future *up_server_push_update(up_server *self, const up_state *const states[], size_t nb_states)
 {
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
@@ -292,7 +292,7 @@ extern "C" __attribute__((visibility("default"))) up_future *up_server_push_upda
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) up_future *up_server_replay(up_server *self, const void *buffer, std::size_t buffer_size)
+extern "C" __attribute__((visibility("default"))) up_future *up_server_replay(up_server *self, const void *buffer, size_t buffer_size)
 {
   using clock_t = std::chrono::steady_clock;
   using timer_t = asio::basic_waitable_timer<clock_t>;
