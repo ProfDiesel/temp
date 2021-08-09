@@ -281,6 +281,26 @@ template<typename continuation_type>
 #undef HANDLE_FIELD
   // clang-format on
 }
+
+template<typename value_type>
+value_type get_update(const instrument_state &state, field_index index) noexcept
+{
+    // clang-format off
+  switch(index)
+  {
+#define HANDLE_FIELD(r, _, elem) \
+    case field_index::BOOST_PP_TUPLE_ELEM(0, elem): \
+      if(std::is_convertible_v<value_type, field_type_t<field::BOOST_PP_TUPLE_ELEM(0, elem)>>) \
+        return {state.BOOST_PP_TUPLE_ELEM(0, elem)}; \
+      break;
+  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
+#undef HANDLE_FIELD
+    default:
+      return {};
+  }
+  // clang-format on
+}
+
 } // namespace feed
 
 #if defined(DOCTEST_LIBRARY_INCLUDED)

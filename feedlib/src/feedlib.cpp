@@ -75,6 +75,18 @@ extern "C" __attribute__((visibility("default"))) uint64_t up_state_get_bitset(c
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+extern "C" __attribute__((visibility("default"))) float up_state_get_float(const up_state_t *self, up_field_t field)
+{
+  return static_cast<float>(feed::get_update<feed::price_t>(self->state, static_cast<feed::field_index>(field)));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+extern "C" __attribute__((visibility("default"))) uint32_t up_state_get_uint(const up_state_t *self, up_field_t field)
+{
+  return static_cast<uint32_t>(feed::get_update<feed::quantity_t>(self->state, static_cast<feed::field_index>(field)));
+}
+
+///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) void up_state_update_float(up_state *self, up_field_t field, float value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
 
 ///////////////////////////////////////////////////////////////////////////////
