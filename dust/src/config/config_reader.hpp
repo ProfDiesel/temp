@@ -99,12 +99,12 @@ static boost::leaf::result<void> parse(const continuation_type &continuation, it
     = '"' >> x3::lexeme[-(object_name >> ".") >> expect(field_name)] >> expect('"') >> expect(":") >> expect(value);
 
   static const auto assignment_with_action = expect(assignment)[(
-      [&](auto &context)
+      [continuation](auto &context)
       {
         auto &[object, field, value] = x3::_attr(context);
         continuation(object, field, std::move(value));
       })];
-  
+
   //const auto grammar = *(!x3::eoi >> assignment_with_action >> expect(";"));
   const auto grammar = assignment_with_action % ',' >> expect(x3::eoi);
 

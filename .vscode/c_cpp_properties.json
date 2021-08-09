@@ -2,7 +2,7 @@
     "configurations": [
         {
             "name": "clang",
-            "compilerPath": "/usr/bin/clang++-13",
+            "compilerPath": "/usr/bin/clang++",
             "cStandard": "gnu17",
             "cppStandard": "gnu++20",
             "intelliSenseMode": "linux-clang-x64",

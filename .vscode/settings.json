@@ -74,7 +74,8 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp",
         "variant": "cpp",
-        "filesystem": "cpp"
+        "filesystem": "cpp",
+        "format": "cpp"
     },
     "python.linting.flake8Enabled": false,
     "python.linting.mypyEnabled": true
