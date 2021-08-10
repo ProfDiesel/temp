@@ -77,13 +77,13 @@ extern "C" __attribute__((visibility("default"))) uint64_t up_state_get_bitset(c
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) float up_state_get_float(const up_state_t *self, up_field_t field)
 {
-  return static_cast<float>(feed::get_update<feed::price_t>(self->state, static_cast<feed::field_index>(field)));
+  return static_cast<float>(feed::get_update<feed::price_t>(self->state, static_cast<feed::field_index>(field), float{}));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) uint32_t up_state_get_uint(const up_state_t *self, up_field_t field)
 {
-  return static_cast<uint32_t>(feed::get_update<feed::quantity_t>(self->state, static_cast<feed::field_index>(field)));
+  return static_cast<uint32_t>(feed::get_update<feed::quantity_t>(self->state, static_cast<feed::field_index>(field), uint32_t{}));
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -274,7 +274,7 @@ template<typename value_type>
 template<typename continuation_type>
 [[using gnu : always_inline, flatten, hot]] inline void visit_state(continuation_type &&continuation, const instrument_state &state)
 {
-    // clang-format off
+  // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
   if(state.updates[static_cast<std::size_t>(field_index::BOOST_PP_TUPLE_ELEM(0, elem))]) continuation(BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c){}, state.BOOST_PP_TUPLE_ELEM(0, elem));
   BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
@@ -283,22 +283,28 @@ template<typename continuation_type>
 }
 
 template<typename value_type>
-value_type get_update(const instrument_state &state, field_index index) noexcept
+value_type get_update(const instrument_state &state, field_index index, const value_type &default_value) noexcept
 {
-    // clang-format off
+  const auto return_ = [&](const auto &value)
+  {
+    if constexpr(std::is_nothrow_convertible_v<decltype(value), value_type>)
+      return value;
+    else
+      return default_value;
+  };
+
   switch(index)
   {
+  // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
     case field_index::BOOST_PP_TUPLE_ELEM(0, elem): \
-      if(std::is_convertible_v<value_type, field_type_t<field::BOOST_PP_TUPLE_ELEM(0, elem)>>) \
-        return {state.BOOST_PP_TUPLE_ELEM(0, elem)}; \
-      break;
-  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
+      return return_(state.BOOST_PP_TUPLE_ELEM(0, elem));
+    BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
 #undef HANDLE_FIELD
-    default:
-      return {};
-  }
   // clang-format on
+    default:
+      return default_value;
+  }
 }
 
 } // namespace feed
