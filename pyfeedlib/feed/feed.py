@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import feedlib.lib as _feedlib
@@ -88,15 +89,23 @@ class Decoder:
     def decode(self, buffer: memoryview):
         _feedlib.up_decoder_decode(self._self, buffer, len(buffer))
 
+class Future:
+    def __init__(self):
+        self._self = _feedlib.up_future_new()
+
+    def __del__(self):
+        _feedlib.up_future_free(self._self)
+
+    def is_set(self):
+        return _feedlib.up_future_is_set(self._self)
+
+    def check(self):
+        assert(self.is_set())
+        if not _feedlib.up_future_is_ok(self._self):
+            raise RuntimeError(_feedlib.up_future_get_message(self._self))
+
 
 class Server:
-    class Future:
-        def __init__(self):
-            self._self = _feedlib.up_future_new()
-
-        def __del__(self):
-            _feedlib.up_future_free(self._self)
-
     def __init__(self, snapshot: Address, update: Address):
         self.__snapshot_address = snapshot
         self.__update_address = update
@@ -104,10 +113,8 @@ class Server:
         self.__futures: Dict[Future, asyncio.Future[None]] = {}
 
     async def connect(self):
-        snapshot_host, snapshot_port = self.__snapshot_address
-        updates_host, updates_port = self.__update_address
         future = Future()
-        self._self = _feedlib.up_server_new(snapshot_host, str(snapshot_port), updates_host, str(updates_port), future)
+        self._self = _feedlib.up_server_new(self.__snapshot_address.host.encode(), str(self.__snapshot_address.port).encode(), self.__update_address.host.encode(), str(self.__update_address.port).encode(), future._self)
         asyncio.get_event_loop().create_task(self.__loop())
         try:
             await self.__wait(future)
@@ -117,7 +124,11 @@ class Server:
 
     async def __loop(self):
         while self._self is not None:
-            _feedlib.up_server_poll(self._self)
+
+            future_ = Future()
+            _feedlib.up_server_poll(self._self, future_._self)
+            future_.check()
+
             for future, future_ in self.__futures.items():
                 if future.is_set():
                     del self.__futures[future]
@@ -125,12 +136,10 @@ class Server:
             await asyncio.sleep(0.1)
 
     async def __wait(self, future: Future):
-        future_ = asyncio,Future()
+        future_ = asyncio.Future()
         self.__futures[future] = future_
         await future_
-        assert(future.is_set())
-        if not _feedlib.up_future_is_ok(future):
-            raise RuntimeError(_feedlib.up_future_get_message(future))
+        future.check()
 
     def get_state(self, instrument: Instrument) -> State:
         assert(self._self is not None)
@@ -142,4 +151,3 @@ class Server:
     async def replay(self, buffer: memoryview):
         assert(self._self is not None)
         await self.__wait(_feedlib.up_server_replay(self._self, buffer, len(buffer)))
-
