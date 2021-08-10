@@ -330,3 +330,10 @@ extern "C" __attribute__((visibility("default"))) up_future *up_server_replay(up
     asio::detached);
   return result;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+extern "C" __attribute__((visibility("default"))) void up_server_get_state(up_server_t *self, up_instrument_id_t instrument, up_state_t *state)
+{
+  state->state = self->server.at(instrument);
+}
+
