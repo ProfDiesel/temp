@@ -8,10 +8,12 @@ Instrument = int
 SequenceId = int
 Field = int
 
+
 @dataclass
 class Address:
     host: str
     port: int
+
 
 class State:
     def __init__(self, instrument: Instrument):
@@ -69,7 +71,7 @@ class Encoder:
             state = State(instrument)
             state.sequence_id = self.__next_sequence_id(instrument)
             for field, value in fields.items():
-                state.update(getattr(up_field, field), float(value))
+                state.update(getattr(_feedlib, field), float(value))
             to_flush.push_back(_move(state._wrapped))
 
         n = _feedlib.up_encoder_encode(self._self, timestamp, to_flush, self.__buffer, len(self.__buffer))
@@ -89,6 +91,8 @@ class Decoder:
     def decode(self, buffer: memoryview):
         _feedlib.up_decoder_decode(self._self, buffer, len(buffer))
 
+up_future = Any
+
 class Future:
     def __init__(self):
         self._self = _feedlib.up_future_new()
@@ -100,46 +104,51 @@ class Future:
         return _feedlib.up_future_is_set(self._self)
 
     def check(self):
-        assert(self.is_set())
-        if not _feedlib.up_future_is_ok(self._self):
-            raise RuntimeError(_feedlib.up_future_get_message(self._self))
+        self._check(self._self)
+
+    @staticmethod
+    def _check(future):
+        assert(_feedlib.up_future_is_set(future))
+        if not _feedlib.up_future_is_ok(future):
+            raise RuntimeError(_feedlib.up_future_get_message(future))
+
 
 
 class Server:
     def __init__(self, snapshot: Address, update: Address):
         self.__snapshot_address = snapshot
         self.__update_address = update
-        self._self: Optional[up_server] = None
-        self.__futures: Dict[Future, asyncio.Future[None]] = {}
+        self._self: Optional[_feedlib.up_server] = None
+        self.__futures: Dict[up_future, asyncio.Future[None]] = {}
 
     async def connect(self):
         future = Future()
         self._self = _feedlib.up_server_new(self.__snapshot_address.host.encode(), str(self.__snapshot_address.port).encode(), self.__update_address.host.encode(), str(self.__update_address.port).encode(), future._self)
         asyncio.get_event_loop().create_task(self.__loop())
         try:
-            await self.__wait(future)
-        except:
+            await self.__wait(future._self)
+        except Exception:
             self._self = None
             raise
 
     async def __loop(self):
         while self._self is not None:
 
-            future_ = Future()
-            _feedlib.up_server_poll(self._self, future_._self)
-            future_.check()
+            future = Future()
+            _feedlib.up_server_poll(self._self, future._self)
+            future.check()
 
-            for future, future_ in self.__futures.items():
-                if future.is_set():
+            for future, future_ in list(self.__futures.items()):
+                if _feedlib.up_future_is_set(future):
                     del self.__futures[future]
-                    _feedlib.up_future_set_result(future_)
+                    future_.set_result(None)
             await asyncio.sleep(0.1)
 
-    async def __wait(self, future: Future):
+    async def __wait(self, future: up_future):
         future_ = asyncio.Future()
         self.__futures[future] = future_
         await future_
-        future.check()
+        Future._check(future)
 
     def get_state(self, instrument: Instrument) -> State:
         assert(self._self is not None)

@@ -192,6 +192,20 @@ extern "C" __attribute__((visibility("default"))) up_future *up_future_new() { r
 extern "C" __attribute__((visibility("default"))) void up_future_free(up_future *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
+extern "C" __attribute__((visibility("default"))) void up_future_set_ok(up_future_t *self)
+{
+  assert(std::holds_alternative<std::nullopt_t>(self->value));
+  self->value = up_future::ok_v;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+extern "C" __attribute__((visibility("default"))) void up_future_set_message(up_future_t *self, const char *message)
+{
+  assert(std::holds_alternative<std::nullopt_t>(self->value));
+  self->value = message;
+}
+
+///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) bool up_future_is_set(const up_future *self) { return !std::holds_alternative<std::nullopt_t>(self->value); }
 
 ///////////////////////////////////////////////////////////////////////////////

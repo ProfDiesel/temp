@@ -72,9 +72,12 @@ extern "C"
 
   up_future_t *up_future_new();
   void up_future_free(up_future_t *self);
+  void up_future_set_ok(up_future_t *self);
+  void up_future_set_message(up_future_t *self, const char *message);
   bool up_future_is_set(const up_future_t *self);
   bool up_future_is_ok(const up_future_t *self);
   const char *up_future_message(const up_future_t *self);
+
 
 
   //

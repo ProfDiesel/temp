@@ -10,6 +10,7 @@ def address(as_str) -> Address:
     host, port = as_str.split(':', 1)
     return (host, int(port))
 
+
 async def async_main(argv=None):
     parser = ArgumentParser()
     parser.add_argument('scenario-file', type=FileType('rb'))
@@ -22,8 +23,10 @@ async def async_main(argv=None):
     await server.connect()
     await server.replay(scenario_file.read())
 
+
 def main(argv=None):
     asyncio.run(async_main())
+
 
 if __name__ == '__main__':
     main()

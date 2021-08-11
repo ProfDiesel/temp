@@ -7,7 +7,7 @@ from pathlib import Path
 from cffi import FFI
 from pcpp import Preprocessor
 
-ROOT = Path('/home/jonathan/dev/pipo/temp')
+ROOT = Path(__file__).parent.resolve() / '../..'
 HEADER = ROOT / 'feedlib/include/feed/feedlib.h'
 
 p = Preprocessor()
