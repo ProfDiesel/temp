@@ -133,12 +133,13 @@ extern "C" __attribute__((visibility("default"))) size_t up_encoder_encode(up_en
 
 struct up_decoder
 {
-  std::function<void(up_field_t, float)> on_update_float;
-  std::function<void(up_field_t, uint)> on_update_uint;
+  std::function<void(up_field_t, float, void*)> on_update_float;
+  std::function<void(up_field_t, uint, void*)> on_update_uint;
+  void *user_data;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) up_decoder *up_decoder_new(up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint) { return new up_decoder {on_update_float, on_update_uint}; }
+extern "C" __attribute__((visibility("default"))) up_decoder *up_decoder_new(up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint, void *user_data) { return new up_decoder {on_update_float, on_update_uint, user_data}; }
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) void up_decoder_free(up_decoder *self) { delete self; }
@@ -154,11 +155,11 @@ extern "C" __attribute__((visibility("default"))) size_t up_decoder_decode(up_de
                           {
                             if constexpr(std::is_same_v<decltype(value), feed::price_t>)
                             {
-                              self->on_update_float(static_cast<up_field_t>(field()), value);
+                              self->on_update_float(static_cast<up_field_t>(field()), value, self->user_data);
                             }
                             else if constexpr(std::is_same_v<decltype(value), feed::quantity_t>)
                             {
-                              self->on_update_uint(static_cast<up_field_t>(field()), value);
+                              self->on_update_uint(static_cast<up_field_t>(field()), value, self->user_data);
                             }
                             else
                             {
@@ -350,4 +351,3 @@ extern "C" __attribute__((visibility("default"))) void up_server_get_state(up_se
 {
   state->state = self->server.at(instrument);
 }
-

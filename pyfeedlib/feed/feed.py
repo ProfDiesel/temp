@@ -1,9 +1,9 @@
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
 
-import feedlib.lib as _feedlib
-import feedlib.ffi as ffi
+from feedlib import lib as _feedlib
+from feedlib import ffi
 
 Instrument = int
 SequenceId = int
@@ -67,13 +67,13 @@ class Encoder:
         return self.__buffer
 
     def encode(self, timestamp, updates: Dict[Instrument, Dict[str, Any]]):
-        to_flush = ffi.new('up_state*', len(updates))
+        to_flush = ffi.new('up_state*[]', len(updates))
         for n, (instrument, fields) in enumerate(updates.items()):
             state = State(instrument)
             state.sequence_id = self.__next_sequence_id(instrument)
             for field, value in fields.items():
-                state.update(getattr(_feedlib, field), float(value))
-            to_flush[n] = state.deref()
+                state.update_float(getattr(_feedlib, field), float(value))
+            to_flush[n] = state._self
 
         n = _feedlib.up_encoder_encode(self._self, timestamp, to_flush, self.__buffer, len(self.__buffer))
         if n > len(self.__buffer):
@@ -145,7 +145,7 @@ class Server:
             await asyncio.sleep(0.1)
 
     async def __wait(self, future: up_future):
-        future_ = asyncio.Future()
+        future_: asyncio.Future[None] = asyncio.Future()
         self.__futures[future] = future_
         await future_
         Future._check(future)
@@ -160,3 +160,32 @@ class Server:
     async def replay(self, buffer: memoryview):
         assert(self._self is not None)
         await self.__wait(_feedlib.up_server_replay(self._self, buffer, len(buffer)))
+
+
+
+ffibuilder.cdef("""
+    typedef ... event_t;
+    typedef void (*event_cb_t)(event_t *evt, void *userdata);
+    void event_cb_register(event_cb_t cb, void *userdata);
+
+    extern "Python" void my_event_callback(event_t *, void *);
+""")
+ffibuilder.set_source("_demo_cffi", r"""
+    #include <the_event_library.h>
+""")
+
+from _demo_cffi import ffi, lib
+
+class Widget(object):
+    def __init__(self):
+        userdata = ffi.new_handle(self)
+        self._userdata = userdata     # must keep this alive!
+        lib.event_cb_register(lib.my_event_callback, userdata)
+
+    def process_event(self, evt):
+        print "got event!"
+
+@ffi.def_extern()
+def my_event_callback(evt, userdata):
+    widget = ffi.from_handle(userdata)
+    widget.process_event(evt)

@@ -7,7 +7,7 @@ import dpkt
 from ..feed import Decoder, Field
 
 
-def main():
+def main(argv=None):
     parser = ArgumentParser()
     parser.add_argument('pcap-file', nargs='?', type=FileType(), default='-')
     parser.add_argument('--unbuffered', action='store_true')
