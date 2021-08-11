@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import feedlib.lib as _feedlib
+import feedlib.ffi as ffi
 
 Instrument = int
 SequenceId = int
@@ -66,13 +67,13 @@ class Encoder:
         return self.__buffer
 
     def encode(self, timestamp, updates: Dict[Instrument, Dict[str, Any]]):
-        to_flush = states_vector()
-        for instrument, fields in updates.items():
+        to_flush = ffi.new('up_state*', len(updates))
+        for n, (instrument, fields) in enumerate(updates.items()):
             state = State(instrument)
             state.sequence_id = self.__next_sequence_id(instrument)
             for field, value in fields.items():
                 state.update(getattr(_feedlib, field), float(value))
-            to_flush.push_back(_move(state._wrapped))
+            to_flush[n] = state.deref()
 
         n = _feedlib.up_encoder_encode(self._self, timestamp, to_flush, self.__buffer, len(self.__buffer))
         if n > len(self.__buffer):
@@ -111,7 +112,6 @@ class Future:
         assert(_feedlib.up_future_is_set(future))
         if not _feedlib.up_future_is_ok(future):
             raise RuntimeError(_feedlib.up_future_get_message(future))
-
 
 
 class Server:
