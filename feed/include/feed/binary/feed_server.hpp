@@ -72,7 +72,7 @@ public:
       {
         return boost::leaf::co_try_handle_all(
           *session_ptr,
-          [&](const boost::leaf::error_info &unmatched) { 
+          [&](const boost::leaf::error_info &unmatched) {
             // TODO
             // logger->log(logger::critical, "leaf_error_id={} exited"_format, ei.error());
           });
@@ -116,7 +116,7 @@ boost::leaf::awaitable<boost::leaf::result<void>> replay(auto co_continuation, a
     BOOST_LEAF_CO_TRYV(co_await co_wait_until(timestamp - timestamp_0));
     buffer += offsetof(feed::detail::event, packet);
 
-    const auto decoded = feed::detail::decode([](auto instrument_id, auto sequence_id) { return instrument_id; },
+    const auto decoded = feed::detail::decode([](auto instrument_id, [[maybe_unused]] auto sequence_id) { return instrument_id; },
                                               [&states]([[maybe_unused]] const auto &timestamp, const auto &update, const auto &instrument_closure)
                                               { update_state(states[instrument_closure], update); },
                                               timestamp, buffer);

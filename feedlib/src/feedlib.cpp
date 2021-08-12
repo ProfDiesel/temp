@@ -258,10 +258,10 @@ struct up_server
         return boost::leaf::co_try_handle_all(
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
           {
-            //const auto snapshot_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
-            BOOST_LEAF_ASIO_CO_TRY2(const auto snapshot_addresses, _, co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
-            //const auto updates_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, _));
-            BOOST_LEAF_ASIO_CO_TRY2(const auto updates_addresses, __, co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, __));
+            const auto snapshot_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
+            //BOOST_LEAF_ASIO_CO_TRY2(const auto snapshot_addresses, _, co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
+            const auto updates_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, _));
+            //BOOST_LEAF_ASIO_CO_TRY2(const auto updates_addresses, __, co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, __));
             BOOST_LEAF_CO_TRYV(server.connect(*snapshot_addresses.begin(), *updates_addresses.begin()));
             future->value = up_future::ok_v;
 

@@ -283,12 +283,12 @@ template<typename continuation_type>
 }
 
 template<typename value_type>
-const value_type &get_update(const instrument_state &state, field_index index, const value_type &default_value) noexcept
+value_type get_update(const instrument_state &state, field_index index, const value_type &default_value) noexcept
 {
-  const auto return_ = [&](const auto &value) -> const value_type &
+  const auto return_ = [&](const auto &value)
   {
     if constexpr(std::is_nothrow_convertible_v<decltype(value), value_type>)
-      return static_cast<const value_type&>(value);
+      return static_cast<value_type>(value);
     else
       return default_value;
   };
@@ -298,7 +298,7 @@ const value_type &get_update(const instrument_state &state, field_index index, c
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
     case field_index::BOOST_PP_TUPLE_ELEM(0, elem): \
-      return (return_(state.BOOST_PP_TUPLE_ELEM(0, elem)));
+      return return_(state.BOOST_PP_TUPLE_ELEM(0, elem));
     BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
 #undef HANDLE_FIELD
   // clang-format on
