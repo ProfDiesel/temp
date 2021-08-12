@@ -18,6 +18,12 @@ out = StringIO()
 p.write(out)
 
 ffi = FFI()
-ffi.cdef(out.getvalue())
+ffi.cdef(out.getvalue() + """
+    extern "Python"
+    {
+        void pyfeedlib_up_on_update_float_t(up_field_t, float, void *user_data);
+        void pyfeedlib_up_on_update_uint_t(up_field_t, size_t, void *user_data);
+    }
+""")
 ffi.set_source('feedlib', f'#include <{str(HEADER)}>', libraries=['feedlib'], library_dirs=[str(ROOT / 'feedlib/_build/debug')])
 ffi.compile(verbose=True)

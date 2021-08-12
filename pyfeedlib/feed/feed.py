@@ -1,6 +1,7 @@
+from abc import abstractmethod
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, Final, Optional, Tuple
 
 from feedlib import lib as _feedlib
 from feedlib import ffi
@@ -84,13 +85,23 @@ class Encoder:
 
 class Decoder:
     def __init__(self, on_update_float: Callable[[Field, float], None], on_update_uint: Callable[[Field, int], None]) -> None:
-        self._self = _feedlib.up_decoder_new(on_update_float, on_update_uint)
+        self._handle = ffi.new_handle(self)
+        self._self = _feedlib.up_decoder_new(on_update_float, on_update_uint, self._handle)
 
     def __del__(self):
         _feedlib.up_decoder_free(self._self)
 
     def decode(self, buffer: memoryview):
         _feedlib.up_decoder_decode(self._self, buffer, len(buffer))
+
+    @abstractmethod
+    def on_update_float(self, field, value):
+        ...
+
+    @abstractmethod
+    def on_update_uint(self, field, value):
+        ...
+
 
 up_future = Any
 
@@ -145,7 +156,7 @@ class Server:
             await asyncio.sleep(0.1)
 
     async def __wait(self, future: up_future):
-        future_: asyncio.Future[None] = asyncio.Future()
+        future_: Final[asyncio.Future[None]] = asyncio.Future()
         self.__futures[future] = future_
         await future_
         Future._check(future)
@@ -162,30 +173,12 @@ class Server:
         await self.__wait(_feedlib.up_server_replay(self._self, buffer, len(buffer)))
 
 
-
-ffibuilder.cdef("""
-    typedef ... event_t;
-    typedef void (*event_cb_t)(event_t *evt, void *userdata);
-    void event_cb_register(event_cb_t cb, void *userdata);
-
-    extern "Python" void my_event_callback(event_t *, void *);
-""")
-ffibuilder.set_source("_demo_cffi", r"""
-    #include <the_event_library.h>
-""")
-
-from _demo_cffi import ffi, lib
-
-class Widget(object):
-    def __init__(self):
-        userdata = ffi.new_handle(self)
-        self._userdata = userdata     # must keep this alive!
-        lib.event_cb_register(lib.my_event_callback, userdata)
-
-    def process_event(self, evt):
-        print "got event!"
+@ffi.def_extern()
+def pyfeedlib_up_on_update_float(field: Field, value: float, user_data):
+    decoder: Final[Decoder] = ffi.from_handle(user_data)
+    decoder.on_update_float(field, value)
 
 @ffi.def_extern()
-def my_event_callback(evt, userdata):
-    widget = ffi.from_handle(userdata)
-    widget.process_event(evt)
+def pyfeedlib_up_on_update_uint(field: Field, value: int, user_data):
+    decoder: Final[Decoder] = ffi.from_handle(user_data)
+    decoder.on_update_uint(field, value)
