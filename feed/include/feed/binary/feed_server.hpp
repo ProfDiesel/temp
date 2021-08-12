@@ -70,7 +70,7 @@ public:
       service,
       [session_ptr]() mutable noexcept -> boost::leaf::awaitable<void>
       {
-        co_await boost::leaf::co_try_handle_all(
+        return boost::leaf::co_try_handle_all(
           *session_ptr,
           [&](const boost::leaf::error_info &unmatched) { 
             // TODO
@@ -113,11 +113,11 @@ boost::leaf::awaitable<boost::leaf::result<void>> replay(auto co_continuation, a
   {
     const auto *current = reinterpret_cast<const feed::detail::event *>(buffer.data());
     const auto timestamp = network_clock::time_point(std::chrono::nanoseconds(current->timestamp));
-    BOOST_LEAF_ASIO_CO_TRYV(co_await co_wait_until(timestamp - timestamp_0));
+    BOOST_LEAF_CO_TRYV(co_await co_wait_until(timestamp - timestamp_0));
     buffer += offsetof(feed::detail::event, packet);
 
     const auto decoded = feed::detail::decode([](auto instrument_id, auto sequence_id) { return instrument_id; },
-                                              [&states](const auto &timestamp, const auto &update, const auto &instrument_closure)
+                                              [&states]([[maybe_unused]] const auto &timestamp, const auto &update, const auto &instrument_closure)
                                               { update_state(states[instrument_closure], update); },
                                               timestamp, buffer);
 

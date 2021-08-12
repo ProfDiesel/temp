@@ -86,13 +86,16 @@
 #define BOOST_LEAF_EC BOOST_LEAF_TOKEN_PASTE2(BOOST_LEAF_TMP, _ec)
 
 // clang-format off
-#define BOOST_LEAF_ASIO_CO_TRY(V, ...)                                                                                                                         \
+#define BOOST_LEAF_ASIO_CO_TRY2(V, TOKEN_NAME, ...)                                                                                                            \
   std::error_code BOOST_LEAF_EC;                                                                                                                               \
-  auto &&BOOST_LEAF_TMP = ({ auto _ = asio::redirect_error(boost::leaf::use_awaitable, BOOST_LEAF_EC); __VA_ARGS__; });                                        \
+  auto TOKEN_NAME = asio::redirect_error(boost::leaf::use_awaitable, BOOST_LEAF_EC);                                                                           \
+  auto &&BOOST_LEAF_TMP =  (__VA_ARGS__);                                                                                                                      \
   if(BOOST_LEAF_EC) [[unlikely]]                                                                                                                               \
     co_return BOOST_LEAF_NEW_ERROR(BOOST_LEAF_EC).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                       \
   V = std::forward<decltype(BOOST_LEAF_TMP)>(BOOST_LEAF_TMP);
 // clang-format on
+
+#define BOOST_LEAF_ASIO_CO_TRY(V, ...)  BOOST_LEAF_ASIO_CO_TRY2(V, _, __VA_ARGS__)
 
 // clang-format off
 #define BOOST_LEAF_ASIO_CO_TRYX(...)                                                                                                                           \

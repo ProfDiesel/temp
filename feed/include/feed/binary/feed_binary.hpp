@@ -112,6 +112,7 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
   auto *message = &packet->message;
   for(auto i = 0; i < packet->nb_messages; ++i, advance(message))
   {
+    ASSERTS(reinterpret_cast<const std::byte *>(message) < buffer_end);
     const auto instrument_closure = message_header_handler(message->instrument.value(), message->sequence_id.value());
     if(UNLIKELY(!instrument_closure))
       continue;
@@ -120,7 +121,8 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
       update_handler(timestamp, update, instrument_closure);
   }
 
-  return reinterpret_cast<const std::byte*>(message) - buffer_begin;
+  ASSERTS(reinterpret_cast<const std::byte*>(message) < buffer_end);
+  return static_cast<std::size_t>(reinterpret_cast<const std::byte*>(message) - buffer_begin);
 }
 
 std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer) noexcept
@@ -165,7 +167,7 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
     }
   }
 
-  return current - buffer_begin;
+  return static_cast<std::size_t>(current - buffer_begin);
 }
 
 

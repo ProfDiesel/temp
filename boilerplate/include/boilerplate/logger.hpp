@@ -86,6 +86,7 @@ struct printer
       case level::ERROR: return LOG_ERR;
       case level::CRITICAL: return LOG_CRIT;
     }
+    UNREACHABLE();
   }
 
 #else // defined(LOGGER_SYSLOG_FORMAT)
@@ -94,12 +95,13 @@ struct printer
   {
     switch(level)
     {
-    case level::DEBUG_: return "DEBUG";
-    case level::INFO: return "INFO ";
-    case level::WARNING: return "WARN.";
-    case level::ERROR: return "ERROR";
-    case level::CRITICAL: return "CRIT.";
+      case level::DEBUG_: return "DEBUG";
+      case level::INFO: return "INFO ";
+      case level::WARNING: return "WARN.";
+      case level::ERROR: return "ERROR";
+      case level::CRITICAL: return "CRIT.";
     }
+    UNREACHABLE();
     return "";
   }
 

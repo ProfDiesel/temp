@@ -17,3 +17,6 @@
 #define REQUIRES(predicate) ;
 #define ENSURES(predicate) ;
 #endif // !defined(NDEBUG)
+
+#define UNREACHABLE() ASSERTS(false)
+

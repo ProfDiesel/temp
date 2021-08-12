@@ -218,7 +218,7 @@ struct instrument_state final
 #define DECLARE_FIELD(r, data, elem) BOOST_PP_TUPLE_ELEM(2, elem) BOOST_PP_TUPLE_ELEM(0, elem) {};
   BOOST_PP_SEQ_FOR_EACH(DECLARE_FIELD, _, FEED_FIELDS)
 #undef DECLARE_FIELD
-  std::bitset<BOOST_PP_SEQ_SIZE(FEED_FIELDS)> updates;
+  std::bitset<BOOST_PP_SEQ_SIZE(FEED_FIELDS)> updates {};
   sequence_id_type sequence_id = 0;
 };
 
@@ -283,12 +283,12 @@ template<typename continuation_type>
 }
 
 template<typename value_type>
-value_type get_update(const instrument_state &state, field_index index, const value_type &default_value) noexcept
+const value_type &get_update(const instrument_state &state, field_index index, const value_type &default_value) noexcept
 {
-  const auto return_ = [&](const auto &value)
+  const auto return_ = [&](const auto &value) -> const value_type &
   {
     if constexpr(std::is_nothrow_convertible_v<decltype(value), value_type>)
-      return value;
+      return static_cast<const value_type&>(value);
     else
       return default_value;
   };
@@ -298,7 +298,7 @@ value_type get_update(const instrument_state &state, field_index index, const va
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
     case field_index::BOOST_PP_TUPLE_ELEM(0, elem): \
-      return return_(state.BOOST_PP_TUPLE_ELEM(0, elem));
+      return (return_(state.BOOST_PP_TUPLE_ELEM(0, elem)));
     BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
 #undef HANDLE_FIELD
   // clang-format on
