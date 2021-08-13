@@ -1,5 +1,5 @@
 #!/usr/bin/env fish
-set INTERDACE wlan0 
+set INTERDACE lo 
 
 stdbuf -o0 sudo tcpdump -i $INTERDACE -U -w - \
     '(((tcp) and (port 4400) and (src host 127.0.0.1))

@@ -82,7 +82,7 @@ using on_update_uint_t = up_on_update_uint_t;
 class decoder
 {
 public:
-  decoder(on_update_float_t on_update_float, on_update_uint_t on_update_uint) noexcept: self(::up_decoder_new(on_update_float, on_update_uint)) {}
+  decoder(on_update_float_t on_update_float, on_update_uint_t on_update_uint) noexcept: self(::up_decoder_new(on_update_float, on_update_uint, this)) {}
 
   std::size_t decode(const void *buffer, std::size_t buffer_size) noexcept { return ::up_decoder_decode(self.get(), buffer, buffer_size); }
 
@@ -100,7 +100,7 @@ public:
 
   bool is_set() const noexcept { return ::up_future_is_set(self.get()); }
   operator bool() const noexcept { return ::up_future_is_ok(self.get()); }
-  std::string_view message() const noexcept { return ::up_future_message(self.get()); }
+  std::string_view message() const noexcept { return ::up_future_get_message(self.get()); }
 
   static auto wrap(::up_future *ptr) noexcept { return future(ptr); }
   auto get() noexcept { return self.get(); }

@@ -70,12 +70,13 @@ public:
       service,
       [session_ptr]() mutable noexcept -> boost::leaf::awaitable<void>
       {
-        return boost::leaf::co_try_handle_all(
+        co_await boost::leaf::co_try_handle_all(
           *session_ptr,
           [&](const boost::leaf::error_info &unmatched) {
             // TODO
             // logger->log(logger::critical, "leaf_error_id={} exited"_format, ei.error());
           });
+        co_return;
       },
       asio::detached);
 

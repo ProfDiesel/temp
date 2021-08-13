@@ -82,11 +82,20 @@ class Encoder:
             _feedlib.up_encoder_encode(self._self, timestamp, to_flush, self.__buffer, n)
         return memoryview(self.__buffer[:n])
 
+@ffi.def_extern()
+def pyfeedlib_up_on_update_float(field: Field, value: float, user_data):
+    decoder: Final[Decoder] = ffi.from_handle(user_data)
+    decoder.on_update_float(field, value)
+
+@ffi.def_extern()
+def pyfeedlib_up_on_update_uint(field: Field, value: int, user_data):
+    decoder: Final[Decoder] = ffi.from_handle(user_data)
+    decoder.on_update_uint(field, value)
 
 class Decoder:
     def __init__(self, on_update_float: Callable[[Field, float], None], on_update_uint: Callable[[Field, int], None]) -> None:
         self._handle = ffi.new_handle(self)
-        self._self = _feedlib.up_decoder_new(on_update_float, on_update_uint, self._handle)
+        self._self = _feedlib.up_decoder_new(_feedlib.pyfeedlib_up_on_update_float, _feedlib.pyfeedlib_up_on_update_uint, self._handle)
 
     def __del__(self):
         _feedlib.up_decoder_free(self._self)
@@ -122,7 +131,7 @@ class Future:
     def _check(future):
         assert(_feedlib.up_future_is_set(future))
         if not _feedlib.up_future_is_ok(future):
-            raise RuntimeError(_feedlib.up_future_get_message(future))
+            raise RuntimeError(ffi.string(_feedlib.up_future_get_message(future)))
 
 
 class Server:
@@ -173,12 +182,4 @@ class Server:
         await self.__wait(_feedlib.up_server_replay(self._self, buffer, len(buffer)))
 
 
-@ffi.def_extern()
-def pyfeedlib_up_on_update_float(field: Field, value: float, user_data):
-    decoder: Final[Decoder] = ffi.from_handle(user_data)
-    decoder.on_update_float(field, value)
 
-@ffi.def_extern()
-def pyfeedlib_up_on_update_uint(field: Field, value: int, user_data):
-    decoder: Final[Decoder] = ffi.from_handle(user_data)
-    decoder.on_update_uint(field, value)

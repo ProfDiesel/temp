@@ -56,6 +56,7 @@ extern "C"
   struct up_decoder;
   typedef struct up_decoder up_decoder_t;
 
+  typedef void (*up_on_message_t)(up_instrument_id_t, void *user_data);
   typedef void (*up_on_update_float_t)(up_field_t, float, void *user_data);
   typedef void (*up_on_update_uint_t)(up_field_t, size_t, void *user_data);
 
@@ -76,7 +77,7 @@ extern "C"
   void up_future_set_message(up_future_t *self, const char *message);
   bool up_future_is_set(const up_future_t *self);
   bool up_future_is_ok(const up_future_t *self);
-  const char *up_future_message(const up_future_t *self);
+  const char *up_future_get_message(const up_future_t *self);
 
 
 

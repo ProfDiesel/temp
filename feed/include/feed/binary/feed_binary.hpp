@@ -107,7 +107,7 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
   const auto advance = [](const message *&message) {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
     message = reinterpret_cast<const struct message *>(reinterpret_cast<const std::byte *>(message) + sizeof(*message)
-                                                         + message->nb_updates * sizeof(update));
+                                                         + (message->nb_updates - 1) * sizeof(update));
   };
   auto *message = &packet->message;
   for(auto i = 0; i < packet->nb_messages; ++i, advance(message))
@@ -121,7 +121,7 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
       update_handler(timestamp, update, instrument_closure);
   }
 
-  ASSERTS(reinterpret_cast<const std::byte*>(message) < buffer_end);
+  ASSERTS(reinterpret_cast<const std::byte*>(message) <= buffer_end);
   return static_cast<std::size_t>(reinterpret_cast<const std::byte*>(message) - buffer_begin);
 }
 
@@ -138,7 +138,7 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
   const auto advance = [](message *&message)
   {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    return message = reinterpret_cast<struct message *>(reinterpret_cast<std::byte *>(message) + sizeof(message) + message->nb_updates * sizeof(update));
+    return message = reinterpret_cast<struct message *>(reinterpret_cast<std::byte *>(message) + sizeof(message) + (message->nb_updates - 1) * sizeof(update));
   };
 
   const std::byte *current = nullptr;

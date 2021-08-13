@@ -147,7 +147,10 @@ extern "C" __attribute__((visibility("default"))) void up_decoder_free(up_decode
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) size_t up_decoder_decode(up_decoder *self, const void *buffer, size_t buffer_size)
 {
-  return feed::decode([](auto instrument_id, [[maybe_unused]] auto sequence_id) noexcept { return instrument_id; },
+  return feed::decode([](auto instrument_id, [[maybe_unused]] auto sequence_id) noexcept {
+     self->on_message(instrument_id, self->user_data);
+     return instrument_id;
+      },
                       [self]([[maybe_unused]] auto timestamp, auto update, [[maybe_unused]] auto instrument_id)
                       {
                         visit_update(
@@ -213,7 +216,7 @@ extern "C" __attribute__((visibility("default"))) bool up_future_is_set(const up
 extern "C" __attribute__((visibility("default"))) bool up_future_is_ok(const up_future *self) { return std::holds_alternative<up_future::ok_t>(self->value); }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) const char *up_future_message(const up_future *self) { return std::get<std::string>(self->value).c_str(); }
+extern "C" __attribute__((visibility("default"))) const char *up_future_get_message(const up_future *self) { return std::get<std::string>(self->value).c_str(); }
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -255,7 +258,7 @@ struct up_server
       service,
       [&, future, snapshot_host=std::string(snapshot_host), snapshot_service=std::string(snapshot_service), updates_host=std::string(updates_host), updates_service=std::string(updates_service)]() noexcept -> boost::leaf::awaitable<void>
       {
-        return boost::leaf::co_try_handle_all(
+        co_await boost::leaf::co_try_handle_all(
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
           {
             const auto snapshot_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
@@ -271,6 +274,7 @@ struct up_server
             co_return boost::leaf::success();
           },
           make_handlers(future));
+        co_return;
       },
       asio::detached);
   }
