@@ -3,6 +3,10 @@
 from argparse import ArgumentParser, FileType
 
 import dpkt
+from dpkt.ethernet import Ethernet
+from dpkt.ip import IP, IP_PROTO_UDP, IP_PROTO_TCP
+from dpkt.udp import UDP
+from dpkt.tcp import TCP
 
 from ..feed import Decoder, Field
 
@@ -19,24 +23,30 @@ def main(argv=None):
     if args.unbuffered:
         input_ = getattr(input_, 'buffer', input_)
 
+    def on_message(instrument: int):
+        print(instrument)
+
     def on_update_float(field: Field, value: float):
         print(field, value)
 
     def on_update_uint(field: Field, value: int):
         print(field, value)
 
-    decoder = Decoder(on_update_float=on_update_float, on_update_uint=on_update_uint)
+    decoder = Decoder(on_message=on_message, on_update_float=on_update_float, on_update_uint=on_update_uint)
 
     for timestamp, buffer in dpkt.pcap.Reader(input_):
-        eth = dpkt.ethernet.Ethernet(buffer)
-        ip = eth.data
+        eth = Ethernet(buffer)
 
-        if ip.p == dpkt.ip.IP_PROTO_TCP:
+        if not isinstance(eth.data, dpkt.ip.IP):
+            continue
+
+        ip = eth.data
+        if ip.p == IP_PROTO_TCP:
             tcp = ip.data
             if tcp.dport == args.snapshot_port:
                 #  snapshot
                 decoder.decode(tcp.data)
-        elif ip.p == dpkt.ip.IP_PROTO_UDP:
+        elif ip.p == IP_PROTO_UDP:
             udp = ip.data
             if udp.dport == args.updates_port:
                 # up updates

@@ -83,6 +83,11 @@ class Encoder:
         return memoryview(self.__buffer[:n])
 
 @ffi.def_extern()
+def pyfeedlib_up_on_message(instrument_id: Instrument, user_data):
+    decoder: Final[Decoder] = ffi.from_handle(user_data)
+    decoder.on_message(instrument_id)
+
+@ffi.def_extern()
 def pyfeedlib_up_on_update_float(field: Field, value: float, user_data):
     decoder: Final[Decoder] = ffi.from_handle(user_data)
     decoder.on_update_float(field, value)
@@ -93,15 +98,19 @@ def pyfeedlib_up_on_update_uint(field: Field, value: int, user_data):
     decoder.on_update_uint(field, value)
 
 class Decoder:
-    def __init__(self, on_update_float: Callable[[Field, float], None], on_update_uint: Callable[[Field, int], None]) -> None:
+    def __init__(self, on_message: Callable[[Instrument], None], on_update_float: Callable[[Field, float], None], on_update_uint: Callable[[Field, int], None]) -> None:
         self._handle = ffi.new_handle(self)
-        self._self = _feedlib.up_decoder_new(_feedlib.pyfeedlib_up_on_update_float, _feedlib.pyfeedlib_up_on_update_uint, self._handle)
+        self._self = _feedlib.up_decoder_new(_feedlib.pyfeedlib_up_on_message, _feedlib.pyfeedlib_up_on_update_float, _feedlib.pyfeedlib_up_on_update_uint, self._handle)
 
     def __del__(self):
         _feedlib.up_decoder_free(self._self)
 
     def decode(self, buffer: memoryview):
         _feedlib.up_decoder_decode(self._self, buffer, len(buffer))
+
+    @abstractmethod
+    def on_message(self, instrument_id: Instrument):
+        ...
 
     @abstractmethod
     def on_update_float(self, field, value):
@@ -180,6 +189,3 @@ class Server:
     async def replay(self, buffer: memoryview):
         assert(self._self is not None)
         await self.__wait(_feedlib.up_server_replay(self._self, buffer, len(buffer)))
-
-
-

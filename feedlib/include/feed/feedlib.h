@@ -60,7 +60,7 @@ extern "C"
   typedef void (*up_on_update_float_t)(up_field_t, float, void *user_data);
   typedef void (*up_on_update_uint_t)(up_field_t, size_t, void *user_data);
 
-  up_decoder_t *up_decoder_new(up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint, void *user_data);
+  up_decoder_t *up_decoder_new(up_on_message_t on_message, up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint, void *user_data);
   void up_decoder_free(up_decoder_t *self);
   size_t up_decoder_decode(up_decoder_t *self, const void *buffer, size_t buffer_size);
 

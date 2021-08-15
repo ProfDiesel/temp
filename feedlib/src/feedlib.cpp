@@ -13,8 +13,8 @@
 #include <boost/range/iterator_range.hpp>
 
 #include <cstring>
-#include <limits>
 #include <iostream>
+#include <limits>
 #include <string_view>
 #include <thread>
 #include <tuple>
@@ -65,7 +65,10 @@ extern "C" __attribute__((visibility("default"))) void up_state_free(up_state *s
 extern "C" __attribute__((visibility("default"))) up_sequence_id_t up_state_get_sequence_id(up_state *self) { return self->state.sequence_id; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_state_set_sequence_id(up_state *self, up_sequence_id_t sequence_id) { self->state.sequence_id = sequence_id; }
+extern "C" __attribute__((visibility("default"))) void up_state_set_sequence_id(up_state *self, up_sequence_id_t sequence_id)
+{
+  self->state.sequence_id = sequence_id;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) uint64_t up_state_get_bitset(const up_state *self)
@@ -77,20 +80,26 @@ extern "C" __attribute__((visibility("default"))) uint64_t up_state_get_bitset(c
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) float up_state_get_float(const up_state_t *self, up_field_t field)
 {
-  return static_cast<float>(feed::get_update<feed::price_t>(self->state, static_cast<feed::field_index>(field), float{}));
+  return static_cast<float>(feed::get_update<feed::price_t>(self->state, static_cast<feed::field_index>(field), float {}));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) uint32_t up_state_get_uint(const up_state_t *self, up_field_t field)
 {
-  return static_cast<uint32_t>(feed::get_update<feed::quantity_t>(self->state, static_cast<feed::field_index>(field), uint32_t{}));
+  return static_cast<uint32_t>(feed::get_update<feed::quantity_t>(self->state, static_cast<feed::field_index>(field), uint32_t {}));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_state_update_float(up_state *self, up_field_t field, float value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
+extern "C" __attribute__((visibility("default"))) void up_state_update_float(up_state *self, up_field_t field, float value)
+{
+  update_state_poly(self->state, static_cast<feed::field>(field), value);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_state_update_uint(up_state *self, up_field_t field, uint32_t value) { update_state_poly(self->state, static_cast<feed::field>(field), value); }
+extern "C" __attribute__((visibility("default"))) void up_state_update_uint(up_state *self, up_field_t field, uint32_t value)
+{
+  update_state_poly(self->state, static_cast<feed::field>(field), value);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -108,8 +117,8 @@ extern "C" __attribute__((visibility("default"))) up_encoder *up_encoder_new() {
 extern "C" __attribute__((visibility("default"))) void up_encoder_free(up_encoder *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) size_t up_encoder_encode(up_encoder *self, up_timestamp_t timestamp, const up_state *const states[], size_t nb_states, void *buffer,
-                                         size_t buffer_size)
+extern "C" __attribute__((visibility("default"))) size_t up_encoder_encode(up_encoder *self, up_timestamp_t timestamp, const up_state *const states[],
+                                                                           size_t nb_states, void *buffer, size_t buffer_size)
 {
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
@@ -133,13 +142,18 @@ extern "C" __attribute__((visibility("default"))) size_t up_encoder_encode(up_en
 
 struct up_decoder
 {
-  std::function<void(up_field_t, float, void*)> on_update_float;
-  std::function<void(up_field_t, uint, void*)> on_update_uint;
+  std::function<std::remove_pointer_t<::up_on_message_t>> on_message;
+  std::function<std::remove_pointer_t<::up_on_update_float_t>> on_update_float;
+  std::function<std::remove_pointer_t<::up_on_update_uint_t>> on_update_uint;
   void *user_data;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) up_decoder *up_decoder_new(up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint, void *user_data) { return new up_decoder {on_update_float, on_update_uint, user_data}; }
+extern "C" __attribute__((visibility("default"))) up_decoder *up_decoder_new(up_on_message_t on_message, up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint,
+                                                                             void *user_data)
+{
+  return new up_decoder {on_message, on_update_float, on_update_uint, user_data};
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) void up_decoder_free(up_decoder *self) { delete self; }
@@ -147,31 +161,33 @@ extern "C" __attribute__((visibility("default"))) void up_decoder_free(up_decode
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) size_t up_decoder_decode(up_decoder *self, const void *buffer, size_t buffer_size)
 {
-  return feed::decode([](auto instrument_id, [[maybe_unused]] auto sequence_id) noexcept {
-     self->on_message(instrument_id, self->user_data);
-     return instrument_id;
-      },
-                      [self]([[maybe_unused]] auto timestamp, auto update, [[maybe_unused]] auto instrument_id)
-                      {
-                        visit_update(
-                          [self](auto field, auto value) noexcept
-                          {
-                            if constexpr(std::is_same_v<decltype(value), feed::price_t>)
-                            {
-                              self->on_update_float(static_cast<up_field_t>(field()), value, self->user_data);
-                            }
-                            else if constexpr(std::is_same_v<decltype(value), feed::quantity_t>)
-                            {
-                              self->on_update_uint(static_cast<up_field_t>(field()), value, self->user_data);
-                            }
-                            else
-                            {
-                              static_assert(boilerplate::always_false<decltype(value)>);
-                            }
-                          },
-                          update);
-                      },
-                      network_clock::time_point(), asio::buffer(buffer, buffer_size));
+  return feed::decode(
+    [self](auto instrument_id, [[maybe_unused]] auto sequence_id) noexcept
+    {
+      self->on_message(instrument_id, self->user_data);
+      return instrument_id;
+    },
+    [self]([[maybe_unused]] auto timestamp, auto update, [[maybe_unused]] auto instrument_id)
+    {
+      visit_update(
+        [self](auto field, auto value) noexcept
+        {
+          if constexpr(std::is_same_v<decltype(value), feed::price_t>)
+          {
+            self->on_update_float(static_cast<up_field_t>(field()), value, self->user_data);
+          }
+          else if constexpr(std::is_same_v<decltype(value), feed::quantity_t>)
+          {
+            self->on_update_uint(static_cast<up_field_t>(field()), value, self->user_data);
+          }
+          else
+          {
+            static_assert(boilerplate::always_false<decltype(value)>);
+          }
+        },
+        update);
+    },
+    network_clock::time_point(), asio::buffer(buffer, buffer_size));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -216,7 +232,10 @@ extern "C" __attribute__((visibility("default"))) bool up_future_is_set(const up
 extern "C" __attribute__((visibility("default"))) bool up_future_is_ok(const up_future *self) { return std::holds_alternative<up_future::ok_t>(self->value); }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) const char *up_future_get_message(const up_future *self) { return std::get<std::string>(self->value).c_str(); }
+extern "C" __attribute__((visibility("default"))) const char *up_future_get_message(const up_future *self)
+{
+  return std::get<std::string>(self->value).c_str();
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -224,7 +243,6 @@ extern "C" __attribute__((visibility("default"))) const char *up_future_get_mess
 
 namespace
 {
-
 auto make_handlers(up_future *future)
 {
   return std::tuple {[future](const boost::leaf::e_source_location &location, const std::error_code &error_code) noexcept
@@ -256,15 +274,19 @@ struct up_server
   {
     asio::co_spawn(
       service,
-      [&, future, snapshot_host=std::string(snapshot_host), snapshot_service=std::string(snapshot_service), updates_host=std::string(updates_host), updates_service=std::string(updates_service)]() noexcept -> boost::leaf::awaitable<void>
+      [&, future, snapshot_host = std::string(snapshot_host), snapshot_service = std::string(snapshot_service), updates_host = std::string(updates_host),
+       updates_service = std::string(updates_service)]() noexcept -> boost::leaf::awaitable<void>
       {
         co_await boost::leaf::co_try_handle_all(
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
           {
-            const auto snapshot_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
-            //BOOST_LEAF_ASIO_CO_TRY2(const auto snapshot_addresses, _, co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
+            const auto snapshot_addresses
+              = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host, snapshot_service, _));
+            // BOOST_LEAF_ASIO_CO_TRY2(const auto snapshot_addresses, _, co_await asio::ip::tcp::resolver(service).async_resolve(snapshot_host,
+            // snapshot_service, _));
             const auto updates_addresses = BOOST_LEAF_ASIO_CO_TRYX(co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, _));
-            //BOOST_LEAF_ASIO_CO_TRY2(const auto updates_addresses, __, co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service, __));
+            // BOOST_LEAF_ASIO_CO_TRY2(const auto updates_addresses, __, co_await asio::ip::udp::resolver(service).async_resolve(updates_host, updates_service,
+            // __));
             BOOST_LEAF_CO_TRYV(server.connect(*snapshot_addresses.begin(), *updates_addresses.begin()));
             future->value = up_future::ok_v;
 
@@ -283,8 +305,8 @@ struct up_server
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) up_server *up_server_new(const char *snapshot_host, const char *snapshot_service, const char *updates_host, const char *updates_service,
-                                    up_future *future)
+extern "C" __attribute__((visibility("default"))) up_server *up_server_new(const char *snapshot_host, const char *snapshot_service, const char *updates_host,
+                                                                           const char *updates_service, up_future *future)
 {
   return new up_server(snapshot_host, snapshot_service, updates_host, updates_service, future);
 }
@@ -316,8 +338,9 @@ extern "C" __attribute__((visibility("default"))) up_future *up_server_push_upda
   auto *const result = up_future_new();
   asio::co_spawn(
     self->service,
-    [self, states=std::move(states_), result]() noexcept -> boost::leaf::awaitable<void>
-    { co_await boost::leaf::co_try_handle_all([&]() noexcept { return self->server.update(states); }, make_handlers(result)); },
+    [self, states = std::move(states_), result]() noexcept -> boost::leaf::awaitable<void> {
+      co_await boost::leaf::co_try_handle_all([&]() noexcept { return self->server.update(states); }, make_handlers(result));
+    },
     asio::detached);
   return result;
 }
