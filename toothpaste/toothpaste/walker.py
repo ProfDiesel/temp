@@ -1,14 +1,17 @@
 import typing
-from typing import MutableSet, Union, Dict, Tuple, Set, Sequence, cast, List, Iterator, Type, Optional, TypeVar, Generic, Callable, Protocol, Final
-from functools import singledispatchmethod, reduce
 from contextlib import suppress
+from functools import reduce, singledispatchmethod
+from typing import (Callable, Dict, Final, Generic, Iterator, List, MutableSet,
+                    Optional, Protocol, Sequence, Set, Tuple, Type, TypeVar,
+                    Union, cast, overload)
 from uuid import uuid4
 
-from .types import Config, Object, Value
-
+from .types import Config, Object, ScalarValue, SequenceValue, Value
 
 DeferredWalker = Union[str, 'Walker']
-WalkerValue = Union[DeferredWalker, 'WalkerSequence', float, List[float]]
+WalkerScalarValue = Union[DeferredWalker, float]
+WalkerSequenceValue = Union['WalkerSequence', List[float]]
+WalkerValue = Union[WalkerScalarValue, WalkerSequenceValue]
 
 
 def make_walker(config: Config, value: Value) -> WalkerValue:
@@ -45,7 +48,7 @@ class ConstWalker(Protocol):
 
 class MutableWalker(ConstWalker):
     def __setitem__(self, item: str, value: Union[None, Value, 'Walker']) -> None: ...
-    def __delitem__(self, item: Union[int, slice]) -> None: ...
+    def __delitem__(self, item: str) -> None: ...
 
     def set(self, item: str, value: Union[None, Value, 'Walker']) -> None: ...
 
@@ -67,7 +70,7 @@ class Walker(MutableWalker):
         return self.__name
 
     @property
-    def object(self) -> Union[Object, str]:
+    def object(self) -> Object:
         return self.__object
 
     @property
@@ -81,7 +84,7 @@ class Walker(MutableWalker):
     def __setitem__(self, item: str, value: Union[None, Value, 'Walker']) -> None:
         self.set(item, value)
 
-    def __delitem__(self, item: Union[int, slice]) -> None:
+    def __delitem__(self, item: str) -> None:
         del self.object[item]
 
     def __repr__(self):
@@ -97,8 +100,10 @@ class Walker(MutableWalker):
             with suppress(KeyError):
                 del self[item]
         elif isinstance(value, typing.get_args(Value)):
+            value = cast(Value, value)
             self.__object[item] = value
         else:
+            value = cast(Walker, value)
             if value._config is not self._config:
                 for walker in value.walk_objects():
                     self._config.try_add(walker.name, walker.object)
@@ -121,22 +126,30 @@ class Walker(MutableWalker):
                 yield object_, field, as_value(value)
 
 
-class WalkerSequence(Sequence[MutableWalker]):
+class WalkerSequence(Sequence[WalkerScalarValue]):
     __slots__ = ('__config', '__names')
 
     def __init__(self, config: Config, names: Sequence[str]):
         self.__config: Config = config
         self.__names: List[str] = list(names)
 
-    def __getitem__(self, index: Union[int, slice]) -> Walker:
+    @overload
+    def __getitem__(self, index: int) -> WalkerScalarValue:
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[WalkerScalarValue]:
+        ...
+
+    def __getitem__(self, index: Union[int, slice]) -> Union[WalkerScalarValue, Sequence[WalkerScalarValue]]:
         return make_walker(self.__config, self.__names[index])
 
     def __len__(self) -> int:
         return len(self.__names)
 
-    def walk_objects(self) -> Iterator[Walker]:
+    def walk_objects(self, *, skip_objects: Optional[MutableSet[str]] = None) -> Iterator[Walker]:
         for name in self.__names:
-            yield from Walker(self.__config, name).walk_objects()
+            yield from Walker(self.__config, name).walk_objects(skip_objects=skip_objects)
 
     def walk(self) -> Iterator[Tuple[Walker, str, Value]]:
         for name in self.__names:
@@ -149,7 +162,7 @@ def as_object(result: WalkerValue) -> Walker:
 
 
 def as_object_opt(result: Optional[WalkerValue]) -> Optional[Walker]:
-    assert(isinstance(result, (Walker, None)))
+    assert(isinstance(result, Walker) or result is None)
     return cast(Optional[Walker], result)
 
 
@@ -172,12 +185,19 @@ def as_str(result: WalkerValue) -> str:
     assert(isinstance(result, Walker))
     return str(result)
 
+@overload
+def as_value(result: WalkerScalarValue) -> ScalarValue:
+    ...
+
+@overload
+def as_value(result: WalkerSequenceValue) -> SequenceValue:
+    ...
 
 def as_value(result: WalkerValue) -> Value:
     if isinstance(result, Walker):
         return result.name
     if isinstance(result, WalkerSequence):
-        return [item.name for item in result]
+        return cast(Value, [as_value(item) for item in result])
     return cast(Value, result)
 
 

@@ -33,7 +33,7 @@ class TypedWalker(Walker, Generic[T]):
         return as_str(self['type'])
 
 
-class Field(Protocol, Generic[T]):
+class Field(Protocol[T]):
     @property
     def name(self) -> str: ...
 
@@ -107,7 +107,7 @@ class OptionalField(Generic[T], FieldDecorator[Optional[T]]):
 
 
 class SequenceField(Generic[T], FieldDecorator[Sequence[T]]):
-    def __get__(self, instance: Optional[Walker], owner: Optional[Type['SequenceField']]) -> Sequence[T]:
+    def __get__(self, instance: Optional[Walker], owner: Optional[Type['SequenceField']]) -> Optional[Sequence[T]]:
         if instance is None:
             raise AttributeError(self.name)
         with suppress(KeyError):
@@ -121,7 +121,7 @@ class SequenceField(Generic[T], FieldDecorator[Sequence[T]]):
 
 class MappingField(Generic[T], FieldDecorator[Mapping[str, T]]):
     def __init__(self, field: Field[T], name_keys: Optional[str] = None):
-        self.__values = SequenceField(field)
+        self.__values: Final[SequenceField[T]] = cast(SequenceField[T], SequenceField(field))
         self.__name_keys = name_keys or f'{field.name}_keys'
 
     def __get__(self, instance: Optional[Walker], owner: Optional[Type['MappingField']]) -> Mapping[str, T]:
@@ -129,7 +129,7 @@ class MappingField(Generic[T], FieldDecorator[Mapping[str, T]]):
             raise AttributeError(self.name)
 
         class Proxy(Mapping[str, T]):
-            __getitem__ = partial(self.get_item, instance=instance, owner=owner)
+            __getitem__ = partial(self.getitem, instance=instance, owner=owner)
         return Proxy(self, instance)
 
     def getitem(self, instance: Walker, index: str, owner) -> T:
@@ -203,8 +203,7 @@ def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWa
         # -> have a classmethod to resolve the type ?
         TypedWalker.__init__(self, walker)
 
-        fields.update(kwargs)
-        for field_name, value in fields.items():
+        for field_name, value in dict(fields, **kwargs).items():
             setattr(self, field_name, value)
 
     def validate(self) -> bool:
