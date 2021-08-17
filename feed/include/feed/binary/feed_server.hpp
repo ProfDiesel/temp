@@ -37,7 +37,7 @@ struct session : public std::enable_shared_from_this<session>
 class server : public state_map
 {
 public:
-  server(asio::io_context &service) noexcept: service(service), updates_socket(service), snapshot_acceptor(service) {}
+  explicit server(asio::io_context &service) noexcept: service(service), updates_socket(service), snapshot_acceptor(service) {}
 
   boost::leaf::result<void> connect(const asio::ip::tcp::endpoint &snapshot_endpoint, const asio::ip::udp::endpoint &updates_endpoint) noexcept
   {

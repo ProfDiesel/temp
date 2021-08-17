@@ -25,7 +25,7 @@ pytestmark = pytest.mark.asyncio
 INSTRUMENT_0 = 42
 
 up_snapshot_addr: Final = confobj.Address('127.0.0.1', 4400)
-up_updates_addr: Final = confobj.Address('239.255.0.1', 4401)
+up_updates_addr: Final = confobj.Address('224.0.0.1', 4401)
 down_stream_addr: Final = confobj.Address('127.0.0.1', 9998)
 down_datagram_addr: Final = confobj.Address('127.0.0.1', 9999)
 executable: Path = Path(__file__).parent / '../../build/debug/ppf'

@@ -113,7 +113,7 @@ auto main() -> int
 \"config.command_out_fd\" : 1.0, \
 \"config.subscription\" : \"subscription\", \
 \"feed.snapshot\" : \"127.0.0.1:4400\", \
-\"feed.update\" : \"239.255.0.1:4401\", \
+\"feed.update\" : \"224.0.0.1:4401\", \
 \"feed.type\" : \"feed\", \
 \"send.type\" : \"send\", \
 \"send.fd\" : 14.0, \

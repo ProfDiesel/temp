@@ -99,9 +99,12 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
 [[using gnu : always_inline, flatten, hot]] inline std::size_t decode(auto &&message_header_handler, auto &&update_handler,
                                                                       const network_clock::time_point &timestamp, const asio::const_buffer &buffer) noexcept
  {
+  REQUIRES(buffer.size() >= sizeof(packet));
+
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast, cppcoreguidelines-pro-bounds-pointer-arithmetic)
   const auto *buffer_begin = reinterpret_cast<const std::byte *>(buffer.data()),
              *buffer_end = buffer_begin + buffer.size();
+
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
   const auto *packet = reinterpret_cast<const struct packet *>(buffer_begin);
   const auto advance = [](const message *&message) {

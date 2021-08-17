@@ -15,7 +15,7 @@ def main(argv=None):
     parser = ArgumentParser()
     parser.add_argument('pcap-file', nargs='?', type=FileType('rb'), default='-')
     parser.add_argument('--unbuffered', action='store_true')
-    parser.add_argument('--snaphsot-port', type=int, default=4400)
+    parser.add_argument('--snapshot-port', type=int, default=4400)
     parser.add_argument('--updates-port', type=int, default=4401)
     args = parser.parse_args(argv)
 
@@ -38,13 +38,13 @@ def main(argv=None):
     for timestamp, buffer in dpkt.pcap.Reader(input_):
         eth = Ethernet(buffer[2:]) # TODO understand why ...
 
-        if not isinstance(eth.data, dpkt.ip.IP):
+        ip = eth.data
+        if not isinstance(ip, IP):
             continue
 
-        ip = eth.data
         if ip.p == IP_PROTO_TCP:
             tcp = ip.data
-            if tcp.dport == args.snapshot_port:
+            if tcp.sport == args.snapshot_port:
                 #  snapshot
                 decoder.decode(tcp.data)
         elif ip.p == IP_PROTO_UDP:

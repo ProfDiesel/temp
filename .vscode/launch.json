@@ -46,7 +46,7 @@
             "request": "launch",
             "module": "feed.entrypoints.player",
             "args": ["${workspaceFolder}/scenario"],
-            "env": {"LD_LIBRARY_PATH": "${workspaceFolder}/feedlib/_build/debug:${workspaceFolder}/pyfeedlib"}
+            "env": {"LD_LIBRARY_PATH": "${workspaceFolder}/feedlib/_build/debug"}
         },
         {
             "name": "feed:pcap_decoder",
@@ -54,7 +54,7 @@
             "request": "launch",
             "module": "feed.entrypoints.pcap_decoder",
             "args": ["${workspaceFolder}/pyfeedlib/capture.pcap"],
-            "env": {"LD_LIBRARY_PATH": "${workspaceFolder}/feedlib/_build/debug:${workspaceFolder}/pyfeedlib"},
+            "env": {"LD_LIBRARY_PATH": "${workspaceFolder}/feedlib/_build/debug"},
             "justMyCode": false
         }
     ]

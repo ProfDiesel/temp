@@ -147,6 +147,9 @@ constexpr std::array<frozen::string, BOOST_PP_SEQ_SIZE(PIPO_STRINGS)> strings = 
 #define HANDLE_STRING_COMMON(r, data, elem)                                                                                                                    \
   std::pair {BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _s), +[](const key_type &k, volatile salt_type &x) { return combine(k, x); }},
 
+#define HANDLE_STRING_COMMON_RHD(r, data, elem)                                                                                                                    \
+  robin_hood::pair {BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _s), std::function([](const key_type &k, volatile salt_type &x) { return combine(k, x); })},
+
 using salt_type = int;
 
 template<typename key_type>
@@ -228,7 +231,7 @@ static void rhd_std(benchmark::State &state) noexcept
   using mapped_type = std::function<int(const key_type &, volatile salt_type &)>;
   using map_type = robin_hood::unordered_flat_map<key_type, mapped_type, caseless_ascii_xxhasher>;
 
-  static const map_type map {{BOOST_PP_SEQ_FOR_EACH(HANDLE_STRING_COMMON, _, PIPO_STRINGS)}};
+  static const map_type map {{BOOST_PP_SEQ_FOR_EACH(HANDLE_STRING_COMMON_RHD, _, PIPO_STRINGS)}};
   for(auto _: state)
     bench(map);
 }

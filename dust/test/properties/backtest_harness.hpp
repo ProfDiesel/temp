@@ -4,6 +4,8 @@
 
 #include <boilerplate/chrono.hpp>
 
+#include <boost/container/flat_map.hpp>
+
 #include <chrono>
 #include <functional>
 

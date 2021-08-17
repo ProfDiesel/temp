@@ -170,8 +170,16 @@ subscription.message <- 'bWVzc2FnZQo=';\n\
 
   using namespace feed::literals;
 
-  bench::feeder::instance.reset(new bench::feeder {feed::server(service, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 3287),
-                                                                asio::ip::udp::endpoint(asio::ip::make_address("239.255.0.1"), 3288))});
+  auto feeder = std::make_unique<bench::feeder>(feed::server(service));
+  boost::leaf::try_handle_all(
+    [&]() noexcept -> boost::leaf::result<void>
+    {
+      return feeder->server.connect(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 3287),
+                                                                asio::ip::udp::endpoint(asio::ip::make_address("224.0.0.1"), 3288));
+    },
+  error_handlers);
+
+  bench::feeder::instance = std::move(feeder);
   const auto _ = gsl::finally([&]() { bench::feeder::instance.reset(); });
 
   bench::feeder::instance->reset(42, feed::instrument_state {.b0 = 95.0_p, .bq0 = 10, .o0 = 105.0_p, .oq0 = 10});
