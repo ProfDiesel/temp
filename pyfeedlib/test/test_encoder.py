@@ -14,7 +14,7 @@ def test_encoder():
 
     with (d / 'scenario').open('wb') as out:
         mid = 100
-        for _ in xrange(1000):
+        for _ in range(1000):
             mid += round(lognormalvariate(0, 3), 0)
             new_b0 = mid - round(abs(lognormalvariate(0, 1)), 1)
             new_o0 = mid + round(abs(lognormalvariate(0, 1)), 1)
@@ -35,4 +35,3 @@ def test_encoder():
 
 if __name__ == '__main__':
     test_encoder()
-

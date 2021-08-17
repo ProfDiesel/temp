@@ -8,7 +8,7 @@ from dpkt.ip import IP, IP_PROTO_UDP, IP_PROTO_TCP
 from dpkt.udp import UDP
 from dpkt.tcp import TCP
 
-from ..feed import Decoder, Field
+from ..feed import Decoder, Field, Instrument
 
 
 def main(argv=None):
@@ -23,19 +23,20 @@ def main(argv=None):
     if args.unbuffered:
         input_ = getattr(input_, 'buffer', input_)
 
-    def on_message(instrument: int):
-        print(instrument)
+    class PrintDecoder(Decoder):
+        def on_message(self, instrument_id: Instrument):
+            print(instrument_id)
 
-    def on_update_float(field: Field, value: float):
-        print(field, value)
+        def on_update_float(self, field, value):
+            print(field, value)
 
-    def on_update_uint(field: Field, value: int):
-        print(field, value)
+        def on_update_uint(self, field, value):
+            print(field, value)
 
-    decoder = Decoder(on_message=on_message, on_update_float=on_update_float, on_update_uint=on_update_uint)
+    decoder = PrintDecoder()
 
     for timestamp, buffer in dpkt.pcap.Reader(input_):
-        eth = Ethernet(buffer)
+        eth = Ethernet(buffer[2:]) # TODO understand why ...
 
         if not isinstance(eth.data, dpkt.ip.IP):
             continue

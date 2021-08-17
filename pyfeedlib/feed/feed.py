@@ -98,7 +98,7 @@ def pyfeedlib_up_on_update_uint(field: Field, value: int, user_data):
     decoder.on_update_uint(field, value)
 
 class Decoder:
-    def __init__(self, on_message: Callable[[Instrument], None], on_update_float: Callable[[Field, float], None], on_update_uint: Callable[[Field, int], None]) -> None:
+    def __init__(self) -> None:
         self._handle = ffi.new_handle(self)
         self._self = _feedlib.up_decoder_new(_feedlib.pyfeedlib_up_on_message, _feedlib.pyfeedlib_up_on_update_float, _feedlib.pyfeedlib_up_on_update_uint, self._handle)
 
