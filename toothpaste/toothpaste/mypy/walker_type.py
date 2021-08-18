@@ -29,7 +29,9 @@ from mypy.typevars import fill_typevars
 from mypy.util import get_unique_redefinition_name
 from typing_extensions import Final
 
+
 WALKER_TYPE_FULL_NAME = 'toothpaste.mypy.walker_kype'
+
 
 @dataclass
 class WalkerAttribute:

@@ -55,6 +55,9 @@ class ValueField(FieldBase[T]):
         super().__init__(name)
         self.__of_value, self.__as_value = of_value, as_value
 
+    @overload
+    def __get__(self, instance: Optional[Walker], owner: Optional[Type['Field']]) -> T: ...
+
     def __get__(self, instance: Optional[Walker], owner: Optional[Type['ValueField']]) -> T:
         if instance is None:
             raise AttributeError(self.name)
@@ -143,6 +146,7 @@ class MappingField(Generic[T], FieldDecorator[Mapping[str, T]]):
 
 
 _WALKER_TYPE_REGISTRY: Dict[str, Type[TypedWalker]] = {}
+
 
 
 def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWalker]:
