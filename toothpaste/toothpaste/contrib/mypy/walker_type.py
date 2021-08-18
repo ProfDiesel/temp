@@ -30,7 +30,7 @@ from mypy.util import get_unique_redefinition_name
 from typing_extensions import Final
 
 
-WALKER_TYPE_FULL_NAME = 'toothpaste.mypy.walker_kype'
+WALKER_TYPE_FULL_NAME = 'toothpaste.typed_walker.walker_kype'
 
 
 @dataclass

@@ -56,6 +56,15 @@
             "args": ["${workspaceFolder}/pyfeedlib/capture.pcap"],
             "env": {"LD_LIBRARY_PATH": "${workspaceFolder}/feedlib/_build/debug"},
             "justMyCode": false
+        },
+        {
+            "name": "mypy",
+            "type": "python",
+            "request": "launch",
+            "module": "mypy",
+            "args": ["--config-file", "setup.cfg", "ppf"],
+            "cwd": "${workspaceFolder}/ppf",
+            "justMyCode": false
         }
     ]
 }

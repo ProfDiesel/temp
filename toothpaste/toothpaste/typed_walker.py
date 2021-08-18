@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import typing
 from typing import Union, Dict, Tuple, Set, Sequence, cast, List, Iterator, Type, Optional, TypeVar, Generic, Callable, Protocol, Final, runtime_checkable, Any, Mapping
 from functools import singledispatchmethod, reduce
@@ -7,7 +8,7 @@ from functools import partial
 from itertools import chain
 
 from .types import Config, Object, Value
-from .walker import Walker, as_value, as_str, WalkerValue
+from .walker import Walker, as_value, as_str, WalkerValue, as_object
 
 
 @runtime_checkable
@@ -19,12 +20,12 @@ class ConfigSerializable(Protocol):
 
 
 T = TypeVar('T')
-FieldT = TypeVar('FieldT')
+FieldT = TypeVar('FieldT', contravariant=True)
 KeyT = TypeVar('KeyT')
 ValueT = TypeVar('ValueT')
 
 
-class TypedWalker(Walker, Generic[T]):
+class TypedWalker(ABC, Walker, Generic[T]):
     def __init__(self, walker: Walker):
         super().__init__(walker._config, walker.name, _object=walker.object)
 
@@ -32,16 +33,20 @@ class TypedWalker(Walker, Generic[T]):
     def type(self) -> str:
         return as_str(self['type'])
 
+    @abstractmethod
+    def validate(self) -> bool:
+        return True
 
-class Field(Protocol[T]):
+
+class Field(Protocol[T, FieldT]):
     @property
     def name(self) -> str: ...
 
-    def __get__(self, instance: Optional[Walker], owner: Optional[Type['Field']]) -> T: ...
+    def __get__(self, instance: Optional[Walker], owner: Optional[FieldT]) -> T: ...
     def __set__(self, instance: Walker, value: T): ...
 
 
-class FieldBase(Field[T]):
+class FieldBase(Field[T, FieldT]):
     def __init__(self, name: str):
         self.__name = name
 
@@ -50,13 +55,10 @@ class FieldBase(Field[T]):
         return self.__name
 
 
-class ValueField(FieldBase[T]):
+class ValueField(FieldBase[T, Type['ValueField']]):
     def __init__(self, name: str, of_value: Callable[[Value], T], as_value: Callable[[T], Value]):
         super().__init__(name)
         self.__of_value, self.__as_value = of_value, as_value
-
-    @overload
-    def __get__(self, instance: Optional[Walker], owner: Optional[Type['Field']]) -> T: ...
 
     def __get__(self, instance: Optional[Walker], owner: Optional[Type['ValueField']]) -> T:
         if instance is None:
@@ -67,15 +69,15 @@ class ValueField(FieldBase[T]):
         instance[self.name] = self.__as_value(value)
 
 
-class ObjectField(FieldBase[T]):
-    def __init__(self, name: str, type_: TypedWalker[T]):
+class ObjectField(FieldBase[TypedWalker[T], Type['ObjectField']]):
+    def __init__(self, name: str, type_: Type[TypedWalker[T]]):
         super().__init__(name)
         self.__type = type_
 
     def __get__(self, instance: Optional[Walker], owner: Optional[Type['ObjectField']]) -> TypedWalker[T]:
         if instance is None:
             raise AttributeError(self.name)
-        return self.__type(instance[self.name])
+        return self.__type(as_object(instance[self.name]))
 
     def __set__(self, instance: Walker, value: TypedWalker[T]):
         instance[self.name] = value.name
@@ -84,8 +86,8 @@ class ObjectField(FieldBase[T]):
                 instance._config.try_add(walker.name, walker.object)
 
 
-class FieldDecorator(Generic[T], Field[T]):
-    def __init__(self, field: Field[T]):
+class FieldDecorator(Generic[T, FieldT], Field[T, FieldT]):
+    def __init__(self, field: Field[T, FieldT]):
         self._field = field
 
     @property
@@ -93,7 +95,7 @@ class FieldDecorator(Generic[T], Field[T]):
         return self._field.name
 
 
-class OptionalField(Generic[T], FieldDecorator[Optional[T]]):
+class OptionalField(Generic[T], FieldDecorator[Optional[T], Type['OptionalField']]):
     def __get__(self, instance: Optional[Walker], owner: Optional[Type['OptionalField']]) -> Optional[T]:
         if instance is None:
             raise AttributeError(self.name)
@@ -109,21 +111,21 @@ class OptionalField(Generic[T], FieldDecorator[Optional[T]]):
             self._field.__set__(instance, value)
 
 
-class SequenceField(Generic[T], FieldDecorator[Sequence[T]]):
-    def __get__(self, instance: Optional[Walker], owner: Optional[Type['SequenceField']]) -> Optional[Sequence[T]]:
+class SequenceField(Generic[T], FieldDecorator[Sequence[T], Type['SequenceField']]):
+    def __get__(self, instance: Optional[Walker], owner: Optional[Type['SequenceField']]) -> Sequence[T]:
         if instance is None:
             raise AttributeError(self.name)
         with suppress(KeyError):
             return self._field.__get__(instance, owner)
-        return None
+        return []
 
     def __set__(self, instance: Walker, value: Sequence[T]):
         for item in value:
             pass
 
 
-class MappingField(Generic[T], FieldDecorator[Mapping[str, T]]):
-    def __init__(self, field: Field[T], name_keys: Optional[str] = None):
+class MappingField(Generic[T, FieldT], FieldDecorator[Mapping[str, T], Type['MappingField']]):
+    def __init__(self, field: Field[T, FieldT], name_keys: Optional[str] = None):
         self.__values: Final[SequenceField[T]] = cast(SequenceField[T], SequenceField(field))
         self.__name_keys = name_keys or f'{field.name}_keys'
 
@@ -172,7 +174,7 @@ def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWa
         elif issubclass(type_, TypedWalker):
             return ObjectField(name, type_)
         elif issubclass(type_, Sequence):
-            assert(issubclass(typing.get_origin(type_), Sequence))
+            assert(issubclass(cast(Type, typing.get_origin(type_)), Sequence))
             item_type, *_ = typing.get_args(type_)
             return SequenceField(make_field(name, item_type))
         else:
@@ -182,7 +184,7 @@ def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWa
         typename = reduce(lambda acc, c: acc + (f'_{c}' if c.isupper() else c), cls.__name__).lower()
 
     bases = cls.__bases__ if cls.__bases__ != (object,) else ()
-    field_descriptors: Final[Dict[str, FieldBase]] = {name: make_field(name, type_) for name, type_ in typing.get_type_hints(cls).items()}
+    field_descriptors: Final[Dict[str, Field]] = {name: make_field(name, type_) for name, type_ in typing.get_type_hints(cls).items()}
 
     def init(self: TypedWalker[T], source: Union[Walker, str, None], /, *, fields: Mapping[str, Any] = {}, **kwargs):
         walker: Walker
@@ -190,7 +192,7 @@ def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWa
             walker = source
         else:
             name: str = source if source else f'{type(self).__qualname__}_{uuid4().hex}'
-            object_ = Object(type=type(self)._type)
+            object_ = Object(type=self.type)
             config = Config(**{name: object_})
             walker = Walker(config, name, _object=object_)
 
