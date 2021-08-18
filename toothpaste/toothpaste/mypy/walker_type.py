@@ -73,9 +73,7 @@ class WalkerTransformer:
         # validate
         add_method(ctx, 'validate', args=[], return_type=ctx.api.named_type('__builtins__.bool'))
 
-        info.metadata[METADATA_TAG] = {
-            'attributes': [vars(attr) for attr in attributes]
-        }
+        info.metadata[METADATA_TAG] = {'attributes': [vars(attr) for attr in attributes]}
 
 
     def collect_attributes(self) -> Optional[List[WalkerAttribute]]:
@@ -151,15 +149,18 @@ class WalkerTransformer:
 
         return all_attrs
 
+
 def walker_maker_callback(ctx: ClassDefContext) -> None:
     transformer = WalkerTransformer(ctx)
     transformer.transform()
+
 
 class CustomPlugin(Plugin):
     def get_class_decorator_hook(self, fullname: str) -> Optional[Callable[[ClassDefContext], None]]:
         if fullname == WALKER_TYPE_FULL_NAME:
             return walker_maker_callback
         return None
+
 
 def plugin(version: str) -> 'TypingType[Plugin]':
     return CustomPlugin
