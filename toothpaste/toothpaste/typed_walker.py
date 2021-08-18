@@ -144,15 +144,6 @@ class MappingField(Generic[T], FieldDecorator[Mapping[str, T]]):
 
 _WALKER_TYPE_REGISTRY: Dict[str, Type[TypedWalker]] = {}
 
-TypedWalkerT = TypeVar('TypedWalkerT', bound=TypedWalker)
-
-
-class _Missing:
-    pass
-
-
-MISSING = _Missing()
-
 
 def walker_type(cls: Type[T], /, typename: Optional[str] = None) -> Type[TypedWalker]:
     def decay_optional(type_) -> Tuple[bool, Type]:

@@ -14,9 +14,6 @@ from . import config_objects as confobj
 from toothpaste.marshalling import marshall_walker, unmarshall_walker
 from toothpaste.types import Config
 
-
-
-
 from base64 import b64decode, b64encode
 from collections import namedtuple
 from typing import Optional, Tuple, Type
