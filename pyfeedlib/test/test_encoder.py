@@ -2,7 +2,8 @@
 
 import asyncio
 from pathlib import Path
-from random import lognormalvariate, uniform
+from random import lognormvariate, uniform
+from math import log
 
 from feed import Encoder
 
@@ -12,25 +13,27 @@ def test_encoder():
 
     e = Encoder()
 
+    packets = []
+    timestamp = 0
+    instrument = 42
+
     with (d / 'scenario').open('wb') as out:
         mid = 100
         for _ in range(1000):
-            mid += round(lognormalvariate(0, 3), 0)
-            new_b0 = mid - round(abs(lognormalvariate(0, 1)), 1)
-            new_o0 = mid + round(abs(lognormalvariate(0, 1)), 1)
-            if new_b0 == new_o0:
-                new_b0, new_bq0 = 0, 0
-            else:
-                new_bq0 = uniform(0, 5)
-                new_oq0 = uniform(0, 5)
+            timestamp += max(round(lognormvariate(log(1000), log(5)), 0), 10000000)
+            mid += round(lognormvariate(0, 3), 0)
+            while True:
+                b0 = mid - round(abs(lognormvariate(0, 1)), 1)
+                o0 = mid + round(abs(lognormvariate(0, 1)), 1)
+                if b0 != o0:
+                    break
+            bq0 = uniform(0, 5)
+            oq0 = uniform(0, 5)
 
-            packets = (
-                e.encode(0, {42:dict(b0=10, bq0=5)}),
-                e.encode(1000, {42:dict(b0=10, bq0=5, o0=11, oq0=1)}),
-                e.encode(2500, {1:dict(b0=64, bq0=1)}),
-            )
-            for packet in packets:
-                out.write(packet)
+            packets.append(e.encode(timestamp, {instrument: dict(b0=b0, bq0=bq0, o0=o0, oq0=oq0)}))
+
+        for packet in packets:
+            out.write(packet)
 
 
 if __name__ == '__main__':

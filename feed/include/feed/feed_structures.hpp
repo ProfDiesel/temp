@@ -241,6 +241,31 @@ template<typename field_constant_type>
   }
 }
 
+template<typename field_constant_type>
+[[using gnu : always_inline, flatten, hot]] inline bool update_state_sparse(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
+{
+  // clang-format off
+#define HANDLE_FIELD(r, _, elem) \
+  if constexpr(field() == field::BOOST_PP_TUPLE_ELEM(0, elem)) \
+  { \
+    if(state.BOOST_PP_TUPLE_ELEM(0, elem) != value) \
+    { \
+      state.BOOST_PP_TUPLE_ELEM(0, elem) = value; \
+      state.updates.set(static_cast<std::size_t>(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
+      return true; \
+    } \
+  } \
+  else
+  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
+#undef HANDLE_FIELD
+  // clang-format on
+  {
+    ASSERTS(false);
+  }
+
+  return false;
+}
+
 template<typename value_type>
 [[using gnu : always_inline, flatten, hot]] inline void update_state_poly(instrument_state &state, enum field field, const value_type &value) noexcept
 {
@@ -280,6 +305,18 @@ template<typename continuation_type>
   BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
 #undef HANDLE_FIELD
   // clang-format on
+}
+
+[[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, const instrument_state &other) noexcept
+{
+  visit_state([&](auto field, auto value) { update_state(state, field, value); }, other);
+}
+
+[[using gnu : always_inline, flatten, hot]] inline bool update_state_sparse(instrument_state &state, const instrument_state &other) noexcept
+{
+  bool result = false;
+  visit_state([&](auto field, auto value) { result |= update_state_sparse(state, field, value); }, other);
+  return result;
 }
 
 template<typename value_type>

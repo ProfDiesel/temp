@@ -68,18 +68,18 @@ class Encoder:
         return self.__buffer
 
     def encode(self, timestamp, updates: Dict[Instrument, Dict[str, Any]]):
-        to_flush = ffi.new('up_state*[]', len(updates))
+        to_flush = ffi.new('up_state_t*[]', len(updates))
         for n, (instrument, fields) in enumerate(updates.items()):
             state = State(instrument)
-            state.sequence_id = self.__next_sequence_id(instrument)
+            _feedlib.up_state_set_sequence_id(state._self, self.__next_sequence_id(instrument))
             for field, value in fields.items():
                 state.update_float(getattr(_feedlib, field), float(value))
             to_flush[n] = state._self
 
-        n = _feedlib.up_encoder_encode(self._self, timestamp, to_flush, self.__buffer, len(self.__buffer))
+        n = _feedlib.up_encoder_encode(self._self, timestamp, to_flush, len(to_flush), ffi.from_buffer(self.__buffer), len(self.__buffer))
         if n > len(self.__buffer):
             self.__buffer = bytearray(n)
-            _feedlib.up_encoder_encode(self._self, timestamp, to_flush, self.__buffer, n)
+            _feedlib.up_encoder_encode(self._self, timestamp, to_flush, len(to_flush), ffi.from_buffer(self.__buffer), n)
         return memoryview(self.__buffer[:n])
 
 @ffi.def_extern()

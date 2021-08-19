@@ -9,10 +9,10 @@ pytest-asyncio
 pytest-html
 pytest-cov
 pytest-line-profiler
+pytest-mypy-plugins
 pytest-pycodestyle
 pytest-pydocstyle
 pytest-pylint
 pytest-randomly
 pytest-runner
 pprofile
-cppyy

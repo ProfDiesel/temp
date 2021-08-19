@@ -184,19 +184,25 @@ public:
   auto update(const auto &states, auto &&continuation) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>>
   {
     asio::mutable_buffer buffer(&storage, detail::packet_max_size);
-    new(buffer.data()) detail::packet {static_cast<std::uint8_t>(states.size()), {}};
+    auto packet = new(buffer.data()) detail::packet {0, {}};
 
     auto current = buffer + offsetof(detail::packet, message);
     for(auto &&[instrument, new_state]: states)
     {
       auto &[state, valid_updates] = this->states[instrument];
-      visit_state([&state = state](auto field, auto value) { update_state(state, field, value); }, new_state);
+      if(!update_state_sparse(state, new_state))
+        continue;
+
       state.sequence_id = new_state.sequence_id;
-      current += detail::encode_message(instrument, state, current);
       valid_updates |= std::exchange(state.updates, {});
+
+      current += detail::encode_message(instrument, state, current);
+      ++packet->nb_messages;
     }
 
-    return std::forward<decltype(continuation)>(continuation)(asio::buffer(buffer, static_cast<std::size_t>(static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data()))));
+    using result_type = std::invoke_result_t<decltype(continuation), asio::const_buffer>;
+
+    return packet->nb_messages ? std::forward<decltype(continuation)>(continuation)(asio::buffer(buffer, static_cast<std::size_t>(static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data())))) : result_type {};
   }
 
   instrument_state at(instrument_id_type instrument) const noexcept
