@@ -23,7 +23,7 @@ from mypy.semanal import set_callable_name  # type: ignore
 from mypy.server.trigger import make_wildcard_trigger
 from mypy.typeops import map_type_from_supertype
 from mypy.types import (AnyType, CallableType, Instance, NoneType, Type,
-                        TypeOfAny, TypeType, TypeVarDef, TypeVarType,
+                        TypeOfAny, TypeType, TypeVarDef, TypeVarType, TypedDictType,
                         UnionType, get_proper_type)
 from mypy.typevars import fill_typevars
 from mypy.util import get_unique_redefinition_name
@@ -70,7 +70,7 @@ class WalkerTransformer:
         source_argument_type = UnionType([ctx.api.named_type_or_none('toothpaste.walker.Walker', [implicit_any]), ctx.api.named_type('__builtins__.str'), NoneType()])
         source_argument = Argument(Var('source', source_argument_type), type_annotation=source_argument_type, initializer=None, kind=ARG_POS)
         attribute_arguments = [attr.to_argument() for attr in attributes]
-        kwargs_argument_type =
+        kwargs_argument_type = ctx.api.named_type_or_none('builtins.dict', [ctx.api.named_type('__builtins__.str'), AnyType(TypeOfAny.special_form)])
         kwargs_arguments = [Argument(Var('kwargs'), type_annotation=kwargs_argument_type, initializer=None, kind=ARG_STAR2)]
         add_method(ctx, '__init__', args=[source_argument] + attribute_arguments + kwargs_arguments, return_type=NoneType())
 
