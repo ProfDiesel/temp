@@ -30,7 +30,7 @@ from mypy.util import get_unique_redefinition_name
 from typing_extensions import Final
 
 
-WALKER_TYPE_FULL_NAME = 'toothpaste.typed_walker.walker_kype'
+WALKER_TYPE_FULL_NAME = 'toothpaste.typed_walker.walker_type'
 
 
 @dataclass
@@ -66,10 +66,12 @@ class WalkerTransformer:
                 return
 
         # __init__
-        source_argument_type = UnionType([ctx.api.named_type('toothpaste.Walker'), ctx.api.named_type('__builtins__.str'), NoneType()])
+        implicit_any = AnyType(TypeOfAny.special_form)
+        source_argument_type = UnionType([ctx.api.named_type_or_none('toothpaste.walker.Walker', [implicit_any]), ctx.api.named_type('__builtins__.str'), NoneType()])
         source_argument = Argument(Var('source', source_argument_type), type_annotation=source_argument_type, initializer=None, kind=ARG_POS)
         attribute_arguments = [attr.to_argument() for attr in attributes]
-        kwargs_arguments = [Argument(Var('kwargs'), type_annotation=None, initializer=None, kind=ARG_STAR2)]
+        kwargs_argument_type =
+        kwargs_arguments = [Argument(Var('kwargs'), type_annotation=kwargs_argument_type, initializer=None, kind=ARG_STAR2)]
         add_method(ctx, '__init__', args=[source_argument] + attribute_arguments + kwargs_arguments, return_type=NoneType())
 
         # validate
@@ -159,6 +161,7 @@ def walker_maker_callback(ctx: ClassDefContext) -> None:
 
 class CustomPlugin(Plugin):
     def get_class_decorator_hook(self, fullname: str) -> Optional[Callable[[ClassDefContext], None]]:
+        print(fullname)
         if fullname == WALKER_TYPE_FULL_NAME:
             return walker_maker_callback
         return None

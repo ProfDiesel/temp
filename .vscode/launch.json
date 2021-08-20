@@ -62,8 +62,8 @@
             "type": "python",
             "request": "launch",
             "module": "mypy",
-            "args": ["--config-file", "setup.cfg", "ppf"],
-            "cwd": "${workspaceFolder}/ppf",
+            "args": ["--config-file", "setup.cfg", "test/simple.py"],
+            "cwd": "${workspaceFolder}/toothpaste",
             "justMyCode": false
         }
     ]
