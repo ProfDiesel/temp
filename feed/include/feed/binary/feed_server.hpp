@@ -53,9 +53,11 @@ public:
   }
 
   boost::leaf::awaitable<boost::leaf::result<void>>
-  update(const auto &states) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>>
+  update(const auto &states) noexcept // TODO requires is_iterable_v<decltype(states), std::tuple<instrument_id_type, instrument_state>>
   {
-    BOOST_LEAF_ASIO_CO_TRYV(co_await state_map::update(states, [&](auto &&buffer) { return updates_socket.async_send(buffer, _); }));
+    auto buffer = state_map::update(states);
+    if(buffer.size() > 0)
+      BOOST_LEAF_ASIO_CO_TRYV(co_await updates_socket.async_send(buffer, _));
     co_return boost::leaf::success();
   }
 

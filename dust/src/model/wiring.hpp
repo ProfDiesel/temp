@@ -68,7 +68,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 #endif // defined(BACKTEST_HARNESS)
 
 [[using gnu: flatten]] auto run(const config::walker &config, asio::io_context &service, auto &command_input, auto &command_output,
-                                boilerplate::not_null_observer_ptr<logger::logger> logger, auto &&continuation, auto dynamic_subscription, auto &&trigger,
+                                boilerplate::not_null_observer_ptr<logger::logger> logger, auto continuation, auto dynamic_subscription, auto &&trigger,
                                 auto handle_packet_loss, auto send_datagram) noexcept -> boost::leaf::result<void>
 {
   using namespace config::literals;
@@ -270,11 +270,11 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
 
       const auto spin_count = std::min(std::size_t(feed["spin_count"_hs].get_or(1)), std::size_t(1));
 
-      [update_source = std::move(update_source), spin_count](auto &&continuation) mutable noexcept
+      [update_source = std::move(update_source), spin_count](auto continuation) mutable noexcept
       {
         using namespace piped_continuation;
         for(auto n = spin_count; n; --n)
-          (std::ref(update_source) |= std::forward<decltype(continuation)>(continuation))();
+          (std::ref(update_source) |= continuation();
       };
     });
 
@@ -296,7 +296,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
         return automaton;
       };
 
-      [&decode_header](auto &&continuation, const network_clock::time_point &timestamp, const asio::const_buffer &buffer) noexcept
+      [&decode_header](auto continuation, const network_clock::time_point &timestamp, const asio::const_buffer &buffer) noexcept
       { return feed::detail::decode(decode_header, continuation, timestamp, buffer); };
     });
 
@@ -306,7 +306,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
   //
 
   const auto trigger_ =
-    [](auto &&continuation, const network_clock::time_point &feed_timestamp, const feed::update &update, typename automata_type::automaton *automaton) noexcept
+    [](auto continuation, const network_clock::time_point &feed_timestamp, const feed::update &update, typename automata_type::automaton *automaton) noexcept
   { return (automaton->trigger)(continuation, feed_timestamp, update, automaton); };
 
   //
@@ -402,7 +402,7 @@ request.instrument = {}\n\n");
 
   spawn([&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>> { return commands(command_input); }, "commands"s);
 
-  auto with_mca_markers = [](auto &&continuation) noexcept
+  auto with_mca_markers = [](auto continuation) noexcept
   {
     asm volatile("# LLVM-MCA-BEGIN trigger");
     continuation();
@@ -424,7 +424,7 @@ auto with_trigger_path(const config::walker &config, asio::io_context &service, 
   using namespace config::literals;
 
 #if !defined(LEAN_AND_MEAN) && !defined(FUZZ_TEST_HARNESS)
-  const auto dynamic_subscription_test = [&](auto &&continuation, auto &&...tags) noexcept
+  const auto dynamic_subscription_test = [&](auto continuation, auto &&...tags) noexcept
   {
     const auto trigger = config["subscription"_hs]["trigger"_hs];
     return trigger ? with_trigger(trigger, logger,
@@ -433,13 +433,13 @@ auto with_trigger_path(const config::walker &config, asio::io_context &service, 
                         : continuation(std::forward<decltype(tags)>(tags)..., std::true_type {}, polymorphic_trigger_dispatcher());
   };
 
-  const auto handle_packet_loss_test = [&](auto &&continuation, auto &&...tags) noexcept
+  const auto handle_packet_loss_test = [&](auto continuation, auto &&...tags) noexcept
   {
     return config["feed"_hs]["handle_packet_loss"_hs] ? continuation(std::forward<decltype(tags)>(tags)..., std::true_type {})
                                                       : continuation(std::forward<decltype(tags)>(tags)..., std::false_type {});
   };
 
-  const auto send_datagram_test = [&](auto &&continuation, auto &&...tags) noexcept
+  const auto send_datagram_test = [&](auto continuation, auto &&...tags) noexcept
   {
     return config["send"_hs]["datagram"_hs] ? continuation(std::forward<decltype(tags)>(tags)..., std::true_type {})
                                             : continuation(std::forward<decltype(tags)>(tags)..., std::false_type {});

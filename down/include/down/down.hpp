@@ -107,7 +107,7 @@ struct order_sm
   }
 };
 
-boost::leaf::awaitable<boost::leaf::result<void>> loop(auto &&continuation, asio::tcp::socket &socket)
+boost::leaf::awaitable<boost::leaf::result<void>> loop(auto continuation, asio::tcp::socket &socket)
 {
   const auto message_id = BOOST_LEAF_CO_TRYX(read<message_id_type>(socket));
 

@@ -210,7 +210,7 @@ public:
   multicast_udp_reader(multicast_udp_reader &&) = default;
   multicast_udp_reader &operator=(multicast_udp_reader &&) = default;
 
-  [[using gnu: always_inline, flatten, hot]] inline auto operator()(auto &&continuation) noexcept -> boost::leaf::result<void>
+  [[using gnu: always_inline, flatten, hot]] inline auto operator()(auto continuation) noexcept -> boost::leaf::result<void>
   {
 #if defined(USE_TCPDIRECT)
     ::zf_reactor_perform(static_stack::instance().stack.get());
@@ -230,7 +230,7 @@ public:
     unsigned int timestamp_flags;
     BOOST_LEAF_RC_TRYV(::zfur_pkt_get_timestamp(zock_.get(), &msg.msg, &timestamp, 0, &timestamp_flags));
 
-    std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(timestamp), asio::const_buffer(msg.msg.iov[0].iov_base, msg.msg.iov[0].iov_len));
+    continuation(to_time_point<network_clock>(timestamp), asio::const_buffer(msg.msg.iov[0].iov_base, msg.msg.iov[0].iov_len));
 
 #elif defined(USE_LIBVMA)
 
@@ -240,7 +240,7 @@ public:
       assert(completion.events & VMA_SOCKETXTREME_PACKET);
       const auto &packet = completion.packet;
       assert(packet.num_bufs == 1);
-      std::forward<decltype(continuation)>(continuation)(to_time_point<network_clock>(packet.hw_timestamp), asio::const_buffer(packet.buff_lst->payload, packet.total_len));
+      continuation(to_time_point<network_clock>(packet.hw_timestamp), asio::const_buffer(packet.buff_lst->payload, packet.total_len));
     }
     for(auto &&completion: completions_ | ranges::views::take(nb_completions))
       vma_api::instance().socketxtreme_free_vma_packets(&completion.packet, 1);
@@ -268,11 +268,11 @@ public:
 
     const auto timestamp = get_timestamp(&msgvec_[0].msg_hdr);
     for(std::size_t i = 0; i != nb_messages_read; ++i)
-      std::forward<decltype(continuation)>(continuation)(timestamp, asio::const_buffer(buffers_[i].data(), msgvec_[i].msg_len));
+      continuation(timestamp, asio::const_buffer(buffers_[i].data(), msgvec_[i].msg_len));
 
 #else  // defined(USE_TCPDIRECT)
     const auto msg_length = receive(asio::buffer(buffer_.data(), buffer_size));
-    std::forward<decltype(continuation)>(continuation)(network_clock::time_point(), asio::const_buffer(buffer_.data(), msg_length));
+    continuation(network_clock::time_point(), asio::const_buffer(buffer_.data(), msg_length));
 #endif // defined(USE_TCPDIRECT)
 
     return {};

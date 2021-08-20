@@ -108,15 +108,15 @@ struct invalid_trigger_config
 };
 
 auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger::logger> logger,
-                  auto &&continuation) noexcept
+                  auto continuation) noexcept
 {
   using namespace config::literals;
 
-  using result_type = std::invoke_result_t<decltype(continuation), trigger_dispatcher<std::tuple<>>>;
+  using result_type = std::invoke_result_t<continuation, trigger_dispatcher<std::tuple<>>>;
   static_assert(boost::leaf::is_result_type<result_type>::value);
 
   // Look HN ! Monoid !
-  const auto null_trigger = [](auto &&continuation) noexcept -> result_type { return continuation(std::tuple {}); };
+  const auto null_trigger = [](auto continuation) noexcept -> result_type { return continuation(std::tuple {}); };
   const auto add_trigger = [](auto &&triggers, auto &&field_set, auto &&trigger) noexcept
   {
     return std::tuple_cat(std::forward<decltype(triggers)>(triggers),
@@ -129,7 +129,7 @@ auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger
 #endif // !defined(LEAN_AND_MEAN)
   const auto default_price = feed::price_t {};
 
-  auto decode_instant_move_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> result_type
+  auto decode_instant_move_trigger = [=](auto continuation, auto &&triggers) noexcept -> result_type
   {
     const auto instant_threshold = config["instant_threshold"_hs];
     return instant_threshold ? continuation(add_trigger(std::forward<decltype(triggers)>(triggers), price_fields,
@@ -138,7 +138,7 @@ auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger
   };
 
 #if !defined(LEAN_AND_MEAN)
-  auto decode_move_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> result_type
+  auto decode_move_trigger = [=](auto continuation, auto &&triggers) noexcept -> result_type
   {
     const auto threshold = config["threshold"_hs];
     const auto period = config["period"_hs];
@@ -161,7 +161,7 @@ auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger
       return continuation(std::forward<decltype(triggers)>(triggers));
   };
 
-  auto decode_min_size_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> result_type
+  auto decode_min_size_trigger = [=](auto continuation, auto &&triggers) noexcept -> result_type
   {
     const auto min_size = config["min_size"_hs];
     return min_size ? continuation(add_trigger(std::forward<decltype(triggers)>(triggers), quantity_fields, min_value_trigger<feed::quantity_t>(min_size)))
@@ -169,7 +169,7 @@ auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger
   };
 #endif // !defined(LEAN_AND_MEAN)
 
-  auto check_has_trigger = [=](auto &&continuation, auto &&triggers) noexcept -> result_type
+  auto check_has_trigger = [=](auto continuation, auto &&triggers) noexcept -> result_type
   {
     if constexpr(std::tuple_size_v<std::decay_t<decltype(triggers)>> != 0)
     {
@@ -189,7 +189,7 @@ auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger
 #if !defined(LEAN_AND_MEAN)
          |= decode_move_trigger |= decode_min_size_trigger
 #endif // !defined(LEAN_AND_MEAN)
-         |= check_has_trigger |= std::forward<decltype(continuation)>(continuation);
+         |= check_has_trigger |= continuation;
 }
 
 

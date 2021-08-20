@@ -45,7 +45,7 @@ public:
     co_return BOOST_LEAF_NEW_ERROR(std::make_error_code(std::errc::io_error)); // TODO
   }
 
-  boost::leaf::result<void> on_update_poll(auto &&continuation) noexcept
+  boost::leaf::result<void> on_update_poll(auto continuation) noexcept
   {
     if(buffer_.size() < sizeof(feed::detail::event))
       return BOOST_LEAF_NEW_ERROR(std::make_error_code(std::errc::io_error));
@@ -59,7 +59,7 @@ public:
                                                     [&](auto field, feed::quantity_t value) { return value; },
                                                   },
                                                   buffer_);
-    std::forward<decltype(continuation)>(continuation)(current_timestamp_, buffer_);
+    continuation(current_timestamp_, buffer_);
     buffer_ += sanitized;
 
     return boost::leaf::success();
@@ -72,7 +72,7 @@ public:
 
   auto make_update_source() noexcept
   {
-    return [this](auto &&continuation) noexcept { return on_update_poll(std::forward<decltype(continuation)>(continuation)); };
+    return [this](auto continuation) noexcept { return on_update_poll(continuation(continuation)); };
   }
 
 private:

@@ -123,17 +123,17 @@ extern "C" __attribute__((visibility("default"))) size_t up_encoder_encode(up_en
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
   std::for_each_n(states, nb_states, [&](const auto *state) noexcept { states_.emplace_back(state->instrument, state->state); });
-  return self->state_map.update(states_,
-                                [&](auto &&result) noexcept
-                                {
-                                  const auto size = result.size() + offsetof(feed::detail::event, packet);
-                                  if(size < buffer_size)
-                                  {
-                                    auto *target = new(buffer) feed::detail::event {timestamp};
-                                    std::memcpy(&target->packet, result.data(), result.size());
-                                  }
-                                  return size;
-                                });
+  auto result = self->state_map.update(states_);
+  if(result.size() == 0)
+    return 0;
+
+  const auto size = result.size() + offsetof(feed::detail::event, packet);
+  if(size < buffer_size)
+  {
+    auto *target = new(buffer) feed::detail::event {timestamp};
+    std::memcpy(&target->packet, result.data(), result.size());
+  }
+  return size;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -111,7 +111,7 @@ struct automata final /*: boost::noncopyable*/
     };
   }
 
-  void warm_up(auto &&continuation) noexcept
+  void warm_up(auto continuation) noexcept
   {
     for(std::size_t i = 0; i < instrument_ids.size(); ++i)
       if(instrument_ids[i])

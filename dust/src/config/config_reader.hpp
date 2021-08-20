@@ -136,7 +136,7 @@ using char_t = typename value_type::char_type;
 template<typename value_type>
 using traits_t = typename value_type::traits_type;
 
-auto parse(auto &&continuation, auto &&from)
+auto parse(auto continuation, auto &&from)
 {
   using from_type_ = std::decay_t<decltype(from)>;
   using char_type = std::detected_or_t<char, char_t, from_type_>;
@@ -144,10 +144,10 @@ auto parse(auto &&continuation, auto &&from)
   if constexpr(std::is_base_of_v<std::basic_istream<char_type, traits_type>, from_type_>)
   {
     boost::spirit::basic_istream_iterator<char_type, traits_type> begin {std::forward<decltype(from)>(from)}, end;
-    return parse(std::forward<decltype(continuation)>(continuation), begin, end);
+    return parse(continuation, begin, end);
   }
   else
-    return parse(std::forward<decltype(continuation)>(continuation), from.begin(), from.end());
+    return parse(continuation, from.begin(), from.end());
 }
 
 namespace detail

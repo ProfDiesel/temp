@@ -174,8 +174,7 @@ inline update encode_update(enum field field, const price_t &value) noexcept
   return update {.field = static_cast<uint8_t>(field), .value = endian::native_to_big(result)};
 }
 
-template<typename continuation_type>
-[[using gnu : always_inline, flatten, hot]] inline auto visit_update(continuation_type &&continuation, const struct update &update)
+[[using gnu : always_inline, flatten, hot]] inline auto visit_update(auto continuation, const struct update &update)
 {
   switch(field{update.field})
   {
@@ -296,8 +295,7 @@ template<typename value_type>
     update_state(state, *update);
 }
 
-template<typename continuation_type>
-[[using gnu : always_inline, flatten, hot]] inline void visit_state(continuation_type &&continuation, const instrument_state &state)
+[[using gnu : always_inline, flatten, hot]] inline void visit_state(auto continuation, const instrument_state &state)
 {
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \

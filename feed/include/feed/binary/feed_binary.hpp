@@ -181,7 +181,7 @@ class state_map
 public:
   void reset(instrument_id_type instrument, instrument_state state = {}) noexcept { states[instrument] = {state, state.updates}; }
 
-  auto update(const auto &states, auto &&continuation) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>>
+  auto update(const auto &states) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>>
   {
     asio::mutable_buffer buffer(&storage, detail::packet_max_size);
     auto packet = new(buffer.data()) detail::packet {0, {}};
@@ -200,9 +200,7 @@ public:
       ++packet->nb_messages;
     }
 
-    using result_type = std::invoke_result_t<decltype(continuation), asio::const_buffer>;
-
-    return packet->nb_messages ? std::forward<decltype(continuation)>(continuation)(asio::buffer(buffer, static_cast<std::size_t>(static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data())))) : result_type {};
+    return packet->nb_messages ? asio::const_buffer(buffer.data(), static_cast<std::size_t>(static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data()))) : asio::const_buffer();
   }
 
   instrument_state at(instrument_id_type instrument) const noexcept
