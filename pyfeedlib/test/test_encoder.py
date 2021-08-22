@@ -2,11 +2,12 @@
 
 import asyncio
 from pathlib import Path
-from random import lognormvariate, uniform
+from random import normalvariate, uniform, lognormvariate, seed
 from math import log
 
 from feed import Encoder
 
+seed('pipololo')
 
 def test_encoder():
     d = Path('.')
@@ -20,16 +21,18 @@ def test_encoder():
     with (d / 'scenario').open('wb') as out:
         mid = 100
         for _ in range(1000):
-            timestamp += max(round(lognormvariate(log(1000), log(5)), 0), 10000000)
-            mid += round(lognormvariate(0, 3), 0)
+            time_offset = lognormvariate(log(1000), log(500))
+            timestamp += int(min(round(time_offset), 3000000))
+            mid += normalvariate(0, 3)
             while True:
-                b0 = mid - round(abs(lognormvariate(0, 1)), 1)
-                o0 = mid + round(abs(lognormvariate(0, 1)), 1)
+                b0 = round(mid - abs(normalvariate(0, .2)), 1)
+                o0 = round(mid + abs(normalvariate(0, .2)), 1)
                 if b0 != o0:
                     break
-            bq0 = uniform(0, 5)
-            oq0 = uniform(0, 5)
+            bq0 = int(uniform(0, 5))
+            oq0 = int(uniform(0, 5))
 
+            print(timestamp, instrument, b0, bq0, o0, oq0)
             packets.append(e.encode(timestamp, {instrument: dict(b0=b0, bq0=bq0, o0=o0, oq0=oq0)}))
 
         for packet in packets:

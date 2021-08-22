@@ -58,6 +58,15 @@
             "justMyCode": false
         },
         {
+            "name": "feed:encoder",
+            "type": "python",
+            "request": "launch",
+            "module": "test.test_encoder",
+            "cwd": "${workspaceFolder}/pyfeedlib",
+            "env": {"LD_LIBRARY_PATH": "${workspaceFolder}/feedlib/_build/debug"},
+            "justMyCode": false
+        },
+        {
             "name": "mypy",
             "type": "python",
             "request": "launch",

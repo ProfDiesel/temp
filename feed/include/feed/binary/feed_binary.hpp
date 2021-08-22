@@ -194,9 +194,10 @@ public:
         continue;
 
       state.sequence_id = new_state.sequence_id;
+      current += detail::encode_message(instrument, state, current);
+
       valid_updates |= std::exchange(state.updates, {});
 
-      current += detail::encode_message(instrument, state, current);
       ++packet->nb_messages;
     }
 
