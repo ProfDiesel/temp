@@ -21,8 +21,8 @@ def test_encoder():
     with (d / 'scenario').open('wb') as out:
         mid = 100
         for _ in range(1000):
-            time_offset = lognormvariate(log(1000), log(500))
-            timestamp += int(min(round(time_offset), 3000000))
+            time_offset = lognormvariate(log(10000), log(5000))
+            timestamp += int(min(round(time_offset), 3000000000))
             mid += normalvariate(0, 3)
             while True:
                 b0 = round(mid - abs(normalvariate(0, .2)), 1)
@@ -32,7 +32,7 @@ def test_encoder():
             bq0 = int(uniform(0, 5))
             oq0 = int(uniform(0, 5))
 
-            print(timestamp, instrument, b0, bq0, o0, oq0)
+            print(timestamp / 1000000000, instrument, b0, bq0, o0, oq0)
             packets.append(e.encode(timestamp, {instrument: dict(b0=b0, bq0=bq0, o0=o0, oq0=oq0)}))
 
         for packet in packets:

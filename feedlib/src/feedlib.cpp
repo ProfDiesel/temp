@@ -71,22 +71,21 @@ extern "C" __attribute__((visibility("default"))) void up_state_set_sequence_id(
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) uint64_t up_state_get_bitset(const up_state *self)
+extern "C" __attribute__((visibility("default"))) bool up_state_is_set(const up_state_t *self, up_field_t field)
 {
-  static_assert(decltype(self->state.updates)().size() <= std::numeric_limits<unsigned long long>::digits);
-  return self->state.updates.to_ullong();
+  return feed::is_set(self->state, static_cast<feed::field>(field));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) float up_state_get_float(const up_state_t *self, up_field_t field)
 {
-  return static_cast<float>(feed::get_update<feed::price_t>(self->state, static_cast<feed::field_index>(field), float {}));
+  return static_cast<float>(feed::get_update_poly<feed::price_t>(self->state, static_cast<feed::field>(field)));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) uint32_t up_state_get_uint(const up_state_t *self, up_field_t field)
 {
-  return static_cast<uint32_t>(feed::get_update<feed::quantity_t>(self->state, static_cast<feed::field_index>(field), uint32_t {}));
+  return static_cast<uint32_t>(feed::get_update_poly<feed::quantity_t>(self->state, static_cast<feed::field>(field)));
 }
 
 ///////////////////////////////////////////////////////////////////////////////

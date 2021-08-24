@@ -61,18 +61,18 @@ static_assert(sizeof(snapshot_request) == 2); // NOLINT(cppcoreguidelines-avoid-
 
 
 constexpr std::size_t packet_max_size = 65'536;
-constexpr std::size_t message_max_size = sizeof(message) + (static_cast<int>(field_index::_count) - 1) * sizeof(update);
+constexpr std::size_t message_max_size = sizeof(message) + (std::to_underlying(field_index::_count) - 1) * sizeof(update);
 constexpr std::size_t packet_header_size = offsetof(packet, message);
 
 inline auto encode_message(instrument_id_type instrument, const instrument_state &state, const asio::mutable_buffer &buffer) noexcept
 {
-  const auto nb_updates = static_cast<uint8_t>(state.updates.count());
+  const auto nb_updates = feed::nb_updates(state);
   const auto needed_bytes = sizeof(message) + sizeof(update) * (nb_updates - 1);
   if(buffer.size() >= needed_bytes)
   {
     auto *message = new(buffer.data()) (struct message) {.instrument = endian::big_uint16_buf_t(instrument),
                                               .sequence_id = endian::big_uint32_buf_t(state.sequence_id),
-                                              .nb_updates = nb_updates};
+                                              .nb_updates = static_cast<std::uint8_t>(nb_updates)};
     visit_state([update = &message->update] (auto field, auto value) mutable { *update++ = encode_update(field, value); }, state);
   }
 
@@ -164,8 +164,8 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
         return buffer.size(); // we consumed it all (and a bit more)
       }
 
-      if(std::find(all_fields.begin(), all_fields.end(), static_cast<feed::field>(update->field)) == all_fields.end())
-        update->field = static_cast<std::uint8_t>(all_fields[update->field % all_fields.size()]);
+      if(std::find(all_fields.begin(), all_fields.end(), update->field) == all_fields.end())
+        update->field = all_fields[std::to_underlying(update->field) % all_fields.size()];
       *update = visit_update([&](auto field, auto value) { return encode_update(field, value_sanitizer(field, value)); }, *update);
     }
   }
@@ -190,7 +190,7 @@ public:
     for(auto &&[instrument, new_state]: states)
     {
       auto &[state, valid_updates] = this->states[instrument];
-      if(!update_state_sparse(state, new_state))
+      if(!update_state_test(state, new_state))
         continue;
 
       state.sequence_id = new_state.sequence_id;
@@ -201,7 +201,7 @@ public:
       ++packet->nb_messages;
     }
 
-    return packet->nb_messages ? asio::const_buffer(buffer.data(), static_cast<std::size_t>(static_cast<std::uint8_t*>(current.data()) - static_cast<std::uint8_t*>(buffer.data()))) : asio::const_buffer();
+    return packet->nb_messages ? asio::const_buffer(buffer.data(), static_cast<std::size_t>(static_cast<std::byte*>(current.data()) - static_cast<std::byte*>(buffer.data()))) : asio::const_buffer();
   }
 
   instrument_state at(instrument_id_type instrument) const noexcept

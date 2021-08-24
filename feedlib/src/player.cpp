@@ -1,4 +1,4 @@
-#include <feed/feedlibpp.hpp>
+#include <feed/feedlib.h>
 
 #include <fcntl.h>
 #include <stdio.h>

@@ -31,7 +31,7 @@ extern "C"
   void up_state_free(up_state_t *self);
   up_sequence_id_t up_state_get_sequence_id(up_state_t *self);
   void up_state_set_sequence_id(up_state_t *self, up_sequence_id_t sequence_id);
-  uint64_t up_state_get_bitset(const up_state_t *self);
+  bool up_state_is_set(const up_state_t *self, up_field_t field);
   float up_state_get_float(const up_state_t *self, up_field_t field);
   uint32_t up_state_get_uint(const up_state_t *self, up_field_t field);
   void up_state_update_float(up_state_t *self, up_field_t field, float value);

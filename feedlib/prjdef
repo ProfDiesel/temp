@@ -42,4 +42,8 @@ pch = GeneratedPch('precompiled_header', sources=('src/feedlib.cpp',))
 
 Default(Alias('feedlib', feedlib := (SharedObject('feedlib', objects=(Cxx('src/feedlib.cpp', pch=pch, pic=True),)),)))
 
+with env():
+    Apply(CxxDef('SPARSE_INSTRUMENT_STATE'))
+    Alias('feedlib_sparse', feedlib := (SharedObject('feedlib_sparse', objects=(Cxx('src/feedlib.cpp', name='feedlib_sparse', pch=pch, pic=True),)),))
+
 Alias('player', (Executable('player', objects=(Cxx('src/player.cpp', pch=pch, pic=True), feedlib)),))

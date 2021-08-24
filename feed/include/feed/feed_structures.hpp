@@ -7,6 +7,11 @@
 #include <boilerplate/units.hpp>
 #endif // !defined(LEAN_AND_MEAN)
 
+#if defined(SPARSE_INSTRUMENT_STATE)
+#include <boost/container/flat_set.hpp>
+#include <boost/container/small_vector.hpp>
+#endif // defined(SPARSE_INSTRUMENT_STATE)
+
 #include <boost/endian/buffers.hpp>
 #include <boost/endian/conversion.hpp>
 
@@ -85,7 +90,7 @@ BOOST_PP_SEQ_FOR_EACH(DECLARE_FIELD, _, FEED_FIELDS)
 template<field value>
 using field_type_t = typename field_type<value>::type;
 
-enum struct field_index
+enum struct field_index: std::size_t
 {
 #define DECLARE_ENUM_INDEX(r, data, elem) BOOST_PP_TUPLE_ELEM(0, elem),
   BOOST_PP_SEQ_FOR_EACH(DECLARE_ENUM_INDEX, _, FEED_FIELDS)
@@ -110,7 +115,8 @@ using sequence_id_type = std::uint32_t;
 
 struct update final
 {
-  std::uint8_t field = 0;
+  static_assert(std::is_same_v<std::underlying_type_t<enum field>, std::uint8_t>);
+  enum field field = {};
   std::uint32_t value = 0;
 } __attribute__((packed));
 static_assert(sizeof(update) == 5); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
@@ -157,7 +163,7 @@ inline update encode_update(enum field field, const value_type &value) noexcept
 template<>
 update encode_update(enum field field, const quantity_t &value) noexcept
 {
-  return update {.field = static_cast<uint8_t>(field), .value = endian::native_to_big(value)};
+  return update {.field = field, .value = endian::native_to_big(value)};
 }
 
 template<>
@@ -171,7 +177,7 @@ inline update encode_update(enum field field, const price_t &value) noexcept
 #else  // defined(__clang__)
   reinterpret_cast<std::decimal::decimal32::__decfloat32 &>(result) = const_cast<std::decimal::decimal32 &>(value.get()).__getval();
 #endif // defined(__clang__)
-  return update {.field = static_cast<uint8_t>(field), .value = endian::native_to_big(result)};
+  return update {.field = field, .value = endian::native_to_big(result)};
 }
 
 [[using gnu : always_inline, flatten, hot]] inline auto visit_update(auto continuation, const struct update &update)
@@ -212,6 +218,66 @@ static_assert(sizeof(message) == 12); // NOLINT(cppcoreguidelines-avoid-magic-nu
 // INSTRUMENT_STATE
 //
 
+#if defined(SPARSE_INSTRUMENT_STATE)
+
+struct instrument_state final
+{
+#define DECLARE_FIELD(r, data, elem) BOOST_PP_TUPLE_ELEM(2, elem) BOOST_PP_TUPLE_ELEM(0, elem) {};
+  BOOST_PP_SEQ_FOR_EACH(DECLARE_FIELD, _, FEED_FIELDS)
+#undef DECLARE_FIELD
+  struct update_field_comparator { auto operator()(auto &lhs, auto &rhs) { return std::less(lhs.field, rhs.field); } };
+  boost::container::flat_set<update, update_field_comparator, boost::container::small_vector<update, 4>> updates;
+  sequence_id_type sequence_id = 0;
+};
+
+template<typename field_constant_type>
+[[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
+{
+  state.updates.insert(encode_update(field(), value));
+}
+
+template<typename field_constant_type>
+[[using gnu : always_inline, flatten, hot]] inline bool update_state_test(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
+{
+  const auto update = encode_update(field(), value);
+  if(const auto it = state.updates.lower_bound(update.field); it == state.updates.end() || it->field != update.field)
+    state.updates.insert(it, update);
+  else if(it->value != update.value)
+    it->value = update.value;
+  else
+      return false;
+  return true;
+}
+
+[[using gnu : always_inline, flatten, hot]] inline void visit_state(auto continuation, const instrument_state &state)
+{
+  for(auto &&update: state.updates)
+    visit_update(continuation, update);
+}
+
+template<typename field_constant_type>
+auto get_update(const instrument_state &state, field_constant_type field) noexcept -> field_type_t<field_constant_type::value>
+{
+  if(const auto it = state.updates.find(update {field(), {}}); it != state.updates.end())
+    return visit_update([](auto field, const auto &value) { 
+      return value;
+    });
+
+  return {};
+}
+
+auto nb_updates(const instrument_state &state)
+{
+  return state.updates.size();
+}
+
+auto is_set(const instrument_state &state, field field)
+{
+  return state.updates.contains(update {field, {}});
+}
+
+#else // defined(SPARSE_INSTRUMENT_STATE)
+
 struct instrument_state final
 {
 #define DECLARE_FIELD(r, data, elem) BOOST_PP_TUPLE_ELEM(2, elem) BOOST_PP_TUPLE_ELEM(0, elem) {};
@@ -229,7 +295,7 @@ template<typename field_constant_type>
   if constexpr(field() == field::BOOST_PP_TUPLE_ELEM(0, elem)) \
   { \
     state.BOOST_PP_TUPLE_ELEM(0, elem) = value; \
-    state.updates.set(static_cast<std::size_t>(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
+    state.updates.set(std::to_underlying(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
   } \
   else
   BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
@@ -241,7 +307,7 @@ template<typename field_constant_type>
 }
 
 template<typename field_constant_type>
-[[using gnu : always_inline, flatten, hot]] inline bool update_state_sparse(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
+[[using gnu : always_inline, flatten, hot]] inline bool update_state_test(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
 {
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
@@ -250,7 +316,7 @@ template<typename field_constant_type>
     if(state.BOOST_PP_TUPLE_ELEM(0, elem) != value) \
     { \
       state.BOOST_PP_TUPLE_ELEM(0, elem) = value; \
-      state.updates.set(static_cast<std::size_t>(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
+      state.updates.set(std::to_underlying(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
       return true; \
     } \
   } \
@@ -265,24 +331,53 @@ template<typename field_constant_type>
   return false;
 }
 
-template<typename value_type>
-[[using gnu : always_inline, flatten, hot]] inline void update_state_poly(instrument_state &state, enum field field, const value_type &value) noexcept
+[[using gnu : always_inline, flatten, hot]] inline void visit_state(auto continuation, const instrument_state &state)
+{
+  // clang-format off
+#define HANDLE_FIELD(r, _, elem) \
+  if(state.updates[std::to_underlying(field_index::BOOST_PP_TUPLE_ELEM(0, elem))]) continuation(BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c){}, state.BOOST_PP_TUPLE_ELEM(0, elem));
+  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
+#undef HANDLE_FIELD
+  // clang-format on
+}
+
+template<typename field_constant_type>
+auto get_update(const instrument_state &state, field_constant_type field) noexcept
+{
+#define HANDLE_FIELD(r, _, elem) \
+  if constexpr(field() == field::BOOST_PP_TUPLE_ELEM(0, elem)) \
+    return state.BOOST_PP_TUPLE_ELEM(0, elem); \
+  else
+  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
+#undef HANDLE_FIELD
+  // clang-format on
+  {
+    ASSERTS(false);
+  }
+}
+
+auto nb_updates(const instrument_state &state)
+{
+  return state.updates.count();
+}
+
+auto is_set(const instrument_state &state, field field)
 {
   switch(field)
   {
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
-  case field::BOOST_PP_TUPLE_ELEM(0, elem): \
-    state.BOOST_PP_TUPLE_ELEM(0, elem) = field_type_t<field::BOOST_PP_TUPLE_ELEM(0, elem)>(value); \
-    state.updates.set(static_cast<std::size_t>(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
-    break;
-  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
+    case field::BOOST_PP_TUPLE_ELEM(0, elem): \
+      return state.updates.test(std::to_underlying(field_index::BOOST_PP_TUPLE_ELEM(0, elem)));
+    BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
 #undef HANDLE_FIELD
   // clang-format on
-  default:
-    ASSERTS(false);
+    default:
+      ASSERTS(false);
   }
 }
+
+#endif // defined(SPARSE_INSTRUMENT_STATE)
 
 [[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, const update &update) noexcept
 {
@@ -295,51 +390,54 @@ template<typename value_type>
     update_state(state, *update);
 }
 
-[[using gnu : always_inline, flatten, hot]] inline void visit_state(auto continuation, const instrument_state &state)
-{
-  // clang-format off
-#define HANDLE_FIELD(r, _, elem) \
-  if(state.updates[static_cast<std::size_t>(field_index::BOOST_PP_TUPLE_ELEM(0, elem))]) continuation(BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c){}, state.BOOST_PP_TUPLE_ELEM(0, elem));
-  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
-#undef HANDLE_FIELD
-  // clang-format on
-}
 
 [[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, const instrument_state &other) noexcept
 {
   visit_state([&](auto field, auto value) { update_state(state, field, value); }, other);
 }
 
-[[using gnu : always_inline, flatten, hot]] inline bool update_state_sparse(instrument_state &state, const instrument_state &other) noexcept
+[[using gnu : always_inline, flatten, hot]] inline bool update_state_test(instrument_state &state, const instrument_state &other) noexcept
 {
   bool result = false;
-  visit_state([&](auto field, auto value) { result |= update_state_sparse(state, field, value); }, other);
+  visit_state([&](auto field, auto value) { result |= update_state_test(state, field, value); }, other);
   return result;
 }
 
 template<typename value_type>
-value_type get_update(const instrument_state &state, field_index index, const value_type &default_value) noexcept
+[[using gnu : always_inline, flatten, hot]] inline void update_state_poly(instrument_state &state, enum field field, const value_type &value) noexcept
 {
-  const auto return_ = [&](const auto &value)
-  {
-    if constexpr(std::is_nothrow_convertible_v<decltype(value), value_type>)
-      return static_cast<value_type>(value);
-    else
-      return default_value;
-  };
-
-  switch(index)
+  switch(field)
   {
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
-    case field_index::BOOST_PP_TUPLE_ELEM(0, elem): \
-      return return_(state.BOOST_PP_TUPLE_ELEM(0, elem));
+  case field::BOOST_PP_TUPLE_ELEM(0, elem): \
+    update_state(state, BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c){}, std::to_underlying(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
+    break;
+  BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
+#undef HANDLE_FIELD
+  // clang-format on
+  default:
+    ASSERTS(false);
+  }
+}
+
+template<typename value_type>
+value_type get_update_poly(const instrument_state &state, enum field field) noexcept
+{
+  switch(field)
+  {
+  // clang-format off
+#define HANDLE_FIELD(r, _, elem) \
+    case field::BOOST_PP_TUPLE_ELEM(0, elem): \
+      static_assert(std::is_nothrow_convertible_v<field_type_t<field::BOOST_PP_TUPLE_ELEM(0, elem)>, value_type>) \
+      return static_cast<value_type>(state.get_update(state, BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c))); \
     BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
 #undef HANDLE_FIELD
   // clang-format on
     default:
-      return default_value;
+      ASSERTS(false);
   }
+  return {};
 }
 
 } // namespace feed
