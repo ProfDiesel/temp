@@ -274,7 +274,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
       {
         using namespace piped_continuation;
         for(auto n = spin_count; n; --n)
-          (std::ref(update_source) |= continuation();
+          std::ref(update_source) |= continuation();
       };
     });
 

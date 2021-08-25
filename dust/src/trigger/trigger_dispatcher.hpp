@@ -112,7 +112,7 @@ auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger
 {
   using namespace config::literals;
 
-  using result_type = std::invoke_result_t<continuation, trigger_dispatcher<std::tuple<>>>;
+  using result_type = std::invoke_result_t<decltype(continuation), trigger_dispatcher<std::tuple<>>>;
   static_assert(boost::leaf::is_result_type<result_type>::value);
 
   // Look HN ! Monoid !
