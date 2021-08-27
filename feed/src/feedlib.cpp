@@ -164,12 +164,13 @@ extern "C" __attribute__((visibility("default"))) void up_decoder_free(up_decode
 extern "C" __attribute__((visibility("default"))) size_t up_decoder_decode(up_decoder *self, const void *buffer, size_t buffer_size)
 {
   auto flush = [self]() { self->on_message(&self->state, self->user_data); };
-  std::unique_ptr<decltype(gsl::finally(flush))> next_flush;
+  using final_action_type = decltype(gsl::finally(flush));
+  std::unique_ptr<final_action_type> next_flush;
 
   return feed::decode(
     [self](auto instrument_id, [[maybe_unused]] auto sequence_id) noexcept
     {
-      next_flush.swap(gsl::finally(flush));
+      next_flush.exchange(std::make_unique<final_action_type>(gsl::finally(flush)));
       self.state.instrument_id = instrument_id;
       return instrument_id;
     },
