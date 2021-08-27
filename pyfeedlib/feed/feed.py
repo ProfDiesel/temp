@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import asyncio
 from dataclasses import dataclass
+from enum import IntEnum, unique
 from typing import Any, Awaitable, Callable, Dict, Final, Optional, Tuple
 
 from feedlib import lib as _feedlib
@@ -8,7 +9,6 @@ from feedlib import ffi
 
 Instrument = int
 SequenceId = int
-Field = int
 
 
 @dataclass
@@ -16,6 +16,7 @@ class Address:
     host: str
     port: int
 
+Field = unique(IntEnum('Field', {member: value for member, value in vars(_feedlib) if member.startswith('field_')}))
 
 class State:
     def __init__(self, instrument: Instrument):

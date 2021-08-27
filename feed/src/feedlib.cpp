@@ -12,6 +12,8 @@
 
 #include <boost/range/iterator_range.hpp>
 
+#include <range/v3/span.hpp>
+
 #include <cstring>
 #include <iostream>
 #include <limits>
@@ -53,16 +55,17 @@ void throw_exception(const exception_type &exception)
 struct up_state
 {
   up_instrument_id_t instrument;
-  feed::instrument_state state;
+  feed::instrument_state state {};
 };
 
+///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) up_state *up_state_new(up_instrument_id_t instrument) { return new up_state {instrument}; }
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) void up_state_free(up_state *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) up_sequence_id_t up_state_get_sequence_id(up_state *self) { return self->state.sequence_id; }
+extern "C" __attribute__((visibility("default"))) up_sequence_id_t up_state_get_sequence_id(const up_state *self) { return self->state.sequence_id; }
 
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) void up_state_set_sequence_id(up_state *self, up_sequence_id_t sequence_id)
@@ -71,31 +74,31 @@ extern "C" __attribute__((visibility("default"))) void up_state_set_sequence_id(
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) bool up_state_is_set(const up_state_t *self, up_field_t field)
+extern "C" __attribute__((visibility("default"))) bool up_state_is_set(const up_state *self, up_field field)
 {
   return feed::is_set(self->state, static_cast<feed::field>(field));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) float up_state_get_float(const up_state_t *self, up_field_t field)
+extern "C" __attribute__((visibility("default"))) float up_state_get_value_float(const up_state *self, up_field field)
 {
   return static_cast<float>(feed::get_update_poly<feed::price_t>(self->state, static_cast<feed::field>(field)));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) uint32_t up_state_get_uint(const up_state_t *self, up_field_t field)
+extern "C" __attribute__((visibility("default"))) uint32_t up_state_get_value_uint(const up_state *self, up_field field)
 {
   return static_cast<uint32_t>(feed::get_update_poly<feed::quantity_t>(self->state, static_cast<feed::field>(field)));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_state_update_float(up_state *self, up_field_t field, float value)
+extern "C" __attribute__((visibility("default"))) void up_state_update_float(up_state *self, up_field field, float value)
 {
   update_state_poly(self->state, static_cast<feed::field>(field), value);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_state_update_uint(up_state *self, up_field_t field, uint32_t value)
+extern "C" __attribute__((visibility("default"))) void up_state_update_uint(up_state *self, up_field field, uint32_t value)
 {
   update_state_poly(self->state, static_cast<feed::field>(field), value);
 }
@@ -121,7 +124,8 @@ extern "C" __attribute__((visibility("default"))) size_t up_encoder_encode(up_en
 {
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
-  std::for_each_n(states, nb_states, [&](const auto *state) noexcept { states_.emplace_back(state->instrument, state->state); });
+  for(const auto *state: ranges::make_span(states, nb_states))
+    states_.emplace_back(state->instrument, state->state);
   auto result = self->state_map.update(states_);
   if(result.size() == 0)
     return 0;
@@ -142,16 +146,15 @@ extern "C" __attribute__((visibility("default"))) size_t up_encoder_encode(up_en
 struct up_decoder
 {
   std::function<std::remove_pointer_t<::up_on_message_t>> on_message;
-  std::function<std::remove_pointer_t<::up_on_update_float_t>> on_update_float;
-  std::function<std::remove_pointer_t<::up_on_update_uint_t>> on_update_uint;
   void *user_data;
+
+  up_state state;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) up_decoder *up_decoder_new(up_on_message_t on_message, up_on_update_float_t on_update_float, up_on_update_uint_t on_update_uint,
-                                                                             void *user_data)
+extern "C" __attribute__((visibility("default"))) up_decoder *up_decoder_new(up_on_message_t on_message, void *user_data)
 {
-  return new up_decoder {on_message, on_update_float, on_update_uint, user_data};
+  return new up_decoder {on_message, user_data};
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -160,31 +163,19 @@ extern "C" __attribute__((visibility("default"))) void up_decoder_free(up_decode
 ///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) size_t up_decoder_decode(up_decoder *self, const void *buffer, size_t buffer_size)
 {
+  auto flush = [self]() { self->on_message(&self->state, self->user_data); };
+  std::unique_ptr<decltype(gsl::finally(flush))> next_flush;
+
   return feed::decode(
     [self](auto instrument_id, [[maybe_unused]] auto sequence_id) noexcept
     {
-      self->on_message(instrument_id, self->user_data);
+      next_flush.swap(gsl::finally(flush));
+      self.state.instrument_id = instrument_id;
       return instrument_id;
     },
     [self]([[maybe_unused]] auto timestamp, auto update, [[maybe_unused]] auto instrument_id)
     {
-      visit_update(
-        [self](auto field, auto value) noexcept
-        {
-          if constexpr(std::is_same_v<decltype(value), feed::price_t>)
-          {
-            self->on_update_float(static_cast<up_field_t>(field()), value, self->user_data);
-          }
-          else if constexpr(std::is_same_v<decltype(value), feed::quantity_t>)
-          {
-            self->on_update_uint(static_cast<up_field_t>(field()), value, self->user_data);
-          }
-          else
-          {
-            static_assert(boilerplate::always_false<decltype(value)>);
-          }
-        },
-        update);
+      update_state(self->state.state, update);
     },
     network_clock::time_point(), asio::buffer(buffer, buffer_size));
 }
@@ -211,14 +202,14 @@ extern "C" __attribute__((visibility("default"))) up_future *up_future_new() { r
 extern "C" __attribute__((visibility("default"))) void up_future_free(up_future *self) { delete self; }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_future_set_ok(up_future_t *self)
+extern "C" __attribute__((visibility("default"))) void up_future_set_ok(up_future *self)
 {
   assert(std::holds_alternative<std::nullopt_t>(self->value));
   self->value = up_future::ok_v;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_future_set_message(up_future_t *self, const char *message)
+extern "C" __attribute__((visibility("default"))) void up_future_set_message(up_future *self, const char *message)
 {
   assert(std::holds_alternative<std::nullopt_t>(self->value));
   self->value = message;
@@ -333,7 +324,8 @@ extern "C" __attribute__((visibility("default"))) up_future *up_server_push_upda
 {
   std::vector<std::tuple<feed::instrument_id_type, feed::instrument_state>> states_;
   states_.reserve(nb_states);
-  std::for_each_n(states, nb_states, [&](const auto *state) { states_.emplace_back(state->instrument, state->state); });
+  for(const auto *state: ranges::make_span(states, nb_states))
+    states_.emplace_back(state->instrument, state->state);
   auto *const result = up_future_new();
   asio::co_spawn(
     self->service,
@@ -373,7 +365,8 @@ extern "C" __attribute__((visibility("default"))) up_future *up_server_replay(up
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_server_get_state(up_server_t *self, up_instrument_id_t instrument, up_state_t *state)
+extern "C" __attribute__((visibility("default"))) void up_server_get_state(up_server *self, up_instrument_id_t instrument, up_state *state)
 {
+  state->instrument = instrument;
   state->state = self->server.at(instrument);
 }

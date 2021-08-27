@@ -25,13 +25,22 @@ def main(argv=None):
 
     class PrintDecoder(Decoder):
         def on_message(self, instrument_id: Instrument):
+            current_message = 
+            self.flush()
             print(instrument_id)
 
         def on_update_float(self, field, value):
-            print(field, value)
+            print(Field(field).name, value)
 
         def on_update_uint(self, field, value):
-            print(field, value)
+            print(Field(field).name, value)
+
+        def decoder(self, data):
+            super().decode(data)
+            self.flush()
+
+        def flush(self):
+            pass
 
     decoder = PrintDecoder()
 

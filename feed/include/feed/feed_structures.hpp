@@ -20,6 +20,8 @@
 #include <boost/preprocessor/seq/for_each.hpp>
 #include <boost/preprocessor/tuple/elem.hpp>
 
+#include <range/v3/span.hpp>
+
 #if !defined(LEAN_AND_MEAN)
 #if defined(__clang__)
 // TODO: use Intel RDFP Math library
@@ -208,7 +210,7 @@ struct message final
   endian::big_uint32_buf_t sequence_id {};
 
   std::uint8_t nb_updates = 0;
-  struct update update = {};
+  struct update updates[1] = {};
 } __attribute__((packed));
 static_assert(sizeof(message) == 12); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
@@ -278,13 +280,17 @@ auto is_set(const instrument_state &state, field field)
 
 #else // defined(SPARSE_INSTRUMENT_STATE)
 
-struct instrument_state final
+struct instrument_state
 {
 #define DECLARE_FIELD(r, data, elem) BOOST_PP_TUPLE_ELEM(2, elem) BOOST_PP_TUPLE_ELEM(0, elem) {};
   BOOST_PP_SEQ_FOR_EACH(DECLARE_FIELD, _, FEED_FIELDS)
 #undef DECLARE_FIELD
   std::bitset<BOOST_PP_SEQ_SIZE(FEED_FIELDS)> updates {};
   sequence_id_type sequence_id = 0;
+
+  // TODO: too big to copy
+  //instrument_state(const instrument_state &) = delete;
+  //instrument_state &operator=(const instrument_state &) = delete;
 };
 
 template<typename field_constant_type>
@@ -386,8 +392,8 @@ auto is_set(const instrument_state &state, field field)
 
 [[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, const message &message) noexcept
 {
-  for(const auto *update = &message.update, *_end = update + message.nb_updates; update != _end; ++update)
-    update_state(state, *update);
+  for(auto &&update: ranges::make_span(message.updates, message.nb_updates))
+    update_state(state, update);
 }
 
 

@@ -3,6 +3,8 @@ Socket: tester writev (LD_PRELOAD)
 Trigger: normalized_move_trigger
 Trigger: polymorphic_trigger_dispatcher, use boost-ext/te
 
+Trigger: Re-design en Entity(=instrument)-Component(=trigger)-System
+
 Config: Pre-hashed strings
 Config: faire une unité de compil séparée avec le parser
 

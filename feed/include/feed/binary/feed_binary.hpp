@@ -73,7 +73,7 @@ inline auto encode_message(instrument_id_type instrument, const instrument_state
     auto *message = new(buffer.data()) (struct message) {.instrument = endian::big_uint16_buf_t(instrument),
                                               .sequence_id = endian::big_uint32_buf_t(state.sequence_id),
                                               .nb_updates = static_cast<std::uint8_t>(nb_updates)};
-    visit_state([update = &message->update] (auto field, auto value) mutable { *update++ = encode_update(field, value); }, state);
+    visit_state([update = message->updates] (auto field, auto value) mutable { *update++ = encode_update(field, value); }, state);
   }
 
   return needed_bytes;
@@ -120,7 +120,7 @@ inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_sna
     if(UNLIKELY(!instrument_closure))
       continue;
 
-    for(auto &&update: ranges::make_span(&message->update, message->nb_updates))
+    for(auto &&update: ranges::make_span(message->updates, message->nb_updates))
       update_handler(timestamp, update, instrument_closure);
   }
 
@@ -154,7 +154,7 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
       return buffer.size(); // we consumed it all (and a bit more)
     }
 
-    for(auto [j, update] = std::tuple {0, &message->update}; j < message->nb_updates; ++j, ++update)
+    for(auto [j, update] = std::tuple {0, message->updates}; j < message->nb_updates; ++j, ++update)
     {
       // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
       if(current = reinterpret_cast<std::byte *>(update); current >= buffer_end)
@@ -179,7 +179,11 @@ std::size_t sanitize(auto &&value_sanitizer, const asio::mutable_buffer &buffer)
 class state_map
 {
 public:
-  void reset(instrument_id_type instrument, instrument_state state = {}) noexcept { states[instrument] = {state, state.updates}; }
+  void reset(instrument_id_type instrument, instrument_state &&state = {}) noexcept
+  {
+    using state_struct = struct state;
+    states.emplace(instrument, (struct state) {std::move(state), state.updates});
+  }
 
   auto update(const auto &states) noexcept // TODO requires is_iterable<decltype(states), std::tuple<instrument_id_type, instrument_state>>
   {
@@ -190,15 +194,27 @@ public:
     for(auto &&[instrument, new_state]: states)
     {
       auto &[state, valid_updates] = this->states[instrument];
-      if(!update_state_test(state, new_state))
+
+      if(new_state.sequence_id)
+        state.sequence_id = new_state.sequence_id;
+
+      auto *message = new (current.data()) (struct message) {.instrument = endian::big_uint16_buf_t(instrument),
+                                                             .sequence_id = endian::big_uint32_buf_t(state.sequence_id),
+                                                             .nb_updates = 0};
+
+      visit_state([&, &state = state](auto field, auto value) { 
+          if(update_state_test(state, field, value))
+            message->updates[++message->nb_updates] = encode_update(field, value);
+        }, new_state);
+
+
+      if((message->nb_updates == 0) && (new_state.sequence_id == 0))
         continue;
 
-      state.sequence_id = new_state.sequence_id;
-      current += detail::encode_message(instrument, state, current);
+      ++packet->nb_messages;
+      current += sizeof(struct message) + sizeof(struct update) * (message->nb_updates - 1); 
 
       valid_updates |= std::exchange(state.updates, {});
-
-      ++packet->nb_messages;
     }
 
     return packet->nb_messages ? asio::const_buffer(buffer.data(), static_cast<std::size_t>(static_cast<std::byte*>(current.data()) - static_cast<std::byte*>(buffer.data()))) : asio::const_buffer();
