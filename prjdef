@@ -1,0 +1,15 @@
+#!/usr/bin/env genjutsu
+# vim: set filetype=python
+
+from glob import glob
+from itertools import chain, repeat
+
+from genjutsu import Alias, Prjdef, E, Glob
+from genjutsu_toolsets.filesystem import Copy
+
+projects = [Prjdef(prjdef) for prjdef in glob('./*/prjdef')]
+projects_aliases = [Alias(project.E.prj_file.parent.name, project.E.all_actual_defaults) for project in projects]
+
+headers = Alias('headers', (Copy(header, header.relative_to(root)) for header, root in chain.from_iterable(zip(Glob('include/**/*.h', root=project.E.get_source_path()), repeat(project.E.get_source_path().relative_to(E.get_source_path()))) for project in projects)))
+
+Alias('all', (headers, *projects_aliases))

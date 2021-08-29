@@ -26,11 +26,11 @@ thirdparties = {thirdparty:
 }
 
 boilerplate = Prjdef('../boilerplate')
-feed = Prjdef('../feed')
+#feed = Prjdef('../feed')
 
 Apply(
     boilerplate.FLAGS,
-    feed.FLAGS,
+#    feed.FLAGS,
     (thirdparty.FLAGS for thirdparty in thirdparties.values()),
 )
 

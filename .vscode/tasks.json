@@ -7,13 +7,11 @@
             "id": "target",
             "description": "target",
             "type": "pickString",
-            "default": "ppf",
+            "default": "all",
             "options": [
-                "ppf",
-                "ppf_ol",
-                "benchmark",
-                "contrib",
-                "test",
+                "all",
+                "dust",
+                "feedlib",
             ],
         },
         {

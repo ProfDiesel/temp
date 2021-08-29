@@ -4,7 +4,9 @@
 from itertools import chain
 from pathlib import Path
 
-from genjutsu_toolsets.c import Cxx, Executable, IncludeDir, CxxDef, SharedObject
+from genjutsu import Alias, Apply, Default, Prjdef, env
+from genjutsu_toolsets.c import (Cxx, CxxDef, Executable, IncludeDir,
+                                 SharedObject)
 from genjutsu_toolsets.filesystem import Copy
 from precompiled_header_generator import GeneratedPch
 from þirdparty import ThirdParty
