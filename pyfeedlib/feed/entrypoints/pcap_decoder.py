@@ -8,7 +8,7 @@ from dpkt.ip import IP, IP_PROTO_UDP, IP_PROTO_TCP
 from dpkt.udp import UDP
 from dpkt.tcp import TCP
 
-from ..feed import Decoder, Field, Instrument
+from ..feed import Decoder, Field, Instrument, State
 
 
 def main(argv=None):

@@ -16,7 +16,7 @@ class Address:
     host: str
     port: int
 
-Field = unique(IntEnum('Field', {member: value for member, value in vars(_feedlib).items() if member.startswith('field_')}))
+Field = unique(IntEnum('Field', {member[len('field_'):]: value for member, value in vars(_feedlib).items() if member.startswith('field_')}))
 
 class State:
     def __init__(self, instrument: Instrument):
@@ -68,13 +68,13 @@ class Encoder:
     def buffer(self):
         return self.__buffer
 
-    def encode(self, timestamp, updates: Dict[Instrument, Dict[str, Any]]):
-        to_flush = ffi.new('up_state_t*[]', len(updates))
+    def encode(self, timestamp, updates: Dict[Instrument, Dict[Field, float]]):
+        to_flush = ffi.new('struct up_state*[]', len(updates))
         for n, (instrument, fields) in enumerate(updates.items()):
             state = State(instrument)
             _feedlib.up_state_set_sequence_id(state._self, self.__next_sequence_id(instrument))
             for field, value in fields.items():
-                state.update_float(getattr(_feedlib, field), float(value))
+                state.update_float(field, value)
             to_flush[n] = state._self
 
         n = _feedlib.up_encoder_encode(self._self, timestamp, to_flush, len(to_flush), ffi.from_buffer(self.__buffer), len(self.__buffer))

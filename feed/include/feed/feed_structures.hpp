@@ -233,13 +233,13 @@ struct instrument_state final
 };
 
 template<typename field_constant_type>
-[[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
+[[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept requires(std::is_same_v<decltype(field()), enum field>)
 {
   state.updates.insert(encode_update(field(), value));
 }
 
 template<typename field_constant_type>
-[[using gnu : always_inline, flatten, hot]] inline bool update_state_test(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
+[[using gnu : always_inline, flatten, hot]] inline bool update_state_test(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept requires(std::is_same_v<decltype(field()), enum field>)
 {
   const auto update = encode_update(field(), value);
   if(const auto it = state.updates.lower_bound(update.field); it == state.updates.end() || it->field != update.field)
@@ -258,7 +258,7 @@ template<typename field_constant_type>
 }
 
 template<typename field_constant_type>
-auto get_update(const instrument_state &state, field_constant_type field) noexcept -> field_type_t<field_constant_type::value>
+auto get_update(const instrument_state &state, field_constant_type field) noexcept requires(std::is_same_v<decltype(field()), enum field>) -> field_type_t<field_constant_type::value>
 {
   if(const auto it = state.updates.find(update {field(), {}}); it != state.updates.end())
     return visit_update([](auto field, const auto &value) { 
@@ -294,7 +294,7 @@ struct instrument_state
 };
 
 template<typename field_constant_type>
-[[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
+[[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept requires(std::is_same_v<decltype(field()), enum field>)
 {
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
@@ -313,7 +313,7 @@ template<typename field_constant_type>
 }
 
 template<typename field_constant_type>
-[[using gnu : always_inline, flatten, hot]] inline bool update_state_test(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept
+[[using gnu : always_inline, flatten, hot]] inline bool update_state_test(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept requires(std::is_same_v<decltype(field()), enum field>)
 {
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
@@ -348,7 +348,7 @@ template<typename field_constant_type>
 }
 
 template<typename field_constant_type>
-auto get_update(const instrument_state &state, field_constant_type field) noexcept
+auto get_update(const instrument_state &state, field_constant_type field) noexcept requires(std::is_same_v<decltype(field()), enum field>)
 {
 #define HANDLE_FIELD(r, _, elem) \
   if constexpr(field() == field::BOOST_PP_TUPLE_ELEM(0, elem)) \

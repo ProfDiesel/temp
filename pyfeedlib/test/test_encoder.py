@@ -5,7 +5,7 @@ from pathlib import Path
 from random import normalvariate, uniform, lognormvariate, seed
 from math import log
 
-from feed import Encoder
+from feed import Encoder, Field
 
 seed('pipololo')
 
@@ -33,7 +33,7 @@ def test_encoder():
             oq0 = int(uniform(0, 5))
 
             print(timestamp / 1000000000, instrument, b0, bq0, o0, oq0)
-            packets.append(e.encode(timestamp, {instrument: dict(b0=b0, bq0=bq0, o0=o0, oq0=oq0)}))
+            packets.append(e.encode(timestamp, {instrument: {Field.b0:b0, Field.bq0:bq0, Field.o0:o0, Field.oq0:oq0}}))
 
         for packet in packets:
             out.write(packet)
