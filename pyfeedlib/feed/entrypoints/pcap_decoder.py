@@ -24,23 +24,11 @@ def main(argv=None):
         input_ = getattr(input_, 'buffer', input_)
 
     class PrintDecoder(Decoder):
-        def on_message(self, instrument_id: Instrument):
-            current_message = 
-            self.flush()
-            print(instrument_id)
-
-        def on_update_float(self, field, value):
-            print(Field(field).name, value)
-
-        def on_update_uint(self, field, value):
-            print(Field(field).name, value)
+        def on_message(self, state: State):
+            print(state)
 
         def decoder(self, data):
             super().decode(data)
-            self.flush()
-
-        def flush(self):
-            pass
 
     decoder = PrintDecoder()
 

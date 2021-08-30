@@ -21,9 +21,7 @@ ffi = FFI()
 ffi.cdef(out.getvalue() + """
     extern "Python"
     {
-        void pyfeedlib_up_on_message(up_instrument_id_t, void *user_data);
-        void pyfeedlib_up_on_update_float(enum up_field, float, void *user_data);
-        void pyfeedlib_up_on_update_uint(enum up_field, size_t, void *user_data);
+        void pyfeedlib_up_on_message(const struct up_state *state, void *user_data);
     }
 """)
 ffi.set_source('feedlib', f'#include <{str(HEADER)}>', libraries=['feedlib'], library_dirs=[str(ROOT / 'feed/_build/debug')])

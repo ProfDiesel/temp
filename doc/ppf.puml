@@ -42,7 +42,7 @@ Rel_R(dust, ppf, "request")
 Rel_L(ppf, dust, "command")
 Rel_U(up, dust, "feed")
 
-System(exchange, "Exchange", "orders goes here", $sprite="exchange_alt")
+System(exchange, "Exchange", "orders go there", $sprite="exchange_alt")
 Rel_U(exchange, up, "feed")
 Rel_D(down, exchange, "order")
 

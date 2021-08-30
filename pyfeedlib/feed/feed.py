@@ -16,7 +16,7 @@ class Address:
     host: str
     port: int
 
-Field = unique(IntEnum('Field', {member: value for member, value in vars(_feedlib) if member.startswith('field_')}))
+Field = unique(IntEnum('Field', {member: value for member, value in vars(_feedlib).items() if member.startswith('field_')}))
 
 class State:
     def __init__(self, instrument: Instrument):
@@ -83,25 +83,17 @@ class Encoder:
             _feedlib.up_encoder_encode(self._self, timestamp, to_flush, len(to_flush), ffi.from_buffer(self.__buffer), n)
         return memoryview(self.__buffer[:n])
 
-@ffi.def_extern()
-def pyfeedlib_up_on_message(instrument_id: Instrument, user_data):
-    decoder: Final[Decoder] = ffi.from_handle(user_data)
-    decoder.on_message(instrument_id)
 
 @ffi.def_extern()
-def pyfeedlib_up_on_update_float(field: Field, value: float, user_data):
+def pyfeedlib_up_on_message(state: State, user_data):
     decoder: Final[Decoder] = ffi.from_handle(user_data)
-    decoder.on_update_float(field, value)
+    decoder.on_message(state)
 
-@ffi.def_extern()
-def pyfeedlib_up_on_update_uint(field: Field, value: int, user_data):
-    decoder: Final[Decoder] = ffi.from_handle(user_data)
-    decoder.on_update_uint(field, value)
 
 class Decoder:
     def __init__(self) -> None:
         self._handle = ffi.new_handle(self)
-        self._self = _feedlib.up_decoder_new(_feedlib.pyfeedlib_up_on_message, _feedlib.pyfeedlib_up_on_update_float, _feedlib.pyfeedlib_up_on_update_uint, self._handle)
+        self._self = _feedlib.up_decoder_new(_feedlib.pyfeedlib_up_on_message, self._handle)
 
     def __del__(self):
         _feedlib.up_decoder_free(self._self)
@@ -110,19 +102,12 @@ class Decoder:
         _feedlib.up_decoder_decode(self._self, buffer, len(buffer))
 
     @abstractmethod
-    def on_message(self, instrument_id: Instrument):
-        ...
-
-    @abstractmethod
-    def on_update_float(self, field, value):
-        ...
-
-    @abstractmethod
-    def on_update_uint(self, field, value):
+    def on_message(self, state: State):
         ...
 
 
 up_future = Any
+
 
 class Future:
     def __init__(self):

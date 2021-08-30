@@ -85,7 +85,7 @@ extern "C"
                                   struct up_future *future);
   void up_server_free(struct up_server *self);
   size_t up_server_poll(struct up_server *self, struct up_future *future);
-  struct up_future *up_server_push_update(struct up_server *self, up_instrument_id_t instrument, const struct up_state *const states[], size_t nb_states);
+  struct up_future *up_server_push_update(struct up_server *self, const struct up_state *const states[], size_t nb_states);
   struct up_future *up_server_replay(struct up_server *self, const void *buffer, size_t buffer_size);
   void up_server_get_state(struct up_server *self, up_instrument_id_t instrument, struct up_state *state);
 
