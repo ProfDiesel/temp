@@ -25,7 +25,10 @@ def main(argv=None):
 
     class PrintDecoder(Decoder):
         def on_message(self, state: State):
-            print(state)
+            print('seq', state.sequence_id)
+            for field in Field:
+                if state.is_set(field):
+                    print(field, state.get_float(field))
 
         def decoder(self, data):
             super().decode(data)

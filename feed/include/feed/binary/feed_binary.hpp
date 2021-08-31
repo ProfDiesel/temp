@@ -204,7 +204,7 @@ public:
 
       visit_state([&, &state = state](auto field, auto value) { 
           if(update_state_test(state, field, value))
-            message->updates[++message->nb_updates] = encode_update(field, value);
+            message->updates[message->nb_updates++] = encode_update(field, value);
         }, new_state);
 
 

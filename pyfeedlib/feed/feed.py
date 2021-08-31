@@ -16,14 +16,22 @@ class Address:
     host: str
     port: int
 
+
 Field = unique(IntEnum('Field', {member[len('field_'):]: value for member, value in vars(_feedlib).items() if member.startswith('field_')}))
 
+
 class State:
-    def __init__(self, instrument: Instrument):
-        self._self = _feedlib.up_state_new(instrument)
+    @classmethod
+    def with_instrument(cls, instrument: Instrument):
+        cls(_feedlib.up_state_new(instrument), True)
+
+    def __init__(self, ptr: 'struct up_state*', is_owner: bool):
+        self._self = ptr
+        self._is_owner = is_owner
 
     def __del__(self):
-        _feedlib.up_state_free(self._self)
+        if self._is_owner:
+            _feedlib.up_state_free(self._self)
 
     @property
     def sequence_id(self) -> SequenceId:
@@ -33,21 +41,22 @@ class State:
     def set_sequence_id(self, seq_id: SequenceId):
         _feedlib.up_state_set_sequence_id(self._self, seq_id)
 
-    @property
-    def bitset(self) -> int:
-        return _feedlib.up_state_get_bitset(self._self)
+    def is_set(self, field: Field) -> int:
+        return _feedlib.up_state_is_set(self._self, field)
 
     def get_float(self, field: Field) -> float:
-        return _feedlib.up_state_get_float(self._self, field)
+        return _feedlib.up_state_get_value_float(self._self, field)
 
     def get_uint(self, field: Field) -> int:
-        return _feedlib.up_state_get_uint(self._self, field)
+        return _feedlib.up_state_get_value_uint(self._self, field)
 
     def update_float(self, field: Field, value: float):
-        _feedlib.up_state_update_float(self._self, field, value)
+        _feedlib.up_state_set_value_float(self._self, field, value)
 
     def update_uit(self, field: Field, value: int):
-        _feedlib.up_state_update_uint(self._self, field, value)
+        _feedlib.up_state_set_value_uint(self._self, field, value)
+
+
 
 
 class Encoder:
@@ -87,7 +96,7 @@ class Encoder:
 @ffi.def_extern()
 def pyfeedlib_up_on_message(state: State, user_data):
     decoder: Final[Decoder] = ffi.from_handle(user_data)
-    decoder.on_message(state)
+    decoder.on_message(State(state, False))
 
 
 class Decoder:

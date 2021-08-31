@@ -80,6 +80,12 @@ extern "C" __attribute__((visibility("default"))) bool up_state_is_set(const up_
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+extern "C" __attribute__((visibility("default"))) enum up_field up_state_next_field(const struct up_state *self, enum up_field field)
+{
+  return feed::bitset(
+}
+
+///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) float up_state_get_value_float(const up_state *self, up_field field)
 {
   return static_cast<float>(feed::get_update_poly<feed::price_t>(self->state, static_cast<feed::field>(field)));

@@ -220,66 +220,6 @@ static_assert(sizeof(message) == 12); // NOLINT(cppcoreguidelines-avoid-magic-nu
 // INSTRUMENT_STATE
 //
 
-#if defined(SPARSE_INSTRUMENT_STATE)
-
-struct instrument_state final
-{
-#define DECLARE_FIELD(r, data, elem) BOOST_PP_TUPLE_ELEM(2, elem) BOOST_PP_TUPLE_ELEM(0, elem) {};
-  BOOST_PP_SEQ_FOR_EACH(DECLARE_FIELD, _, FEED_FIELDS)
-#undef DECLARE_FIELD
-  struct update_field_comparator { auto operator()(auto &lhs, auto &rhs) { return std::less(lhs.field, rhs.field); } };
-  boost::container::flat_set<update, update_field_comparator, boost::container::small_vector<update, 4>> updates;
-  sequence_id_type sequence_id = 0;
-};
-
-template<typename field_constant_type>
-[[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept requires(std::is_same_v<decltype(field()), enum field>)
-{
-  state.updates.insert(encode_update(field(), value));
-}
-
-template<typename field_constant_type>
-[[using gnu : always_inline, flatten, hot]] inline bool update_state_test(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept requires(std::is_same_v<decltype(field()), enum field>)
-{
-  const auto update = encode_update(field(), value);
-  if(const auto it = state.updates.lower_bound(update.field); it == state.updates.end() || it->field != update.field)
-    state.updates.insert(it, update);
-  else if(it->value != update.value)
-    it->value = update.value;
-  else
-      return false;
-  return true;
-}
-
-[[using gnu : always_inline, flatten, hot]] inline void visit_state(auto continuation, const instrument_state &state)
-{
-  for(auto &&update: state.updates)
-    visit_update(continuation, update);
-}
-
-template<typename field_constant_type>
-auto get_update(const instrument_state &state, field_constant_type field) noexcept requires(std::is_same_v<decltype(field()), enum field>) -> field_type_t<field_constant_type::value>
-{
-  if(const auto it = state.updates.find(update {field(), {}}); it != state.updates.end())
-    return visit_update([](auto field, const auto &value) { 
-      return value;
-    });
-
-  return {};
-}
-
-auto nb_updates(const instrument_state &state)
-{
-  return state.updates.size();
-}
-
-auto is_set(const instrument_state &state, field field)
-{
-  return state.updates.contains(update {field, {}});
-}
-
-#else // defined(SPARSE_INSTRUMENT_STATE)
-
 struct instrument_state
 {
 #define DECLARE_FIELD(r, data, elem) BOOST_PP_TUPLE_ELEM(2, elem) BOOST_PP_TUPLE_ELEM(0, elem) {};
@@ -383,8 +323,6 @@ auto is_set(const instrument_state &state, field field)
   }
 }
 
-#endif // defined(SPARSE_INSTRUMENT_STATE)
-
 [[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, const update &update) noexcept
 {
   visit_update([&state](auto field, auto &&value) { update_state(state, field, std::move(value)); }, update);
@@ -395,7 +333,6 @@ auto is_set(const instrument_state &state, field field)
   for(auto &&update: ranges::make_span(message.updates, message.nb_updates))
     update_state(state, update);
 }
-
 
 [[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, const instrument_state &other) noexcept
 {
@@ -417,7 +354,7 @@ template<typename value_type>
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
   case field::BOOST_PP_TUPLE_ELEM(0, elem): \
-    update_state(state, BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c){}, std::to_underlying(field_index::BOOST_PP_TUPLE_ELEM(0, elem))); \
+    update_state(state, BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c){}, static_cast<field_type_t<field::BOOST_PP_TUPLE_ELEM(0, elem)>>(value)); \
     break;
   BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
 #undef HANDLE_FIELD
