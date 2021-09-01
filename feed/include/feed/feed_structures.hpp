@@ -372,8 +372,8 @@ value_type get_update_poly(const instrument_state &state, enum field field) noex
   // clang-format off
 #define HANDLE_FIELD(r, _, elem) \
     case field::BOOST_PP_TUPLE_ELEM(0, elem): \
-      static_assert(std::is_nothrow_convertible_v<field_type_t<field::BOOST_PP_TUPLE_ELEM(0, elem)>, value_type>) \
-      return static_cast<value_type>(state.get_update(state, BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c))); \
+      static_assert(std::is_nothrow_convertible_v<field_type_t<field::BOOST_PP_TUPLE_ELEM(0, elem)>, value_type>); \
+      return static_cast<value_type>(get_update(state, BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(0, elem), _c){}));
     BOOST_PP_SEQ_FOR_EACH(HANDLE_FIELD, _, FEED_FIELDS)
 #undef HANDLE_FIELD
   // clang-format on

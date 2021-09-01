@@ -15,8 +15,6 @@ extern "C"
   // TODO Make X-Macros from feed_fields.hpp
   enum up_field
   {
-    field_invalid = -1,
-
     field_b0 = 10,
     field_bq0 = 20,
     field_o0 = 30,
@@ -34,7 +32,6 @@ extern "C"
   up_sequence_id_t up_state_get_sequence_id(const struct up_state *self);
   void up_state_set_sequence_id(struct up_state *self, up_sequence_id_t sequence_id);
   bool up_state_is_set(const struct up_state *self, enum up_field field);
-  enum up_field up_state_next_field(const struct up_state *self, enum up_field field);
   float up_state_get_value_float(const struct up_state *self, enum up_field field);
   uint32_t up_state_get_value_uint(const struct up_state *self, enum up_field field);
   void up_state_set_value_float(struct up_state *self, enum up_field field, float value);

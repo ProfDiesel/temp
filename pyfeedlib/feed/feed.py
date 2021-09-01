@@ -23,7 +23,11 @@ Field = unique(IntEnum('Field', {member[len('field_'):]: value for member, value
 class State:
     @classmethod
     def with_instrument(cls, instrument: Instrument):
-        cls(_feedlib.up_state_new(instrument), True)
+        return cls(_feedlib.up_state_new(instrument), True)
+
+    @classmethod
+    def borrow(cls, ptr: 'struct up_state*'):
+        return cls(ptr, False)
 
     def __init__(self, ptr: 'struct up_state*', is_owner: bool):
         self._self = ptr
@@ -80,7 +84,7 @@ class Encoder:
     def encode(self, timestamp, updates: Dict[Instrument, Dict[Field, float]]):
         to_flush = ffi.new('struct up_state*[]', len(updates))
         for n, (instrument, fields) in enumerate(updates.items()):
-            state = State(instrument)
+            state = State.with_instrument(instrument)
             _feedlib.up_state_set_sequence_id(state._self, self.__next_sequence_id(instrument))
             for field, value in fields.items():
                 state.update_float(field, value)
@@ -96,7 +100,7 @@ class Encoder:
 @ffi.def_extern()
 def pyfeedlib_up_on_message(state: State, user_data):
     decoder: Final[Decoder] = ffi.from_handle(user_data)
-    decoder.on_message(State(state, False))
+    decoder.on_message(State.borrow(state))
 
 
 class Decoder:

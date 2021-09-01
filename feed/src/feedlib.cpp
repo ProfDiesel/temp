@@ -80,12 +80,6 @@ extern "C" __attribute__((visibility("default"))) bool up_state_is_set(const up_
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) enum up_field up_state_next_field(const struct up_state *self, enum up_field field)
-{
-  return feed::bitset(
-}
-
-///////////////////////////////////////////////////////////////////////////////
 extern "C" __attribute__((visibility("default"))) float up_state_get_value_float(const up_state *self, up_field field)
 {
   return static_cast<float>(feed::get_update_poly<feed::price_t>(self->state, static_cast<feed::field>(field)));
@@ -98,13 +92,13 @@ extern "C" __attribute__((visibility("default"))) uint32_t up_state_get_value_ui
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_state_update_float(up_state *self, up_field field, float value)
+extern "C" __attribute__((visibility("default"))) void up_state_set_value_float(up_state *self, up_field field, float value)
 {
   update_state_poly(self->state, static_cast<feed::field>(field), value);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-extern "C" __attribute__((visibility("default"))) void up_state_update_uint(up_state *self, up_field field, uint32_t value)
+extern "C" __attribute__((visibility("default"))) void up_state_set_value_uint(up_state *self, up_field field, uint32_t value)
 {
   update_state_poly(self->state, static_cast<feed::field>(field), value);
 }

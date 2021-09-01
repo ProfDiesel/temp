@@ -119,10 +119,17 @@ boost::leaf::awaitable<boost::leaf::result<void>> replay(auto co_continuation, a
     BOOST_LEAF_CO_TRYV(co_await co_wait_until(timestamp - timestamp_0));
     buffer += offsetof(feed::detail::event, packet);
 
-    const auto decoded = feed::detail::decode([](auto instrument_id, [[maybe_unused]] auto sequence_id) { return instrument_id; },
-                                              [&states]([[maybe_unused]] const auto &timestamp, const auto &update, const auto &instrument_closure)
-                                              { update_state(states[instrument_closure], update); },
-                                              timestamp, buffer);
+    const auto decoded = feed::detail::decode(
+      [&states](auto instrument_id, [[maybe_unused]] auto sequence_id) {
+        auto &state = states[instrument_id];
+        state.sequence_id = sequence_id;
+        return &state;
+      },
+      []([[maybe_unused]] const auto &timestamp, const auto &update, const auto &instrument_closure) {
+        update_state(*instrument_closure, update);
+      },
+      timestamp,
+      buffer);
 
     BOOST_LEAF_CO_TRYV(co_await co_continuation(std::move(states)));
     states.clear();

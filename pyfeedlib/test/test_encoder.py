@@ -31,6 +31,10 @@ def test_encoder():
                     break
             bq0 = int(uniform(0, 5))
             oq0 = int(uniform(0, 5))
+            if bq0 == 0:
+                b0 = 0
+            if oq0 == 0:
+                o0 = 0
 
             print(timestamp / 1000000000, instrument, b0, bq0, o0, oq0)
             packets.append(e.encode(timestamp, {instrument: {Field.b0:b0, Field.bq0:bq0, Field.o0:o0, Field.oq0:oq0}}))
