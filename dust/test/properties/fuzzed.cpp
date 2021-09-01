@@ -141,7 +141,7 @@ auto main() -> int
                                            fast_path();
                                            backtest::detail::executor_instance->poll();
                                            if(service.poll())
-                                             fuzz::bad_test(); // the non-deterministic executor is not supposed to be used
+                                             fuzz::failed_test(); // the non-deterministic executor is not supposed to be used
                                            logger.flush();
                                          }
                                        return {};

@@ -208,8 +208,13 @@ public:
         }, new_state);
 
 
-      if((message->nb_updates == 0) && (new_state.sequence_id == 0))
+      if(message->nb_updates == 0)
         continue;
+
+      if(!new_state.sequence_id)
+        ++state.sequence_id;
+
+      message->sequence_id = state.sequence_id;
 
       ++packet->nb_messages;
       current += sizeof(struct message) + sizeof(struct update) * (message->nb_updates - 1); 

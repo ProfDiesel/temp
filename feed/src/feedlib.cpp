@@ -173,9 +173,12 @@ extern "C" __attribute__((visibility("default"))) size_t up_decoder_decode(up_de
     [self, &flush](auto instrument_id, [[maybe_unused]] auto sequence_id) noexcept
     {
       std::exchange(flush, { .self = self });
-      return self->state.instrument = instrument_id;
+      self->state.instrument = instrument_id;
+      self->state.state.updates.reset();
+      self->state.state.sequence_id = sequence_id;
+      return true;
     },
-    [self]([[maybe_unused]] auto timestamp, auto update, [[maybe_unused]] auto instrument_id)
+    [self]([[maybe_unused]] auto timestamp, auto update, [[maybe_unused]] auto instrument_closure)
     {
       update_state(self->state.state, update);
     },

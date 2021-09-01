@@ -70,7 +70,7 @@ class Encoder:
         self.__sequence_ids: Dict[Instrument, int] = {}
 
     def __next_sequence_id(self, instrument: Instrument) -> int:
-        result = self.__sequence_ids.setdefault(instrument, 0)
+        result = self.__sequence_ids.setdefault(instrument, 1)
         self.__sequence_ids[instrument] = result + 1
         return result
 

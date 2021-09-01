@@ -20,7 +20,7 @@ def test_encoder():
 
     with (d / 'scenario').open('wb') as out:
         mid = 100
-        for _ in range(1000):
+        for sequence_id in range(1000):
             time_offset = lognormvariate(log(10000), log(5000))
             timestamp += int(min(round(time_offset), 3000000000))
             mid += normalvariate(0, 3)
