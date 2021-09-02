@@ -274,7 +274,7 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
       {
         using namespace piped_continuation;
         for(auto n = spin_count; n; --n)
-          std::ref(update_source) |= continuation();
+          (std::ref(update_source) |= continuation)();
       };
     });
 
@@ -402,19 +402,14 @@ request.instrument = {}\n\n");
 
   spawn([&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>> { return commands(command_input); }, "commands"s);
 
-  auto with_mca_markers = [](auto continuation) noexcept
-  {
-    asm volatile("# LLVM-MCA-BEGIN trigger");
-    continuation();
-    asm volatile("# LLVM-MCA-END trigger");
-  };
-
   using namespace piped_continuation;
   return continuation(
     [&]() noexcept
     {
       warm_up();
-      with_mca_markers(std::ref(receive) |= decode |= trigger_ |= std::ref(send_));
+      asm volatile("# LLVM-MCA-BEGIN trigger");
+      (std::ref(receive) |= decode |= trigger_ |= std::ref(send_))();
+      asm volatile("# LLVM-MCA-END trigger");
     });
 }
 
