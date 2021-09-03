@@ -169,6 +169,9 @@ void delay([[maybe_unused]] asio::io_context &service, const std::chrono::steady
   // AUTOMATA
   //
 
+  auto instrument_id = subscription["trigger"_hs]["instrument"_hs];
+  assert(instrument_id == 42);
+
   automata_type automata = BOOST_LEAF_TRYX(
     [&]() noexcept -> boost::leaf::result<automata_type>
     {

@@ -43,7 +43,8 @@ Apply(CxxDef('LOGGER_FMT_COMPILE'))
 Apply(CxxDef('LOGGER_SYSLOG_FORMAT'))
 # Apply(CxxDef('BOOST_SPIRIT_X3_DEBUG'))
 
-pch = GeneratedPch('precompiled_header', sources=('src/main.cpp',), pch_gen_project=Prjdef('../../precompiled_header_generator'))
+#pch = GeneratedPch('precompiled_header', sources=('src/main.cpp',), pch_gen_project=Prjdef('../../precompiled_header_generator'))
+pch = GeneratedPch('precompiled_header', sources=('src/main.cpp',))
 
 Copy(
     Cxx('src/feed/feed.hpp', pch=pch, preprocess_only=True),
