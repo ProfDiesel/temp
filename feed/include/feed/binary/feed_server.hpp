@@ -53,7 +53,7 @@ public:
   }
 
   boost::leaf::awaitable<boost::leaf::result<void>>
-  update(const auto &states) noexcept // TODO requires is_iterable_v<decltype(states), std::tuple<instrument_id_type, instrument_state>>
+  update_async(const auto &states) noexcept // TODO requires is_iterable_v<decltype(states), std::tuple<instrument_id_type, instrument_state>>
   {
     auto buffer = state_map::update(states);
     if(buffer.size() > 0)
@@ -63,7 +63,7 @@ public:
 
   instrument_state snapshot(instrument_id_type instrument) const noexcept { return at(instrument); }
 
-  boost::leaf::awaitable<boost::leaf::result<void>> accept() noexcept
+  boost::leaf::awaitable<boost::leaf::result<void>> accept_async() noexcept
   {
     asio::ip::tcp::socket socket(service);
     BOOST_LEAF_ASIO_CO_TRYV(co_await snapshot_acceptor.async_accept(socket, _));
@@ -106,7 +106,7 @@ inline boost::leaf::awaitable<boost::leaf::result<void>> detail::session::operat
   co_return boost::leaf::success();
 }
 
-boost::leaf::awaitable<boost::leaf::result<void>> replay(auto co_continuation, auto co_wait_until, asio::const_buffer buffer)
+boost::leaf::awaitable<boost::leaf::result<void>> replay_async(auto co_continuation, auto co_wait_until, asio::const_buffer buffer)
 {
   const auto *current = reinterpret_cast<const feed::detail::event *>(buffer.data());
   const auto timestamp_0 = network_clock::time_point(std::chrono::nanoseconds(current->timestamp));

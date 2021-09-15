@@ -286,7 +286,7 @@ struct up_server
             future->value = up_future::ok_v;
 
             while(!quit.test(std::memory_order_acquire))
-              BOOST_LEAF_CO_TRYV(co_await server.accept());
+              BOOST_LEAF_CO_TRYV(co_await server.accept_async());
 
             co_return boost::leaf::success();
           },
@@ -335,7 +335,7 @@ extern "C" __attribute__((visibility("default"))) up_future *up_server_push_upda
   asio::co_spawn(
     self->service,
     [self, states = std::move(states_), result]() noexcept -> boost::leaf::awaitable<void> {
-      co_await boost::leaf::co_try_handle_all([&]() noexcept { return self->server.update(states); }, make_handlers(result));
+      co_await boost::leaf::co_try_handle_all([&]() noexcept { return self->server.update_async(states); }, make_handlers(result));
     },
     asio::detached);
   return result;
@@ -355,13 +355,13 @@ extern "C" __attribute__((visibility("default"))) up_future *up_server_replay(up
       co_await boost::leaf::co_try_handle_all(
         [&]() noexcept
         {
-          return feed::replay([&](auto states) { return self->server.update(std::forward<decltype(states)>(states)); },
-                              [&, clock_0 = clock_t::now()](auto timestamp) mutable -> boost::leaf::awaitable<boost::leaf::result<void>>
-                              {
-                                BOOST_LEAF_ASIO_CO_TRYV(co_await timer_t(self->service, clock_0 + timestamp).async_wait(_));
-                                co_return boost::leaf::success();
-                              },
-                              asio::buffer(buffer, buffer_size));
+          return feed::replay_async([&](auto states) { return self->server.update_async(std::forward<decltype(states)>(states)); },
+                                    [&, clock_0 = clock_t::now()](auto timestamp) mutable -> boost::leaf::awaitable<boost::leaf::result<void>>
+                                    {
+                                      BOOST_LEAF_ASIO_CO_TRYV(co_await timer_t(self->service, clock_0 + timestamp).async_wait(_));
+                                      co_return boost::leaf::success();
+                                    },
+                                    asio::buffer(buffer, buffer_size));
         },
         make_handlers(result));
     },

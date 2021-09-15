@@ -1,7 +1,7 @@
 #pragma once
 
 #include "config/config_reader.hpp"
-#include "model/wiring.hpp"
+#include "trigger/trigger_dispatcher.hpp"
 
 #include <boilerplate/logger.hpp>
 

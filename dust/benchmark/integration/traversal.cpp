@@ -1,6 +1,5 @@
 #include <initializer_list>
 #define BACKTEST_HARNESS
-#include "model/wiring.hpp"
 
 #include "feed/feed.hpp"
 #include "feed/binary/feed_server.hpp"

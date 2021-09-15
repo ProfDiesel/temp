@@ -1,0 +1,8 @@
+voire guidelines de la librarie standard
+GSL
+celles de BUNGIE ("guidelines + razors")
+
+snake_case
+coroutines start with 'co_' (functions or types of which a () operator is a coro)
+pointer variables (used with -> operator) end with '_ptr'
+variable marked as const unless otherwise needed

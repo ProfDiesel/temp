@@ -233,6 +233,9 @@ struct instrument_state
   //instrument_state &operator=(const instrument_state &) = delete;
 };
 
+static_assert(sizeof(instrument_state) < 128);
+// if the instrument_state becomes too big, make it a flyweight (and sparse) or pass reference_wrapper
+
 template<typename field_constant_type>
 [[using gnu : always_inline, flatten, hot]] inline void update_state(instrument_state &state, field_constant_type field, const field_type_t<field_constant_type::value> &value) noexcept requires(std::is_same_v<decltype(field()), enum field>)
 {

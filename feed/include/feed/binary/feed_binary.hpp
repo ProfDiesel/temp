@@ -79,7 +79,7 @@ inline auto encode_message(instrument_id_type instrument, const instrument_state
   return needed_bytes;
 }
 
-inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> request_snapshot(asio::ip::tcp::socket &socket, instrument_id_type instrument) noexcept
+inline boost::leaf::awaitable<boost::leaf::result<instrument_state>> co_request_snapshot(asio::ip::tcp::socket &socket, instrument_id_type instrument) noexcept
 {
   const snapshot_request request {.instrument = endian::big_uint16_buf_t(instrument)};
   BOOST_LEAF_ASIO_CO_TRYV(co_await asio::async_write(socket, asio::const_buffer(&request, sizeof(request)), _));
@@ -247,7 +247,7 @@ private:
 };
 
 using detail::decode;
-using detail::request_snapshot;
+using detail::co_request_snapshot;
 
 namespace sample_packets
 {

@@ -1,6 +1,5 @@
 #include "feed/binary/feed_binary.hpp"
 #include "handlers.hpp"
-#include "model/wiring.hpp"
 
 #include "backtest_harness.hpp"
 #include "fuzz_test_harness.hpp"
