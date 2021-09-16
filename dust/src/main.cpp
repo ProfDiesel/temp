@@ -143,7 +143,7 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &comm
     {
     case "payload"_h:
       if(auto *automaton_ptr = automata.at(entrypoint["instrument"_hs]); automaton_ptr)
-        automaton_ptr->payload = BOOST_LEAF_CO_TRYX(decode_payload<send_datagram>(entrypoint))
+        automaton_ptr->payload = BOOST_LEAF_CO_TRYX(decode_payload<send_datagram>(entrypoint));
       break;
     case "subscribe"_h:
       if constexpr(dynamic_subscription)
