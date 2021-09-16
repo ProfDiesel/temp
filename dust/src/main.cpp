@@ -113,40 +113,9 @@ struct logger_thread : boost::noncopyable
 };
 
 
-template<typename co_request_snapshot_type, typename automata_type>
-struct model
+auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &command_input, auto &automata, boilerplate::not_null_observer_ptr<logger::logger> logger_ptr) noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
 {
-  static constexpr bool send_datagram = automata_type::send_datagram;
-  using automaton_type = typename automata_type::automaton;
-
-  model(co_request_snapshot_type co_request_snapshot, automata_type &&automata) : co_request_snapshot(co_request_snapshot), automata(std::move(automata)) {}
-
-  void add(feed::instrument_id_type instrument_id, auto &&trigger, const payload<send_datagram> &&payload)
-  {
-    trigger.apply(co_await co_request_snapshot(instrument_id));
-    automata.track(instrument_id, automaton_type {instrument_id, std::move(trigger), std::move(payload)});
-  }
-
-  void remove(feed::instrument_id_type instrument_id)
-  {
-    automata.untrack(instrument_id);
-  }
-
-  void update_payload(feed::instrument_id_type instrument_id, const payload<send_datagram> &&payload)
-  {
-    if(auto *automaton = automata.at(instrument_id); automaton) [[likely]]
-      automaton->payload = std::move(payload);
-  }
-
-private:
-  co_request_snapshot_type co_request_snapshot;
-  automata_type automata;
-};
-
-
-auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &command_input, auto &model, boilerplate::not_null_observer_ptr<logger::logger> logger_ptr) noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
-{
-  using automata_type = typename std::decay_t<decltype(model)>::automata_type;
+  using automata_type = typename std::decay_t<decltype(automata)>::automata_type;
 
   constexpr bool send_datagram = automata_type::send_datagram;
   constexpr bool dynamic_subscription = automata_type::dynamic_subscription;
@@ -173,21 +142,25 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &comm
     switch(dispatch_hash(entrypoint["type"_hs])) // TODO
     {
     case "payload"_h:
-      model.update_payload(entrypoint["instrument"_hs], BOOST_LEAF_CO_TRYX(decode_payload<send_datagram>(entrypoint)));
+      if(auto *automaton_ptr = automata.at(entrypoint["instrument"_hs]); automaton)
+        automaton_ptr->payload = BOOST_LEAF_CO_TRYX(decode_payload<send_datagram>(entrypoint))
       break;
     case "subscribe"_h:
       if constexpr(dynamic_subscription)
       {
         BOOST_LEAF_CO_TRYV(co_await with_trigger(entrypoint, logger_ptr,
                                                 [&](auto &&trigger_map) noexcept -> boost::leaf::awaitable<void> {
+                                                  const auto instrument_id = entrypoint["instrument"_hs];
                                                   auto trigger = polymorphic_trigger_dispatcher::make<trigger_dispatcher<std::decay_t<decltype(trigger_map)>>>(std::forward<decltype(trigger_map)>(trigger_map));
-                                                  model.add(entrypoint["instrument"_hs], std::move(trigger), BOOST_LEAF_CO_TRYX(decode_payload<send_datagram>(entrypoint)));
+                                                  trigger.reset(BOOST_LEAF_CO_TRYX(co_await co_request_snapshot(instrument_id)));
+                                                  auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram>(entrypoint));
+                                                  automata.emplace({.instrument_id = instrument_id, .trigger = std::move(trigger), .payload = std::move(payload)});
                                                 }));
       }
       break;
     case "unsubscribe"_h:
       if constexpr(dynamic_subscription)
-        model.remove(entrypoint["instrument"_hs]);
+        automata.erase(entrypoint["instrument"_hs]);
       break;
     case "quit"_h: service.stop(); break;
     }
@@ -261,12 +234,12 @@ auto main() -> int
   //
   // post-send
 
-  auto post_send = [&](const auto &properties, auto &model) {
+  auto post_send = [&](const auto &properties, auto &automata) {
     const auto send = properties["send"_hs];
     const bool disposable_payload = *send["disposable_payload"_hs];
     const std::chrono::steady_clock::duration cooldown = *send["cooldown"_hs];
 
-    return [spawn, &service, &model, &command_output, disposable_payload, cooldown](auto *instrument_ptr) {
+    return [spawn, &service, &automata, &command_output, disposable_payload, cooldown](auto *instrument_ptr) {
       if(disposable_payload)
       {
         static std::array<char, 64> buffer;
@@ -287,7 +260,7 @@ auto main() -> int
           "request payload"s);
       }
 
-      auto leave_cooldown_token = model.automata.enter_cooldown(instrument_ptr);
+      auto leave_cooldown_token = automata.enter_cooldown(instrument_ptr);
     // whatever the value of error_code, get out of the cooldown state
 #if defined(BACKTEST_HARNESS)
       backtest::delay(service, cooldown, [=, &service]() { asio::defer(service, leave_cooldown_token); });
@@ -299,9 +272,7 @@ auto main() -> int
     };
   };
 
-  boost::leaf::try_handle_all(
-    [&]() noexcept -> boost::leaf::result<void>
-    {
+  boost::leaf::try_handle_all([&]() noexcept -> boost::leaf::result<void> {
       using namespace config::literals;
 
       std::string command_buffer;
@@ -313,7 +284,7 @@ auto main() -> int
 
 #if defined(BACKTEST_HARNESS)
       auto co_request_snapshot = backtest::make_snapshot_requester();
-      auto updates_socket = backtest::make_update_source()};
+      auto updates_socket = backtest::make_update_source();
 #else // defined(BACKTEST_HARNESS)
       auto snapshot_socket = ({ 
           const auto [snapshot_host, snapshot_port] = (config::address)*properties["feed"_hs]["snapshot"_hs];
@@ -348,10 +319,10 @@ auto main() -> int
       //
       // decode
 
-      const auto decode = [&](auto &model) {
+      const auto decode = [&](auto &automata) {
         const auto decode_header = [&](feed::instrument_id_type instrument_id, feed::sequence_id_type sequence_id) noexcept
         {
-          auto *const automaton_ptr = model.automata.at_if_not_disabled(instrument_id);
+          auto *const automaton_ptr = automata.at_if_not_disabled(instrument_id);
           auto snapshot_requester = [&]() { return [&](auto termination_handler) {
             spawn([&]() {
               auto state = BOOST_LEAF_CO_TRYX(co_await co_request_snapshot(automaton_ptr->instrument_id));
@@ -382,8 +353,8 @@ auto main() -> int
       auto stream_send = [send_stream = std::move(send_stream)](auto buffer) mutable noexcept { asio::write(send_stream, buffer); };
 #endif // defined(BACKTEST_HARNESS)
 
-      const auto send = [&](auto &model) {
-        constexpr bool send_datagram = decltype(model)::send_datagram;
+      const auto send = [&](auto &automata) {
+        constexpr bool send_datagram = decltype(automata)::send_datagram;
 
         return [&, send_datagram_socket = std::move(send_datagram_socket), stream_send = std::move(stream_send)](auto continuation, const network_clock::time_point &feed_timestamp, auto *instrument_ptr, auto send_for_real) mutable noexcept {
           network_clock::time_point send_timestamp {};
@@ -410,19 +381,23 @@ auto main() -> int
       // main loop
 
       auto run = with_automata(properties["config"_hs], logger_ptr, [&](auto &automata) -> boost::leaf::result<void> {
-        using model_t = model<decltype(co_request_snapshot), decltype(automata)>;
-        auto model = model_t(co_request_snapshot, automata);
 
         if(!dynamic_subscription)
         {
-          spawn([&]() { return co_request_snapshot(instrument_id)); }, "initial snapshot"s);
+          spawn([&]() {
+              const auto subscription = config["subscription"_hs];
+              const auto instrument_id = subscription["trigger"_hs]["instrument"_hs];
+              auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription["payload"_hs]));
+              auto state = co_request_snapshot(instrument_id));
+              automata.emplace({.trigger = std::move(state), .payload = std::move(payload), .instrument_id = instrument_id});
+          }, "initial snapshot"s);
           service.run_until_complete();
         } 
 
-        spawn([&]() { return co_commands(service, command_input, model, logger_ptr); }, "commands"s);
+        spawn([&]() { return co_commands(service, command_input, automata, logger_ptr); }, "commands"s);
  
         using namespace piped_continuation;
-        const auto fast_path = std::ref(receive) |= decode(model) |= trigger |= send(model) |= post_send(properties, model);
+        const auto fast_path = std::ref(receive) |= decode(automata) |= trigger |= send(automata) |= post_send(properties, automata);
  
         while(!service.stopped())
           [[likely]]
@@ -444,7 +419,8 @@ auto main() -> int
       });
 
       BOOST_LEAF_CHECK(run());
-      return {};
+
+      return boost::leaf::success();
     },
     make_handlers(std::ref(logger_thread.printer)));
 

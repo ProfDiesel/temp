@@ -45,7 +45,7 @@ struct trigger_dispatcher
                       triggers);
   }
 
-  void reset(const feed::instrument_state &state) noexcept
+  void reset(feed::instrument_state &&state) noexcept
   {
     const auto apply = [&](auto field, auto &trigger_map_value, const auto &value)
     {
@@ -74,7 +74,7 @@ struct polymorphic_trigger_dispatcher
 
   /*const*/ func::function<bool(void *, const continuation_type &, const clock_type::time_point &, const feed::update &, instrument_closure)> call_thunk
     = []([[maybe_unused]] auto...) { return false; };
-  /*const*/ func::function<void(void *, const feed::instrument_state &)> reset_thunk = []([[maybe_unused]] auto...) {};
+  /*const*/ func::function<void(void *, feed::instrument_state &&)> reset_thunk = []([[maybe_unused]] auto...) {};
   /*const*/ func::function<void(void *)> warm_up_thunk = []([[maybe_unused]] auto...) {};
 
   template<typename upstream_dispatcher_type, typename... args_types>
@@ -88,7 +88,7 @@ struct polymorphic_trigger_dispatcher
         auto blank_dispatcher = [&](const auto &timestamp, auto closure, auto blank) -> bool { return continuation(timestamp, closure, blank()); };
         return (*reinterpret_cast<upstream_dispatcher_type *>(thiz))(blank_dispatcher, timestamp, update, instrument);
         },
-      .reset_thunk = [](void *thiz, const feed::instrument_state &state) { reinterpret_cast<upstream_dispatcher_type *>(thiz)->reset(state); },
+      .reset_thunk = [](void *thiz, feed::instrument_state &&state) { reinterpret_cast<upstream_dispatcher_type *>(thiz)->reset(std::move(state)); },
       .warm_up_thunk = [](void *thiz) { reinterpret_cast<upstream_dispatcher_type *>(thiz)->warm_up(); }};
     new(&result.storage) upstream_dispatcher_type(std::forward<args_types>(args)...);
     return result;
@@ -98,7 +98,7 @@ struct polymorphic_trigger_dispatcher
   {
     return call_thunk(&storage, continuation, timestamp, update, instrument);
   }
-  void reset(const feed::instrument_state &state) noexcept { reset_thunk(&storage, state); }
+  void reset(feed::instrument_state &&state) noexcept { reset_thunk(&storage, std::move(state)); }
   void warm_up() noexcept { warm_up_thunk(&storage); }
 };
 

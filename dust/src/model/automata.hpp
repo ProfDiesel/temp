@@ -18,7 +18,7 @@
 #include <asio/steady_timer.hpp>
 
 #include <boost/container/small_vector.hpp>
-#include <boost/core/noncopyable.hpp>
+#include <boost/hana/type.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -30,12 +30,15 @@
 namespace bco = boost::container;
 namespace b = boilerplate;
 
+
 template<bool handle_packet_loss_, typename trigger_type_, bool send_datagram_>
 struct automaton final
 {
   static constexpr auto handle_packet_loss = handle_packet_loss_;
   using trigger_type = trigger_type_;
   static constexpr auto send_datagram = send_datagram_;
+
+  using payload_type = payload<send_datagram>;
 
   trigger_type trigger;
   payload_type payload;
@@ -46,97 +49,102 @@ struct automaton final
   [[no_unique_address]] std::conditional_t<handle_packet_loss, feed::sequence_id_type, b::empty> sequence_id = {};
   [[no_unique_address]] std::conditional_t<handle_packet_loss, bool, b::empty> snapshot_request_running;
 
-  bool handle_sequence_id(feed::sequence_id_type sequence_id, auto snapshot_requester)
+  bool handle_sequence_id(feed::sequence_id_type sequence_id, auto snapshot_requester) noexcept requires handle_packet_loss
   {
-    if (handle_packet_loss || UNLIKELY(this->sequence_id == feed::sequence_id_type {}))
-    {
       const auto diff = sequence_id - (this->sequence_id + 1);
       if(!diff) [[likely]]
         return true;
       if(diff < 0) [[unlikely]]
         return false;
-      return request_snapshot();
-    }
-
-    return true;
+      if(std::exchange(snapshot_request_running, true)) [[unlikely]]
+        return false;
+      snapshot_requester(instrument_id, [this]() noexcept { snapshot_request_running = false; });
+      return true;
   }
 
-  bool request_snapshot() noexcept
-  {
-    if(std::exchange(snapshot_request_running, true)) [[unlikely]]
-      return false;
-    snapshot_requester(instrument_id, [this]() { if constexpr(handle_packet_loss) snapshot_request_running = false; });
-    return true;
-  }
+  constexpr bool handle_sequence_id(feed::sequence_id_type, auto) noexcept requires (!handle_packet_loss) { return true; }
 
   void apply(feed::instrument_state &&state) noexcept {
     trigger.reset(std::move(state));
-    if constexpr(handle_packet_loss) this->sequence_id = sequence_id;
+    if constexpr(handle_packet_loss)
+      this->sequence_id = sequence_id;
   };
 
   operator const payload_type &() const noexcept { return payload; }
 };
 
 template<typename automaton_type, bool dynamic_subscription_>
-struct automata final /*: boost::noncopyable*/
+struct automata final
 {
   static constexpr auto dynamic_subscription = dynamic_subscription_;
-
-  boilerplate::not_null_observer_ptr<logger::logger> logger_ptr;
 
   template<typename value_type>
   using sequence = std::conditional_t<dynamic_subscription, bco::small_vector<value_type, std::hardware_destructive_interference_size / sizeof(value_type)>,
                                       std::array<value_type, 1>>;
 
   sequence<feed::instrument_id_type> instrument_ids;
-  sequence<automaton> data;
+  sequence<automaton_type> data;
 
   static constexpr feed::instrument_id_type INVALID_INSTRUMENT = 0;
 
-  explicit automata(boilerplate::not_null_observer_ptr<logger::logger> logger_ptr) noexcept requires dynamic_subscription : logger_ptr(logger_ptr) {}
-  automata(boilerplate::not_null_observer_ptr<logger::logger> logger_ptr, automaton &&automaton) noexcept requires(!dynamic_subscription):
-    logger_ptr(logger_ptr), instrument_ids {{INVALID_INSTRUMENT}}, data {{std::move(automaton)}}
-  {
-  }
+  automata() noexcept requires dynamic_subscription : {}
+  automata() noexcept requires(!dynamic_subscription): instrument_ids {{INVALID_INSTRUMENT}} {}
 
+  automata(const automata&) noexcept = delete;
   automata(automata &&) noexcept = default;
 
-  [[using gnu: always_inline, flatten, hot]] inline automaton *at_if_not_disabled(feed::instrument_id_type instrument_id) noexcept
+  automata &operator=(const automata&) noexcept = delete;
+  automata &operator=(automata &&) noexcept = default;
+
+  [[using gnu: always_inline, flatten, hot]] inline automaton_type *at_if_not_disabled(feed::instrument_id_type instrument_id) noexcept
   {
     const auto it = std::find(instrument_ids.begin(), instrument_ids.end(), instrument_id);
     return LIKELY(it != instrument_ids.end()) ? &data[it - instrument_ids.begin()] : nullptr;
   }
 
-  automaton *at(feed::instrument_id_type instrument_id) noexcept
+  automaton_type *at(feed::instrument_id_type instrument_id) noexcept
   {
     const auto it = std::find_if(data.begin(), data.end(), [&](const auto &automaton) { return automaton.instrument_id == instrument_id; });
     return it != data.end() ? &data[std::size_t(it - data.begin())] : nullptr;
   }
 
-  void emplace(feed::instrument_id_type instrument_id, automaton &&automaton) noexcept requires dynamic_subscription
+  [[using gnu: always_inline, flatten, hot]] inline const automaton_type *at_if_not_disabled(feed::instrument_id_type instrument_id) const noexcept { return b::const_cast_(this)->at_if_not_disabled(instrument_ids); }
+
+  const automaton_type *at(feed::instrument_id_type instrument_id) const noexcept { return b::const_cast_(*this)->at(instrument_id); }
+
+  void emplace(automaton_type &&automaton) noexcept requires dynamic_subscription
   {
-    if(at(instrument_id)) [[unlikely]]
+    REQUIRES(automaton.instrument_id != INVALID_INSTRUMENT);
+    if(at(automaton.instrument_id)) [[unlikely]]
       return;
     data.push_back(std::move(automaton));
-    instrument_ids.push_back(instrument_id);
+    instrument_ids.push_back(automaton.instrument_id);
+  }
+
+  void emplace(automaton_type &&automaton) noexcept requires (!dynamic_subscription)
+  {
+    REQUIRES(instrument_ids == {INVALID_INSTRUMENT});
+    REQUIRES(automaton.instrument_id != INVALID_INSTRUMENT);
+    data[0] = std::move(automaton);
+    instrument_ids[0] = automaton.instrument_id;
   }
 
   void erase(feed::instrument_id_type instrument_id) noexcept requires dynamic_subscription
   {
-    if(const auto *automaton = at(instrument_id); automaton) [[likely]]
+    if(const auto *automaton_ptr = at(instrument_id); automaton_ptr) [[likely]]
     {
-      instrument_ids.erase(instrument_ids.begin() + (automaton - &data[0]));
-      data.erase(data.begin() + (automaton - &data[0]));
+      instrument_ids.erase(instrument_ids.begin() + (automaton_ptr - &data[0]));
+      data.erase(data.begin() + (automaton_ptr - &data[0]));
     }
   };
 
-  auto enter_cooldown(automaton *instrument) noexcept
+  [[nodiscard]] auto enter_cooldown(automaton_type *automaton_ptr) noexcept
   {
-    REQUIRES(instrument);
-    instrument_ids[std::size_t(instrument - &data[0])] = INVALID_INSTRUMENT;
-    return [&, instrument_id = instrument->instrument_id]() { // capture the id, some subscriptions/unsubscriptions may have happened in the interval
-      if(const auto *automaton = at(instrument_id); automaton) [[likely]]
-        instrument_ids[std::size_t(automaton - &data[0])] = instrument_id;
+    REQUIRES(automaton_ptr);
+    instrument_ids[std::size_t(automaton_ptr - &data[0])] = INVALID_INSTRUMENT;
+    return [&, instrument_id = automaton_ptr->instrument_id]() { // capture the id, some subscriptions/unsubscriptions may have happened in the interval
+      if(const auto *automaton_ptr = at(instrument_id); automaton_ptr) [[likely]]
+        instrument_ids[std::size_t(automaton_ptr - &data[0])] = instrument_id;
     };
   }
 
@@ -146,6 +154,8 @@ struct automata final /*: boost::noncopyable*/
       if(instrument_ids[i])
         continuation(&data[i]);
   }
+
+  void each(auto continuation) const noexcept { return b::const_cast_(*this)->each(continuation); }
 };
 
 
@@ -154,66 +164,49 @@ struct automata final /*: boost::noncopyable*/
 {
   using namespace config::literals;
 
-  auto wrapped = [&](auto dynamic_subscription, auto &&trigger, auto handle_packet_loss, auto send_datagram) noexcept -> boost::leaf::result<void>
-  {
-    const auto subscription = config["subscription"_hs];
-
-    using automaton_type = automaton<handle_packet_loss(), trigger_type(), send_datagram()>;
-    using automata_type = automata<automaton_type, dynamic_subscription()>;
-
-    auto automata = BOOST_LEAF_TRYX(
-      [&]() noexcept -> boost::leaf::result<automata_type>
-      {
-        if constexpr(!dynamic_subscription())
-        {
-          const auto instrument_id = subscription["trigger"_hs]["instrument"_hs];
-          auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription["payload"_hs]));
-          auto automaton = typename automata_type::automaton {.trigger = std::move(trigger),
-                                                              .payload = std::move(payload),
-                                                              .instrument_id = instrument_id};
-          return automata_type(logger_ptr, std::move(automaton));
-        }
-        else
-          return automata_type(logger_ptr);
-      }());
-
-      return continuation(std::move(automata));
-  };
-
-#if !defined(LEAN_AND_MEAN) && !defined(FUZZ_TEST_HARNESS)
-  const auto dynamic_subscription_test = [&](auto continuation, auto &&...tags) noexcept
-  {
-    const auto trigger = config["subscription"_hs]["trigger"_hs];
-    return trigger ? with_trigger(trigger, logger_ptr,
-                                       [&](auto &&trigger_dispatcher)
-                                       { return continuation(std::forward<decltype(tags)>(tags)..., std::false_type {}, std::move(trigger_dispatcher)); })()
-                        : continuation(std::forward<decltype(tags)>(tags)..., std::true_type {}, polymorphic_trigger_dispatcher());
-  };
-
   const auto handle_packet_loss_test = [&](auto continuation, auto &&...tags) noexcept
   {
-    return config["feed"_hs]["handle_packet_loss"_hs] ? continuation(std::forward<decltype(tags)>(tags)..., std::true_type {})
-                                                      : continuation(std::forward<decltype(tags)>(tags)..., std::false_type {});
+    return config["feed"_hs]["handle_packet_loss"_hs] ? continuation(std::forward<decltype(tags)>(tags)..., std::true_type())
+                                                      : continuation(std::forward<decltype(tags)>(tags)..., std::false_type());
   };
 
   const auto send_datagram_test = [&](auto continuation, auto &&...tags) noexcept
   {
-    return config["send"_hs]["datagram"_hs] ? continuation(std::forward<decltype(tags)>(tags)..., std::true_type {})
-                                            : continuation(std::forward<decltype(tags)>(tags)..., std::false_type {});
+    return config["send"_hs]["datagram"_hs] ? continuation(std::forward<decltype(tags)>(tags)..., std::true_type())
+                                            : continuation(std::forward<decltype(tags)>(tags)..., std::false_type());
   };
 
+  const auto with_fixed_automata = [&](auto subscription, auto handle_packet_loss, auto send_datagram) noexcept
+  {
+    const auto subscription = config["subscription"_hs];
+    const auto trigger = subscription["trigger"_hs];
+    return with_trigger(trigger, logger_ptr, [&](auto &&trigger_dispatcher) { 
+      const auto instrument_id = trigger["instrument"_hs];
+      auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription["payload"_hs]));
+      auto state = co_request_snapshot(instrument_id));
+      return continuation(automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false> automata({.trigger = std::move(state), .payload = std::move(payload), .instrument_id = instrument_id}));
+    });
+  };
+
+  const auto with_dynamic_automata = [](auto handle_packet_loss, auto send_datagram) noexcept
+  {
+     return hof::partial(continuation)(automata<automaton<handle_packet_loss(), polymorphic_trigger_dispatcher, send_datagram()>, true>());
+  }; 
+
+  const auto with_automata_selector = [&](auto handle_packet_loss, auto send_datagram) noexcept
+  {
+    const auto subscription = config["subscription"_hs];
+    const auto trigger = subscription["trigger"_hs];
+    return trigger ? with_fixed_automata(subscription, handle_packet_loss, send_datagram)
+                   : with_dynamic_automata(handle_packet_loss, send_datagram);
+  };
+
+#if defined(LEAN_AND_MEAN) && defined(FUZZ_TEST_HARNESS)
+  with_automata_selector(std::true_type(), std::true_type());
+#else  // defined(LEAN_AND_MEAN) && defined(FUZZ_TEST_HARNESS)
   using namespace piped_continuation;
-  return dynamic_subscription_test |= handle_packet_loss_test |= send_datagram_test
-         |= hof::partial(wrapped)(service, logger_ptr, continuation, properties);
-#else  // !defined(LEAN_AND_MEAN) && !defined(FUZZ_TEST_HARNESS)
-  const auto trigger = config["subscription"_hs]["trigger"_hs];
-  return with_trigger(trigger, logger_ptr,
-                      [&](auto &&trigger_dispatcher)
-                      {
-                        return wrapped(config, service, logger_ptr, continuation, std::false_type {},
-                                   std::forward<decltype(trigger_dispatcher)>(trigger_dispatcher), std::false_type {}, std::false_type {});
-                      });
-#endif // !defined(LEAN_AND_MEAN) && !defined(FUZZ_TEST_HARNESS)
+  return handle_packet_loss_test |= send_datagram_test |= with_automata_selector;
+#endif // defined(LEAN_AND_MEAN) && defined(FUZZ_TEST_HARNESS)
 }
 
 
