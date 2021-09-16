@@ -19,6 +19,7 @@
 
 #include <boost/container/small_vector.hpp>
 #include <boost/hana/type.hpp>
+#include <boost/hof/partial.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -28,6 +29,7 @@
 #include <unistd.h>
 
 namespace bco = boost::container;
+namespace hof = boost::hof;
 namespace b = boilerplate;
 
 
@@ -87,7 +89,7 @@ struct automata final
 
   static constexpr feed::instrument_id_type INVALID_INSTRUMENT = 0;
 
-  automata() noexcept requires dynamic_subscription : {}
+  automata() noexcept requires dynamic_subscription {}
   automata() noexcept requires(!dynamic_subscription): instrument_ids {{INVALID_INSTRUMENT}} {}
 
   automata(const automata&) noexcept = delete;
@@ -178,17 +180,16 @@ struct automata final
 
   const auto with_fixed_automata = [&](auto subscription, auto handle_packet_loss, auto send_datagram) noexcept
   {
-    const auto subscription = config["subscription"_hs];
     const auto trigger = subscription["trigger"_hs];
     return with_trigger(trigger, logger_ptr, [&](auto &&trigger_dispatcher) { 
       const auto instrument_id = trigger["instrument"_hs];
       auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription["payload"_hs]));
-      auto state = co_request_snapshot(instrument_id));
-      return continuation(automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false> automata({.trigger = std::move(state), .payload = std::move(payload), .instrument_id = instrument_id}));
+      auto state = co_request_snapshot(instrument_id);
+      return continuation(automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>({.trigger = std::move(state), .payload = std::move(payload), .instrument_id = instrument_id}));
     });
   };
 
-  const auto with_dynamic_automata = [](auto handle_packet_loss, auto send_datagram) noexcept
+  const auto with_dynamic_automata = [&](auto handle_packet_loss, auto send_datagram) noexcept
   {
      return hof::partial(continuation)(automata<automaton<handle_packet_loss(), polymorphic_trigger_dispatcher, send_datagram()>, true>());
   }; 

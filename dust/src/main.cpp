@@ -142,7 +142,7 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &comm
     switch(dispatch_hash(entrypoint["type"_hs])) // TODO
     {
     case "payload"_h:
-      if(auto *automaton_ptr = automata.at(entrypoint["instrument"_hs]); automaton)
+      if(auto *automaton_ptr = automata.at(entrypoint["instrument"_hs]); automaton_ptr)
         automaton_ptr->payload = BOOST_LEAF_CO_TRYX(decode_payload<send_datagram>(entrypoint))
       break;
     case "subscribe"_h:
