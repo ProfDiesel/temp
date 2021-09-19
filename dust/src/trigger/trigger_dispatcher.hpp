@@ -107,7 +107,7 @@ struct invalid_trigger_config
   const config::walker &walker;
 };
 
-auto with_trigger(const config::walker &config, boilerplate::observer_ptr<logger::logger> logger,
+decltype(auto) with_trigger(const config::walker &config, boilerplate::observer_ptr<logger::logger> logger,
                   auto continuation) noexcept
 {
   using namespace config::literals;

@@ -182,7 +182,7 @@ inline update encode_update(enum field field, const price_t &value) noexcept
   return update {.field = field, .value = endian::native_to_big(result)};
 }
 
-[[using gnu : always_inline, flatten, hot]] inline auto visit_update(auto continuation, const struct update &update)
+[[using gnu : always_inline, flatten, hot]] inline decltype(auto) visit_update(auto continuation, const struct update &update)
 {
   switch(field{update.field})
   {

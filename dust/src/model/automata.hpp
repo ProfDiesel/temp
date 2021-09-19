@@ -42,11 +42,11 @@ struct automaton final
 
   using payload_type = payload<send_datagram>;
 
-  trigger_type trigger;
-  payload_type payload;
-
   /*const*/
   feed::instrument_id_type instrument_id = {};
+
+  trigger_type trigger;
+  payload_type payload;
 
   [[no_unique_address]] std::conditional_t<handle_packet_loss, feed::sequence_id_type, b::empty> sequence_id = {};
   [[no_unique_address]] std::conditional_t<handle_packet_loss, bool, b::empty> snapshot_request_running;
@@ -75,9 +75,11 @@ struct automaton final
   operator const payload_type &() const noexcept { return payload; }
 };
 
-template<typename automaton_type, bool dynamic_subscription_>
+template<typename automaton_type_, bool dynamic_subscription_>
 struct automata final
 {
+  using automaton_type = automaton_type_;
+
   static constexpr auto dynamic_subscription = dynamic_subscription_;
 
   template<typename value_type>
@@ -90,7 +92,7 @@ struct automata final
   static constexpr feed::instrument_id_type INVALID_INSTRUMENT = 0;
 
   automata() noexcept requires dynamic_subscription {}
-  automata() noexcept requires(!dynamic_subscription): instrument_ids {{INVALID_INSTRUMENT}} {}
+  explicit automata(automaton_type &&automaton) noexcept requires(!dynamic_subscription): instrument_ids {{INVALID_INSTRUMENT}}, data {{std::move(automaton)}} {}
 
   automata(const automata&) noexcept = delete;
   automata(automata &&) noexcept = default;
@@ -154,15 +156,14 @@ struct automata final
   {
     for(std::size_t i = 0; i < instrument_ids.size(); ++i)
       if(instrument_ids[i])
-        continuation(&data[i]);
+        continuation(data[i]);
   }
 
   void each(auto continuation) const noexcept { return b::const_cast_(*this)->each(continuation); }
 };
 
 
-[[using gnu: flatten]] auto with_automata(const config::walker &config, asio::io_context &service, 
-                       boilerplate::not_null_observer_ptr<logger::logger> logger_ptr, auto continuation) noexcept
+[[using gnu: flatten]] decltype(auto) with_automata(const config::walker &config, boilerplate::not_null_observer_ptr<logger::logger> logger_ptr, auto continuation) noexcept
 {
   using namespace config::literals;
 
@@ -181,11 +182,10 @@ struct automata final
   const auto with_fixed_automata = [&](auto subscription, auto handle_packet_loss, auto send_datagram) noexcept
   {
     const auto trigger = subscription["trigger"_hs];
-    return with_trigger(trigger, logger_ptr, [&](auto &&trigger_dispatcher) { 
+    return with_trigger(trigger, logger_ptr, [&](auto &&trigger_dispatcher) -> boost::leaf::result<std::invoke_result_t<decltype(continuation), automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>>> { 
       const auto instrument_id = trigger["instrument"_hs];
       auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription["payload"_hs]));
-      auto state = co_request_snapshot(instrument_id);
-      return continuation(automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>({.trigger = std::move(state), .payload = std::move(payload), .instrument_id = instrument_id}));
+      return continuation(automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>({.instrument_id = instrument_id, .payload = std::move(payload)}));
     });
   };
 
@@ -203,7 +203,7 @@ struct automata final
   };
 
 #if defined(LEAN_AND_MEAN) && defined(FUZZ_TEST_HARNESS)
-  with_automata_selector(std::true_type(), std::true_type());
+  return with_automata_selector(std::true_type(), std::true_type());
 #else  // defined(LEAN_AND_MEAN) && defined(FUZZ_TEST_HARNESS)
   using namespace piped_continuation;
   return handle_packet_loss_test |= send_datagram_test |= with_automata_selector;
