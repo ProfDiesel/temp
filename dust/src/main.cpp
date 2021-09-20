@@ -148,11 +148,11 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &comm
       {
         const auto instrument_id = entrypoint["instrument"_hs];
         auto state = BOOST_LEAF_CO_TRYX(co_await co_request_snapshot(instrument_id));
-        BOOST_LEAF_CO_TRYV(with_trigger(entrypoint, logger_ptr, [&](auto &&trigger_dispatcher) noexcept -> boost::leaf::result<void> {
-          auto trigger = polymorphic_trigger_dispatcher::make<std::decay_t<decltype(trigger_map)>>(std::forward<decltype(trigger_map)>(trigger_map));
-          trigger.reset(std::move(state));
+        BOOST_LEAF_CO_TRYV(with_trigger(entrypoint, logger_ptr, [&](auto &&upstream_dispatcher) noexcept -> boost::leaf::result<void> {
+          auto poly_dispatcher = polymorphic_trigger_dispatcher::make<std::decay_t<decltype(upstream_dispatcher)>>(std::move(upstream_dispatcher));
+          poly_dispatcher.reset(std::move(state));
           auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram>(entrypoint));
-          automata.emplace({.instrument_id = instrument_id, .trigger = std::move(trigger), .payload = std::move(payload)});
+          automata.emplace({.instrument_id = instrument_id, .trigger = std::move(poly_dispatcher), .payload = std::move(payload)});
           return boost::leaf::success();
         })());
       }
@@ -326,6 +326,7 @@ auto main() -> int
             spawn([&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>> {
               auto state = BOOST_LEAF_CO_TRYX(co_await co_request_snapshot(automaton_ptr->instrument_id));
               automaton_ptr->apply(std::move(state));
+              co_return boost::leaf::success();
             }, "request_snapshot"s);
           };
           return LIKELY(automaton_ptr) && LIKELY(automaton_ptr->handle_sequence_id(sequence_id, snapshot_requester)) ? automaton_ptr : nullptr;
@@ -355,7 +356,7 @@ auto main() -> int
       const auto send = [&](auto &automata) {
         constexpr bool send_datagram = std::decay_t<decltype(automata)>::automaton_type::send_datagram;
 
-        return [&, send_datagram_socket = std::move(send_datagram_socket), stream_send = std::move(stream_send)](auto continuation, const network_clock::time_point &feed_timestamp, auto *instrument_ptr, auto send_for_real) mutable noexcept {
+        return [&, send_datagram_socket = std::move(send_datagram_socket), stream_send = std::move(stream_send)](auto continuation, const network_clock::time_point &feed_timestamp, auto *instrument_ptr, b::is_integral_constant<bool> auto send_for_real) mutable noexcept {
           network_clock::time_point send_timestamp {};
           if constexpr(send_datagram)
           {

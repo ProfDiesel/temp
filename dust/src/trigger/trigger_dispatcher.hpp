@@ -17,7 +17,7 @@
 
 // trigger_map_type = tuple<tuple<tuple<fields...>, trigger>>;
 template<typename trigger_map_type>
-using is_trigger_map_type_v = boilerplate::is_tuple_v<trigger_map_type>;
+inline constexpr auto is_trigger_map_type_v = boilerplate::is_tuple_v<trigger_map_type>;
 
 template<typename trigger_map_type> requires is_trigger_map_type_v<trigger_map_type>
 struct trigger_dispatcher

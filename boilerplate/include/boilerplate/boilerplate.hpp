@@ -37,6 +37,15 @@ struct is_tuple<std::tuple<tuple_element_types...>> : std::true_type
 template<typename value_type>
 inline constexpr bool is_tuple_v = is_tuple<value_type>::value;
 
+template<typename value_type, typename integral_type>
+struct is_integral_constant : std::false_type
+{
+}
+
+template<typename value_type, typename integral_type>
+struct is_integral_constant<> : std::true_type
+{
+}
 
 template<class... Ts>
 struct overloaded : Ts...
