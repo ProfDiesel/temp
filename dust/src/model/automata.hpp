@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <concepts>
 #include <cstdio>
 #include <memory>
 #include <type_traits>
@@ -60,7 +61,7 @@ struct automaton final
         return false;
       if(std::exchange(snapshot_request_running, true)) [[unlikely]]
         return false;
-      snapshot_requester(instrument_id, [this]() noexcept { snapshot_request_running = false; });
+      snapshot_requester([this]() noexcept { snapshot_request_running = false; });
       return true;
   }
 
@@ -108,7 +109,7 @@ struct automata final
 
   automaton_type *at(feed::instrument_id_type instrument_id) noexcept
   {
-    const auto it = std::find_if(data.begin(), data.end(), [&](const auto &automaton) { return automaton.instrument_id == instrument_id; });
+    const auto it = std::find_if(data.begin(), data.end(), [&](const auto &automaton) noexcept { return automaton.instrument_id == instrument_id; });
     return it != data.end() ? &data[std::size_t(it - data.begin())] : nullptr;
   }
 
@@ -146,7 +147,7 @@ struct automata final
   {
     REQUIRES(automaton_ptr);
     instrument_ids[std::size_t(automaton_ptr - &data[0])] = INVALID_INSTRUMENT;
-    return [&, instrument_id = automaton_ptr->instrument_id]() { // capture the id, some subscriptions/unsubscriptions may have happened in the interval
+    return [&, instrument_id = automaton_ptr->instrument_id]() noexcept { // capture the id, some subscriptions/unsubscriptions may have happened in the interval
       if(const auto *automaton_ptr = at(instrument_id); automaton_ptr) [[likely]]
         instrument_ids[std::size_t(automaton_ptr - &data[0])] = instrument_id;
     };
@@ -182,7 +183,7 @@ struct automata final
   const auto with_fixed_automata = [&](auto subscription, auto handle_packet_loss, auto send_datagram) noexcept
   {
     const auto trigger = subscription["trigger"_hs];
-    return with_trigger(trigger, logger_ptr, [&](auto &&trigger_dispatcher) -> boost::leaf::result<std::invoke_result_t<decltype(continuation), automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>>> { 
+    return with_trigger(trigger, logger_ptr, [&](auto &&trigger_dispatcher) -> boost::leaf::result<std::invoke_result_t<decltype(continuation), automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>>> {
       const auto instrument_id = trigger["instrument"_hs];
       auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription["payload"_hs]));
       return continuation(automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>({.instrument_id = instrument_id, .payload = std::move(payload)}));
@@ -192,14 +193,15 @@ struct automata final
   const auto with_dynamic_automata = [&](auto handle_packet_loss, auto send_datagram) noexcept
   {
      return hof::partial(continuation)(automata<automaton<handle_packet_loss(), polymorphic_trigger_dispatcher, send_datagram()>, true>());
-  }; 
+  };
 
   const auto with_automata_selector = [&](auto handle_packet_loss, auto send_datagram) noexcept
   {
     const auto subscription = config["subscription"_hs];
     const auto trigger = subscription["trigger"_hs];
-    return trigger ? with_fixed_automata(subscription, handle_packet_loss, send_datagram)
-                   : with_dynamic_automata(handle_packet_loss, send_datagram);
+    static_assert(std::invocable<std::decay_t<decltype(continuation)>, std::invocable_result_t<with_fixed_automata, decltype(subscription), decltype(handle_packet_loss), decltype(send_datagram)>&&>);
+    static_assert(std::invocable<std::decay_t<decltype(continuation)>, std::invocable_result_t<with_dynamic_automata, decltype(handle_packet_loss), decltype(send_datagram)>&&>);
+    return trigger ? with_fixed_automata(subscription, handle_packet_loss, send_datagram) : with_dynamic_automata(handle_packet_loss, send_datagram);
   };
 
 #if defined(LEAN_AND_MEAN) && defined(FUZZ_TEST_HARNESS)

@@ -80,7 +80,7 @@ public:
       __builtin_prefetch(buffer_.get() + (i * std::hardware_destructive_interference_size), 1, 1);
   }
 
-  std::byte *producer_allocate(size_t size = 0) noexcept
+  [[nodiscard]] std::byte *producer_allocate(size_t size = 0) noexcept
   {
     assert(size < overflow_size);
     const auto read_pos = read_pos_.load();
@@ -97,7 +97,7 @@ public:
     __builtin_prefetch(buffer_.get() + ((write_pos_ + std::hardware_destructive_interference_size * NB_CACHE_LINE_PREFETCH) & buffer_size_mask), 1, 1);
   }
 
-  std::byte *consumer_peek(size_t size = 0) noexcept
+  [[nodiscard]] std::byte *consumer_peek(size_t size = 0) noexcept
   {
     const auto write_pos = write_pos_.load();
     return (LIKELY(read_pos_ + size <= write_pos)
@@ -110,7 +110,7 @@ public:
   void consumer_flush() noexcept { read_pos_.flush(buffer_.get(), buffer_size_mask); }
 
   // wait for the queue to be empty. Similar to ``!consumer_peek(0)``, but from the consumer view
-  bool producer_test_empty() noexcept
+  [[nodiscard]] bool producer_test_empty() noexcept
   {
     const auto read_pos = read_pos_.load();
     return !(LIKELY(read_pos <= write_pos_) || UNLIKELY(read_pos + buffer_size <= write_pos_));

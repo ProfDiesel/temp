@@ -14,6 +14,7 @@
 
 #include <range/v3/view/take.hpp>
 
+#include <concepts>
 #include <iostream>
 #if defined(LINUX)
 #  include <linux/net_tstamp.h>
@@ -210,7 +211,7 @@ public:
   multicast_udp_reader(multicast_udp_reader &&) = default;
   multicast_udp_reader &operator=(multicast_udp_reader &&) = default;
 
-  [[using gnu: always_inline, flatten, hot]] inline auto operator()(auto continuation) noexcept -> boost::leaf::result<void>
+  [[using gnu: always_inline, flatten, hot]] inline auto operator()(std::invocable<const network_clock::time_point&, asio::const_buffer&&> auto continuation) noexcept -> boost::leaf::result<void>
   {
 #if defined(USE_TCPDIRECT)
     ::zf_reactor_perform(static_stack::instance().stack.get());

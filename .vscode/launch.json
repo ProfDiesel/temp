@@ -21,23 +21,13 @@
             ]
         },
         {
-            "name": "ppf/prjdef",
-            "type": "python",
-            "request": "launch",
-            "module": "genjutsu",
-            "args": ["${workspaceFolder}/ppf/prjdef"],
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}/../dependencies"
-            }
-        },
-        {
             "name": "prjdef",
             "type": "python",
             "request": "launch",
             "module": "genjutsu",
             "args": ["${workspaceFolder}/prjdef"],
             "env": {
-                "PYTHONPATH": "${workspaceFolder}/../dependencies"
+                "PYTHONPATH": "${workspaceFolder}/../dependencies:${workspaceFolder}/../precompiled_header_generator/genjutsu_toolsets"
             }
         },
         {

@@ -76,13 +76,21 @@ struct parse_error
   std::string snippet;
 };
 
-template<typename continuation_type, typename iterator_type>
-static boost::leaf::result<void> parse(const continuation_type &continuation, iterator_type first, iterator_type last)
+namespace detail
+{
+  template<typename iterator_type>
+  using name_type = std::conditional_t<std::contiguous_iterator<iterator_type>, boost::iterator_range<iterator_type>, std::string>;
+}
+
+static boost::leaf::result<void> parse(auto continuation, auto first, auto last) noexcept requires (std::is_same_v<std::decay_t<decltype(first)>, std::decay_t<decltype(last)>>
+                                                                                                 && std::invocable<std::decay_t<decltype(continuation)>, detail::name_type<std::decay_t<decltype(first)>>&&, detail::name_type<std::decay_t<decltype(first)>>&&, value_type&&>)
 {
   namespace x3 = boost::spirit::x3;
   using namespace x3_ext;
 
-  using name_type = std::conditional_t<std::contiguous_iterator<iterator_type>, boost::iterator_range<iterator_type>, std::string>;
+  using iterator_type = std::decay_t<decltype(first)>;
+
+  using name_type = detail::name_type<iterator_type>;
   using assignment_type = std::tuple<name_type, name_type, value_type>;
 
   static const auto comment = x3::rule<class comment>("comment") = "//" >> *(x3::char_ - x3::eol) >> x3::eol;
@@ -99,10 +107,10 @@ static boost::leaf::result<void> parse(const continuation_type &continuation, it
     = '"' >> x3::lexeme[-(object_name >> ".") >> expect(field_name)] >> expect('"') >> expect(":") >> expect(value);
 
   static const auto assignment_with_action = expect(assignment)[(
-      [continuation](auto &context)
+      [continuation](auto &context) noexcept
       {
         auto &[object, field, value] = x3::_attr(context);
-        continuation(object, field, std::move(value));
+        continuation(std::move(object), std::move(field), std::move(value));
       })];
 
   //const auto grammar = *(!x3::eoi >> assignment_with_action >> expect(";"));
@@ -136,7 +144,7 @@ using char_t = typename value_type::char_type;
 template<typename value_type>
 using traits_t = typename value_type::traits_type;
 
-auto parse(auto continuation, auto &&from)
+auto parse(auto continuation, auto &&from) requires std::invocable<std::decay_t<decltype(continuation)>, detail::name_type<std::decay_t<decltype(from)>>&&, detail::name_type<std::decay_t<decltype(from)>>&&, value_type&&>
 {
   using from_type_ = std::decay_t<decltype(from)>;
   using char_type = std::detected_or_t<char, char_t, from_type_>;
@@ -351,7 +359,7 @@ struct properties final
   {
     auto data = std::make_shared<detail::world_type>();
     BOOST_LEAF_CHECK(parse(
-      [&](auto object, auto field, auto &&value)
+      [&](auto &&object, auto &&field, auto &&value) noexcept
       {
         auto [it, _] = data->try_emplace(detail::object_name_type {object.begin(), object.end()}, detail::object_type {});
         it->second.insert_or_assign(detail::field_name_type {field.begin(), field.end()}, std::forward<decltype(value)>(value));

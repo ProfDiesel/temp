@@ -38,9 +38,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
-#if !defined(__clang__)
-#  include <experimental/memory>
-#endif
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -97,7 +95,7 @@ struct logger_thread : boost::noncopyable
   std::atomic_bool leave {};
   static_assert(decltype(leave)::is_always_lock_free);
 
-  std::thread thread {[this]()
+  std::thread thread {[this]() noexcept
                       {
                         while(!leave.load(std::memory_order_acquire))
                           logger.drain();
@@ -113,7 +111,7 @@ struct logger_thread : boost::noncopyable
 };
 
 
-auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &command_input, auto co_request_snapshot, auto &automata, boilerplate::not_null_observer_ptr<logger::logger> logger_ptr) noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
+auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &command_input, auto &automata, auto co_request_snapshot, boilerplate::not_null_observer_ptr<logger::logger> logger_ptr) noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
 {
   using automata_type = typename std::decay_t<decltype(automata)>;
 
@@ -224,7 +222,7 @@ auto main() -> int
 
   asio::signal_set signals(service, SIGINT, SIGTERM);
   signals.async_wait(
-    [&](auto error_code, auto signal_number)
+    [&](auto error_code, auto signal_number) noexcept
     {
       if(error_code)
         return;
@@ -235,12 +233,12 @@ auto main() -> int
   //
   // post-send
 
-  auto post_send = [&](const auto &properties, auto &automata) {
+  auto post_send = [&](const auto &properties, auto &automata) noexcept {
     const auto send = properties["send"_hs];
     const bool disposable_payload = *send["disposable_payload"_hs];
     const std::chrono::steady_clock::duration cooldown = *send["cooldown"_hs];
 
-    return [spawn, &service, &automata, &command_output, disposable_payload, cooldown](auto *instrument_ptr) {
+    return [spawn, &service, &automata, &command_output, disposable_payload, cooldown](auto *instrument_ptr) noexcept {
       if(disposable_payload)
       {
         static std::array<char, 64> buffer;
@@ -287,7 +285,7 @@ auto main() -> int
       auto co_request_snapshot = backtest::make_snapshot_requester();
       auto updates_socket = backtest::make_update_source();
 #else // defined(BACKTEST_HARNESS)
-      auto snapshot_socket = ({ 
+      auto snapshot_socket = ({
           const auto [snapshot_host, snapshot_port] = (config::address)*properties["feed"_hs]["snapshot"_hs];
           const auto snapshot_endpoints = BOOST_LEAF_EC_TRYX(asio::ip::tcp::resolver(service).resolve(snapshot_host, snapshot_port, _));
           auto snapshot_socket = asio::ip::tcp::socket(service);
@@ -320,16 +318,16 @@ auto main() -> int
       //
       // decode
 
-      const auto decode = [&](auto &automata) {
+      const auto decode = [&](auto &automata) noexcept {
         const auto decode_header = [&](feed::instrument_id_type instrument_id, feed::sequence_id_type sequence_id) noexcept
         {
           auto *const automaton_ptr = automata.at_if_not_disabled(instrument_id);
-          auto snapshot_requester = [&]() { return [&](auto termination_handler) {
-            spawn([&]() {
+          auto snapshot_requester = [&](auto termination_handler) {
+            spawn([&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>> {
               auto state = BOOST_LEAF_CO_TRYX(co_await co_request_snapshot(automaton_ptr->instrument_id));
               automaton_ptr->apply(std::move(state));
             }, "request_snapshot"s);
-          }; };
+          };
           return LIKELY(automaton_ptr) && LIKELY(automaton_ptr->handle_sequence_id(sequence_id, snapshot_requester)) ? automaton_ptr : nullptr;
         };
 
@@ -378,16 +376,16 @@ auto main() -> int
         };
       };
 
-      // 
+      //
       // main loop
 
-      auto run = with_automata(properties["config"_hs], logger_ptr, [&](auto &&automata) -> boost::leaf::result<void> {
+      auto run = with_automata(properties["config"_hs], logger_ptr, [&](auto &&automata) noexcept -> boost::leaf::result<void> {
 
         if(!std::decay_t<decltype(automata)>::dynamic_subscription)
         {
-          automata.each([&](auto &automaton) -> boost::leaf::result<void> {
+          automata.each([&](auto &automaton) noexcept -> boost::leaf::result<void> {
             bool done = false;
-            spawn([&]() -> boost::leaf::awaitable<boost::leaf::result<void>> { 
+            spawn([&]() -> boost::leaf::awaitable<boost::leaf::result<void>> {
               auto state = BOOST_LEAF_CO_TRYX(co_await co_request_snapshot(automaton.instrument_id));
               automaton.trigger.reset(std::move(state));
               done = true;
@@ -397,18 +395,19 @@ auto main() -> int
               BOOST_LEAF_EC_TRYV(service.poll(_));
             return boost::leaf::success();
           });
-        } 
+        }
 
-        spawn([&]() { return co_commands(service, command_input, std::ref(co_request_snapshot), automata, logger_ptr); }, "commands"s);
- 
+        spawn([&]() noexcept { return co_commands(service, command_input, automata, std::ref(co_request_snapshot), logger_ptr); }, "commands"s);
+
         using namespace piped_continuation;
         auto send_ = send(automata);
         auto f = decode(automata) |= trigger |= std::ref(send_) |= post_send(properties, automata);
         f(network_clock::time_point(), asio::const_buffer(nullptr, 0));
         /*
         auto fast_path = std::ref(receive) |= decode(automata) |= trigger |= std::ref(send_) |= post_send(properties, automata);
- 
+
         while(!service.stopped())
+<<<<<<< Updated upstream
         [[likely]]
         {
           // warm up

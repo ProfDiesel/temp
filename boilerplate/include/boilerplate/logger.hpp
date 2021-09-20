@@ -236,7 +236,7 @@ public:
   void debug(bool debug) noexcept { debug_ = debug; }
   [[nodiscard]] auto debug() const noexcept { return debug_; }
 
-  auto drain() noexcept
+  bool drain() noexcept
   {
     using payload_t = detail::payload<printer_type, logger::info>;
     auto *payload = reinterpret_cast<payload_t *>(queue_.consumer_peek(sizeof(payload_t)));
@@ -267,7 +267,7 @@ private:
 
 struct do_nothing
 {
-  auto operator()([[maybe_unused]] std::size_t _) const noexcept { return true; }
+  bool operator()([[maybe_unused]] std::size_t _) const noexcept { return true; }
 };
 
 using logger = basic_logger<printer, do_nothing>;

@@ -10,7 +10,7 @@ struct data
   uint64_t tsc;
 };
 
-inline data rdtscp() noexcept
+[[nodiscard]] inline data rdtscp() noexcept
 {
   uint32_t eax {}, ecx {}, edx {};
   asm volatile("rdtscp" : "=a"(eax), "=d"(edx), "=c"(ecx));

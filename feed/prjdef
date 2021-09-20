@@ -41,6 +41,7 @@ Apply(CxxDef('LEAN_AND_MEAN'))
 Apply(CxxDef('LOGGER_FMT_COMPILE'))
 Apply(CxxDef('LOGGER_SYSLOG_FORMAT'))
 
+#pch = GeneratedPch('precompiled_header', sources=('src/feedlib.cpp',), pch_gen_project=Prjdef('../../precompiled_header_generator'))
 pch = GeneratedPch('precompiled_header', sources=('src/feedlib.cpp',))
 
 Copy(Cxx('include/feed/feed.hpp', preprocess_only=True), 'preprocessed/feed/feed.hpp')

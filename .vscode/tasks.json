@@ -35,12 +35,11 @@
             ],
             "presentation": {
                 "echo": true,
-                "reveal": "always",
                 "revealProblems": "onProblem",
                 "focus": false,
                 "panel": "dedicated",
                 "clear": true,
-                "group": "ninja"
+                "close": false
             },
             "group": {
                 "kind": "build",
@@ -48,17 +47,18 @@
             },
             "options": {
                 "env": {
-                    "PIPO": "false"
+                    "PATH": "${workspaceFolder}/../precompiled_header_generator/_build/default/bin:${env:PATH}"
                 },
                 "shell": {
                     "executable": "/usr/bin/fish",
                     "args": [
-                        "-l",
                         "-c"
                     ]
                 }
             },
             "args": [
+                "-v",
+                "-k0",
                 "${input:target}:${input:variant}"
             ]
         },
@@ -73,8 +73,7 @@
                 "focus": false,
                 "panel": "dedicated",
                 "showReuseMessage": false,
-                "clear": true,
-                "group": "prebuild"
+                "clear": true
             },
         }
     ]

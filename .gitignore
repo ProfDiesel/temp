@@ -13,7 +13,11 @@ __pycache__/
 .cache/
 
 *.un~
+.gdb_history
 
 precompiled_header
 compile_commands.json
 
+doc/generated/
+
+playground

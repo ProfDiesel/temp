@@ -13,5 +13,6 @@ set -x GENJUTSU_C_TOOLSET clang
 #find $TMP_ROOT -name 'prjdef' -executable | xargs -P0 -l1 genjutsu
 ./prjdef
 
-ninja -f $TMP_ROOT/dust/_build/debug/build.ninja -t compdb cxx > $TMP_ROOT/dust/compile_commands.json
-ninja -f $TMP_ROOT/feed/_build/debug/build.ninja -t compdb cxx > $TMP_ROOT/feed/compile_commands.json
+#ninja -f $TMP_ROOT/dust/_build/debug/build.ninja -t compdb cxx > $TMP_ROOT/dust/compile_commands.json
+#ninja -f $TMP_ROOT/feed/_build/debug/build.ninja -t compdb cxx > $TMP_ROOT/feed/compile_commands.json
+ninja -f $TMP_ROOT/_build/debug/build.ninja -t compdb cxx > $TMP_ROOT/compile_commands.json
