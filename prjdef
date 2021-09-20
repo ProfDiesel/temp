@@ -13,3 +13,4 @@ projects_aliases = [Alias(project.E.prj_file.parent.name, project.E.all_actual_d
 headers = Alias('headers', (Copy(header, header.relative_to(root)) for header, root in chain.from_iterable(zip(Glob('include/**/*.h', root=project.E.get_source_path()), repeat(project.E.get_source_path().relative_to(E.get_source_path()))) for project in projects)))
 
 Alias('all', (headers, *projects_aliases))
+Apply(Flag('_', ''), flavour='debug')

@@ -199,8 +199,8 @@ struct automata final
   {
     const auto subscription = config["subscription"_hs];
     const auto trigger = subscription["trigger"_hs];
-    static_assert(std::invocable<std::decay_t<decltype(continuation)>, std::invocable_result_t<with_fixed_automata, decltype(subscription), decltype(handle_packet_loss), decltype(send_datagram)>&&>);
-    static_assert(std::invocable<std::decay_t<decltype(continuation)>, std::invocable_result_t<with_dynamic_automata, decltype(handle_packet_loss), decltype(send_datagram)>&&>);
+    static_assert(std::invocable<std::decay_t<decltype(continuation)>, std::invoke_result_t<decltype(with_fixed_automata), decltype(subscription), decltype(handle_packet_loss), decltype(send_datagram)>&&>);
+    static_assert(std::invocable<std::decay_t<decltype(continuation)>, std::invoke_result_t<decltype(with_dynamic_automata), decltype(handle_packet_loss), decltype(send_datagram)>&&>);
     return trigger ? with_fixed_automata(subscription, handle_packet_loss, send_datagram) : with_dynamic_automata(handle_packet_loss, send_datagram);
   };
 

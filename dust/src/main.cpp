@@ -148,8 +148,8 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &comm
       {
         const auto instrument_id = entrypoint["instrument"_hs];
         auto state = BOOST_LEAF_CO_TRYX(co_await co_request_snapshot(instrument_id));
-        BOOST_LEAF_CO_TRYV(with_trigger(entrypoint, logger_ptr, [&](auto &&trigger_map) noexcept -> boost::leaf::result<void> {
-          auto trigger = polymorphic_trigger_dispatcher::make<trigger_dispatcher<std::decay_t<decltype(trigger_map)>>>(std::forward<decltype(trigger_map)>(trigger_map));
+        BOOST_LEAF_CO_TRYV(with_trigger(entrypoint, logger_ptr, [&](auto &&trigger_dispatcher) noexcept -> boost::leaf::result<void> {
+          auto trigger = polymorphic_trigger_dispatcher::make<std::decay_t<decltype(trigger_map)>>(std::forward<decltype(trigger_map)>(trigger_map));
           trigger.reset(std::move(state));
           auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram>(entrypoint));
           automata.emplace({.instrument_id = instrument_id, .trigger = std::move(trigger), .payload = std::move(payload)});
