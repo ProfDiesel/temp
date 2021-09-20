@@ -1,9 +1,8 @@
 #!/usr/bin/env genjutsu
 # vim: set filetype=python
 
-from genjutsu import Apply, Default, Alias, env, main
-from genjutsu_toolsets.c import Cxx, SharedObject, Executable, IncludeDir, CxxDef, Pch
-from genjutsu_toolsets.filesystem import Copy
+from genjutsu import Apply, Prjdef
+from genjutsu_toolsets.c import Cxx, CxxDef, Executable
 from þirdparty import ThirdParty
 
 thirdparties = {thirdparty:
@@ -40,5 +39,5 @@ Apply(CxxDef('LEAN_AND_MEAN'))
 Apply(CxxDef('LOGGER_FMT_COMPILE'))
 Apply(CxxDef('LOGGER_SYSLOG_FORMAT'))
 
-Executable('leaf', objects=(Cxx('leaf.cpp'),))
-Executable('leaf_coro', objects=(Cxx('leaf_coro.cpp'),))
+#Executable('leaf', objects=(Cxx('leaf.cpp'),))
+#Executable('leaf_coro', objects=(Cxx('leaf_coro.cpp'),))

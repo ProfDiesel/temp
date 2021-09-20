@@ -40,12 +40,15 @@ inline constexpr bool is_tuple_v = is_tuple<value_type>::value;
 template<typename value_type, typename integral_type>
 struct is_integral_constant : std::false_type
 {
-}
+};
+
+template<typename integral_type, integral_type value>
+struct is_integral_constant<std::integral_constant<integral_type, value>, integral_type> : std::true_type
+{
+};
 
 template<typename value_type, typename integral_type>
-struct is_integral_constant<> : std::true_type
-{
-}
+inline constexpr bool is_integral_constant_v = is_integral_constant<value_type, integral_type>::value;
 
 template<class... Ts>
 struct overloaded : Ts...

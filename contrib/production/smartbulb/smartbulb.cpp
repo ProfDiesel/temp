@@ -29,8 +29,8 @@ auto safe_getenv(std::string_view name) noexcept
 
 #if defined(DEBUG)
 bool verbose = false;
-#  define SMARTBULB_LOG(expression)                                                                                                                                      \
-    if(UNLIKELY(verbose))                                                                                                                                      \
+#  define SMARTBULB_LOG(expression)                                                                                                                            \
+    if(verbose) [[unlikely]]                                                                                                                                   \
     {                                                                                                                                                          \
       std::clog << expression << '\n';                                                                                                                         \
     }
@@ -170,7 +170,7 @@ extern "C" __attribute__((visibility("default"))) int connect(int fd, const stru
 
 extern "C" __attribute__((visibility("default"))) ssize_t write(int fd, const void *buf, size_t count)
 {
-  if(LIKELY(managed_sockets.contains(fd)))
+  if(managed_sockets.contains(fd)) [[likely]]
   {
     SMARTBULB_LOG(fd << " writev");
     const iovec iov {.iov_base = const_cast<void *>(buf), .iov_len = count};

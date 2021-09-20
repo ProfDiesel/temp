@@ -75,7 +75,11 @@
         "typeinfo": "cpp",
         "variant": "cpp",
         "filesystem": "cpp",
-        "format": "cpp"
+        "format": "cpp",
+        "__bit_reference": "cpp",
+        "__node_handle": "cpp",
+        "__memory": "cpp",
+        "locale": "cpp"
     },
     "python.linting.flake8Enabled": false,
     "python.linting.mypyEnabled": true

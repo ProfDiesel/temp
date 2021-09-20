@@ -1,4 +1,4 @@
-from genjutsu import Apply, env
+from genjutsu import Apply, env, Prjdef
 from genjutsu_toolsets.c import Cxx, SharedObject, Executable, IncludeDir, CxxDef
 from þirdparty import ThirdParty
 
@@ -9,7 +9,10 @@ thirdparties = {thirdparty:
     )
 }
 
+feed = Prjdef('../feed')
+
 Apply(
+    feed.FLAGS,
     (thirdparty.FLAGS for thirdparty in thirdparties.values()),
 )
 
@@ -37,4 +40,3 @@ with env('notebook'):
         'trigger_helper_test',
         objects=(Cxx('trigger_helper.cpp', name='trigger_helper_test', flags=(CxxDef('TEST'),), quick_build_alias=None),)
     )
-

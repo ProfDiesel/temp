@@ -356,7 +356,7 @@ auto main() -> int
       const auto send = [&](auto &automata) {
         constexpr bool send_datagram = std::decay_t<decltype(automata)>::automaton_type::send_datagram;
 
-        return [&, send_datagram_socket = std::move(send_datagram_socket), stream_send = std::move(stream_send)](auto continuation, const network_clock::time_point &feed_timestamp, auto *instrument_ptr, b::is_integral_constant<bool> auto send_for_real) mutable noexcept {
+        return [&, send_datagram_socket = std::move(send_datagram_socket), stream_send = std::move(stream_send)](auto continuation, const network_clock::time_point &feed_timestamp, auto *instrument_ptr, auto send_for_real) mutable noexcept {
           network_clock::time_point send_timestamp {};
           if constexpr(send_datagram)
           {
