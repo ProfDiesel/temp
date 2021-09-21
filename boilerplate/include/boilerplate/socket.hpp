@@ -368,7 +368,7 @@ public:
     ::zf_pkt_report reports[1];
     int count = 1;
     BOOST_LEAF_RC_TRYV(::zfut_get_tx_timestamps(zock_.get(), reports, &count));
-    return UNLIKELY(count > 0) ? to_time_point<network_clock>(reports[0].timestamp) : network_clock::time_point();
+    return LIKELY(count > 0) ? to_time_point<network_clock>(reports[0].timestamp) : network_clock::time_point();
 #elif defined(USE_LIBVMA)
     ::send(native_handle(), buffer.data(), buffer.size(), 0);
     return network_clock::now();

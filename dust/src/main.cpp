@@ -350,14 +350,14 @@ auto main() -> int
       auto stream_send = backtest::make_stream_send();
 #else  // defined(BACKTEST_HARNESS)
       auto send_stream = asio::posix::stream_descriptor(service, ::dup(properties["send"_hs]["fd"_hs]));
-      auto stream_send = [send_stream = std::move(send_stream)](auto buffer) mutable noexcept { asio::write(send_stream, buffer); };
+      auto stream_send = [send_stream = std::move(send_stream)](auto buffer) mutable noexcept -> boost::leaf::result<bool> { return BOOST_LEAF_EC_TRYX(asio::write(send_stream, buffer, _)) == buffer.size(); };
 #endif // defined(BACKTEST_HARNESS)
 
       const auto send = [&](auto &automata) {
         constexpr bool send_datagram = std::decay_t<decltype(automata)>::automaton_type::send_datagram;
 
         return [&, send_datagram_socket = std::move(send_datagram_socket), stream_send = std::move(stream_send)](auto continuation, const network_clock::time_point &feed_timestamp, auto *instrument_ptr, auto send_for_real) mutable noexcept {
-          network_clock::time_point send_timestamp {};
+          boost::leaf::result<network_clock::time_point> send_timestamp {};
           if constexpr(send_datagram)
           {
             if constexpr(!send_for_real())
@@ -368,10 +368,20 @@ auto main() -> int
 
             send_timestamp = send_datagram_socket->send(instrument_ptr->payload.datagram_payload);
           }
-          stream_send(asio::const_buffer(instrument_ptr->payload.stream_payload));
+          const auto stream_send_result = stream_send(asio::const_buffer(instrument_ptr->payload.stream_payload));
 
-          logger_ptr->log(logger::info, "instrument={} in_ts={} out_ts={} Payload sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp),
-                      to_timespec(send_timestamp));
+          BOOST_LEAF_CHECK(send_timestamp);
+
+          if(send_timestamp) [[likely]]
+            logger_ptr->log(logger::info, "instrument={} in_ts={} out_ts={} Payload datagram sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp),
+                      to_timespec(*send_timestamp));
+          else
+            logger_ptr->log(logger::info, "instrument={} out_result={} Payload datagram NOT sent"_format, instrument_ptr->instrument_id, send_timestamp.error());
+
+          if(stream_send_result && *stream_send_result) [[likely]]
+            logger_ptr->log(logger::info, "instrument={} in_ts={} Payload sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp));
+          else
+            logger_ptr->log(logger::info, "instrument={} out_result={} Payload NOT sent"_format, instrument_ptr->instrument_id, stream_send_result.error());
 
           return continuation(instrument_ptr);
         };
