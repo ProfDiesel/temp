@@ -102,6 +102,8 @@ inline auto to_string_handlers() noexcept
   });
 }
 
+/*
+
 auto get_context_allocator(auto &&...handlers)
 {
   using context_type = boost::leaf::context_type_from_handlers<decltype(handlers)...>;
@@ -110,7 +112,6 @@ auto get_context_allocator(auto &&...handlers)
 #else
   namespace pmr = std::prm;
   static std::pmr::unsynchronized_pool_resource resource({.max_blocks_per_chunk = 0, .largest_required_pool_block = 0});
-  Monomorphic allocator ? without vtable
   return std::pmr::polymorphic_allocator<context_type>(&resource);
 #endif
 }
@@ -118,20 +119,31 @@ auto get_context_allocator(auto &&...handlers)
 inline auto pack_result(auto &&result) noexcept requires boost::leaf::is_result_type<std::decay_t<decltype(result)>>::value
 {
   auto handlers = to_string_handlers();
-  return boost::leaf::capture(boost::leaf::allocate_shared_context(get_context_allocator(handlers), handlers), [&]() { return result; })
+  return boost::leaf::capture(boost::leaf::allocate_shared_context(get_context_allocator(handlers), handlers), [&]() { return std::move(result); });
 } 
 
 template<typename value_type, typename char_type>
-struct fmt::formatter<boost::leaf::result<value_type>, char_type> : fmt::formatter<value_type, char_type>
+struct fmt::formatter<const boost::leaf::result<value_type>&, char_type> : fmt::formatter<value_type, char_type>
 {
   template<typename context_type>
   auto format(const boost::leaf::result<value_type> &result, context_type &context)
   {
-    const auto result = boost::leaf::try_handle_all([&]() noexcept -> boost::leaf::result<std::string> {
+    using namespace std::string_literals;
+    const auto as_string = boost::leaf::try_handle_all([&]() noexcept -> boost::leaf::result<std::string> {
       BOOST_LEAF_CHECK(std::move(result)); 
-      return ""_s;
+      return ""s;
     }, to_string_handlers());
-    return formatter<value_type, char_type>::format(result, context);
+    return formatter<value_type, char_type>::format(as_string, context);
   }
 };
+
+*/
+inline auto pack_result(auto &&result) noexcept requires boost::leaf::is_result_type<std::decay_t<decltype(result)>>::value
+{
+  using namespace std::string_literals;
+  return boost::leaf::try_handle_all([&]() noexcept -> boost::leaf::result<std::string> {
+    BOOST_LEAF_CHECK(std::move(result)); 
+    return ""s;
+  }, to_string_handlers());
+} 
 

@@ -180,7 +180,7 @@ auto main() -> int
   logger_thread logger_thread;
   auto logger_ptr = boilerplate::make_strict_not_null(&logger_thread.logger);
 
-  logger_ptr->log(logger::info, "lwpid={} Starting."_format, std::this_thread::get_id());
+  logger_ptr->log_non_trivial(logger::info, "lwpid={} Starting."_format, std::this_thread::get_id());
   logger_ptr->flush();
 
   //
@@ -303,9 +303,9 @@ auto main() -> int
 
       const auto [updates_host, updates_port] = (config::address)*properties["feed"_hs]["update"_hs];
 #  if defined(LINUX) && !defined(USE_TCPDIRECT) && !defined(USE_LIBVMA)
-      auto updates_socket = multicast_udp_reader::create(service, updates_host, updates_port, properties["feed"_hs]["spin_duration"_hs].get_or(1'000ns), properties["feed"_hs]["timestamping"_hs].get_or(false));
+      auto updates_socket = BOOST_LEAF_TRYX(multicast_udp_reader::create(service, updates_host, updates_port, properties["feed"_hs]["spin_duration"_hs].get_or(1'000ns), properties["feed"_hs]["timestamping"_hs].get_or(false)));
 #  else
-      auto updates_socket = multicast_udp_reader::create(service, updates_host, updates_port);
+      auto updates_socket = BOOST_LEAF_TRYX(multicast_udp_reader::create(service, updates_host, updates_port));
 #  endif // defined(LINUX) && !defined(USE_TCPDIRECT) && !defined(USE_LIBVMA)
 #endif // defined(BACKTEST_HARNESS)
 
@@ -373,12 +373,12 @@ auto main() -> int
               logger_ptr->log(logger::info, "instrument={} in_ts={} out_ts={} Payload datagram sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp),
                         to_timespec(*send_timestamp_result));
             else
-              logger_ptr->log_non_trivial(logger::info, "instrument={} {} / Payload datagram NOT sent"_format, instrument_ptr->instrument_id, format_result(std::move(send_timestamp_result)));
+              logger_ptr->log_non_trivial(logger::info, "instrument={} {} / Payload datagram NOT sent"_format, instrument_ptr->instrument_id, pack_result(std::move(send_timestamp_result)));
 
             if(stream_send_result && *stream_send_result) [[likely]]
               logger_ptr->log(logger::info, "instrument={} in_ts={} Payload sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp));
             else
-              logger_ptr->log_non_trivial(logger::info, "instrument={} {} / Payload NOT sent"_format, instrument_ptr->instrument_id, format_result(std::move(stream_send_result)));
+              logger_ptr->log_non_trivial(logger::info, "instrument={} {} / Payload NOT sent"_format, instrument_ptr->instrument_id, pack_result(std::move(stream_send_result)));
           }
           else
           {
@@ -387,7 +387,7 @@ auto main() -> int
             if(stream_send_result && *stream_send_result) [[likely]]
               logger_ptr->log(logger::info, "instrument={} in_ts={} Payload sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp));
             else
-              logger_ptr->log(logger::info, "instrument={} {} / Payload NOT sent"_format, instrument_ptr->instrument_id, format_result(std::move(stream_send_result)));
+              logger_ptr->log(logger::info, "instrument={} {} / Payload NOT sent"_format, instrument_ptr->instrument_id, pack_result(std::move(stream_send_result)));
           }
 
           return continuation(instrument_ptr);
@@ -419,19 +419,17 @@ auto main() -> int
 
         using namespace piped_continuation;
         auto send_ = send(automata);
-        auto f = decode(automata) |= trigger |= std::ref(send_) |= post_send(properties, automata);
-        f(network_clock::time_point(), asio::const_buffer(nullptr, 0));
-        /*
+        //auto f = decode(automata) |= trigger |= std::ref(send_) |= post_send(properties, automata);
+        //f(network_clock::time_point(), asio::const_buffer(nullptr, 0));
         auto fast_path = std::ref(receive) |= decode(automata) |= trigger |= std::ref(send_) |= post_send(properties, automata);
 
-        while(!service.stopped())
-<<<<<<< Updated upstream
-        [[likely]]
+        while(!service.stopped()) [[likely]]
         {
           // warm up
-          automata.each([&](auto automaton) {
+          automata.each([&](auto &automaton) {
               automaton.trigger.warm_up();
-              send_([](auto){}, network_clock::time_point {}, automaton, std::false_type {});
+              auto *instrument_ptr = &automaton;
+              send_([]([[maybe_unused]] auto *instrument_ptr){ return true; }, network_clock::time_point {}, instrument_ptr, std::false_type {});
           });
           asm volatile("# LLVM-MCA-BEGIN trigger");
           fast_path();
@@ -441,7 +439,6 @@ auto main() -> int
           logger_ptr->flush();
         }
         logger_ptr->log(logger::info, "Executor stopped.");
-        */
         return boost::leaf::success();
       });
 
@@ -449,10 +446,10 @@ auto main() -> int
 
       return boost::leaf::success();
     },
-    make_handlers([&](auto ...&&args) noexcept {
+    make_handlers([&](auto &&...args) noexcept {
         logger_thread.printer(logger::critical, std::forward<decltype(args)>(args)...);
         std::abort();
-    });
+    }));
 
   return 0;
 }

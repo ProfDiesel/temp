@@ -12,4 +12,5 @@ set -x GENJUTSU_C_TOOLSET clang
 
 ./prjdef
 
-ninja -f $TMP_ROOT/_build/default/build.ninja -t compdb cxx > $TMP_ROOT/compile_commands.json
+# compdb, filter out phony targets
+ninja -f $TMP_ROOT/_build/default/build.ninja -t compdb cxx exe | jq '[.[] | select(.command != "")]' > $TMP_ROOT/compile_commands.json
