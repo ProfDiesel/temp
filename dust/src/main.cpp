@@ -124,7 +124,7 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &comm
   for(;;)
   {
     logger_ptr->log(logger::debug, "awaiting commands");
-    auto bytes_transferred = BOOST_LEAF_ASIO_CO_TRYX(
+    const auto bytes_transferred = BOOST_LEAF_ASIO_CO_TRYX(
       co_await asio::async_read_until(command_input, asio::dynamic_buffer(command_buffer), "\n\n", _));
 
     if(!bytes_transferred)
@@ -136,7 +136,7 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &comm
 
     const auto properties = BOOST_LEAF_CO_TRYX(config::properties::create(command_buffer));
     const auto entrypoint = properties["entrypoint"_hs];
-    logger_ptr->log(logger::debug, "command=\"{}\" command recieved"_format, entrypoint["type"_hs]);
+    logger_ptr->log_non_trivial(logger::debug, "command=\"{}\" command recieved"_format, entrypoint["type"_hs]);
     switch(dispatch_hash(entrypoint["type"_hs])) // TODO
     {
     case "payload"_h:
@@ -188,7 +188,7 @@ auto main() -> int
 
   auto spawn = [&service, logger_ptr](auto &&coroutine, auto name)
   {
-    logger_ptr->log(logger::debug, "coroutine=\"{}\" spawned"_format, name);
+    logger_ptr->log_non_trivial(logger::debug, "coroutine=\"{}\" spawned"_format, name);
     asio::co_spawn(
       service,
       [&]() noexcept -> boost::leaf::awaitable<void>
@@ -196,20 +196,20 @@ auto main() -> int
         co_await boost::leaf::co_try_handle_all(
           [&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
           {
-            logger_ptr->log(logger::debug, "coroutine=\"{}\" started"_format, name);
+            logger_ptr->log_non_trivial(logger::debug, "coroutine=\"{}\" started"_format, name);
             BOOST_LEAF_CO_TRYV(co_await std::forward<decltype(coroutine)>(coroutine)());
-            logger_ptr->log(logger::debug, "coroutine=\"{}\" exited"_format, name);
+            logger_ptr->log_non_trivial(logger::debug, "coroutine=\"{}\" exited"_format, name);
       	    co_return boost::leaf::success();
           },
           [&](const std::error_code &error_code, const boost::leaf::e_source_location location, const std::string &statement) noexcept
           {
-            logger_ptr->log(logger::critical, "coroutine=\"{}\" error_code={} error=\"{}\" file=\"{}\" line={} statement=\"{}\" exited"_format, name,
+            logger_ptr->log_non_trivial(logger::critical, "coroutine=\"{}\" error_code={} error=\"{}\" file=\"{}\" line={} statement=\"{}\" exited"_format, name,
                         error_code.value(), error_code.message(), location.file, location.line, statement);
             service.stop();
           },
           [&](const boost::leaf::error_info &ei) noexcept
           {
-            logger_ptr->log(logger::critical, "coroutine=\"{}\" leaf_error_id={} exited"_format, name, ei.error());
+            logger_ptr->log_non_trivial(logger::critical, "coroutine=\"{}\" leaf_error_id={} exited"_format, name, ei.error());
             service.stop();
           });
       },
@@ -245,10 +245,10 @@ auto main() -> int
         constexpr auto request_payload = FMT_COMPILE("\
   est.type <- request_payload; \n\
   est.instrument = {}\n\n");
-        const auto [_, size] = fmt::format_to_n(buffer.data(), sizeof(buffer), request_payload, instrument_ptr->instrument_id);
+        auto &&[_, size] = fmt::format_to_n(buffer.data(), buffer.size(), request_payload, instrument_ptr->instrument_id);
         spawn(
           [&, size = size]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>> {
-            auto n = BOOST_LEAF_ASIO_CO_TRYX(
+            const auto n = BOOST_LEAF_ASIO_CO_TRYX(
               co_await asio::async_write(command_output, asio::buffer(buffer.data(), size), _));
 #if !defined(__clang__)
             if(n != size) [[unlikely]]
@@ -262,9 +262,9 @@ auto main() -> int
       auto leave_cooldown_token = automata.enter_cooldown(instrument_ptr);
     // whatever the value of error_code, get out of the cooldown state
 #if defined(BACKTEST_HARNESS)
-      backtest::delay(service, cooldown, [=, &service]() { asio::defer(service, leave_cooldown_token); });
+      backtest::delay(service, cooldown, [=, &service]() { asio::defer(service, std::move(leave_cooldown_token)); });
 #else  // defined(BACKTEST_HARNESS)
-      asio::steady_timer(service, cooldown).async_wait([=]([[maybe_unused]] auto error_code) { leave_cooldown_token(); });
+      asio::steady_timer(service, cooldown).async_wait([=]([[maybe_unused]] auto error_code) { std::move(leave_cooldown_token)(); });
 #endif // defined(BACKTEST_HARNESS)
 
       return true;
@@ -357,7 +357,7 @@ auto main() -> int
         constexpr bool send_datagram = std::decay_t<decltype(automata)>::automaton_type::send_datagram;
 
         return [&, send_datagram_socket = std::move(send_datagram_socket), stream_send = std::move(stream_send)](auto continuation, const network_clock::time_point &feed_timestamp, auto *instrument_ptr, auto send_for_real) mutable noexcept {
-          boost::leaf::result<network_clock::time_point> send_timestamp {};
+
           if constexpr(send_datagram)
           {
             if constexpr(!send_for_real())
@@ -366,22 +366,29 @@ auto main() -> int
               return false;
             }
 
-            send_timestamp = send_datagram_socket->send(instrument_ptr->payload.datagram_payload);
+            auto send_timestamp_result = send_datagram_socket->send(instrument_ptr->payload.datagram_payload);
+            auto stream_send_result = stream_send(asio::const_buffer(instrument_ptr->payload.stream_payload));
+
+            if(send_timestamp_result) [[likely]]
+              logger_ptr->log(logger::info, "instrument={} in_ts={} out_ts={} Payload datagram sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp),
+                        to_timespec(*send_timestamp_result));
+            else
+              logger_ptr->log_non_trivial(logger::info, "instrument={} {} / Payload datagram NOT sent"_format, instrument_ptr->instrument_id, format_result(std::move(send_timestamp_result)));
+
+            if(stream_send_result && *stream_send_result) [[likely]]
+              logger_ptr->log(logger::info, "instrument={} in_ts={} Payload sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp));
+            else
+              logger_ptr->log_non_trivial(logger::info, "instrument={} {} / Payload NOT sent"_format, instrument_ptr->instrument_id, format_result(std::move(stream_send_result)));
           }
-          const auto stream_send_result = stream_send(asio::const_buffer(instrument_ptr->payload.stream_payload));
-
-          BOOST_LEAF_CHECK(send_timestamp);
-
-          if(send_timestamp) [[likely]]
-            logger_ptr->log(logger::info, "instrument={} in_ts={} out_ts={} Payload datagram sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp),
-                      to_timespec(*send_timestamp));
           else
-            logger_ptr->log(logger::info, "instrument={} out_result={} Payload datagram NOT sent"_format, instrument_ptr->instrument_id, send_timestamp.error());
+          {
+            auto stream_send_result = stream_send(asio::const_buffer(instrument_ptr->payload.stream_payload));
 
-          if(stream_send_result && *stream_send_result) [[likely]]
-            logger_ptr->log(logger::info, "instrument={} in_ts={} Payload sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp));
-          else
-            logger_ptr->log(logger::info, "instrument={} out_result={} Payload NOT sent"_format, instrument_ptr->instrument_id, stream_send_result.error());
+            if(stream_send_result && *stream_send_result) [[likely]]
+              logger_ptr->log(logger::info, "instrument={} in_ts={} Payload sent"_format, instrument_ptr->instrument_id, to_timespec(feed_timestamp));
+            else
+              logger_ptr->log(logger::info, "instrument={} {} / Payload NOT sent"_format, instrument_ptr->instrument_id, format_result(std::move(stream_send_result)));
+          }
 
           return continuation(instrument_ptr);
         };
@@ -442,7 +449,10 @@ auto main() -> int
 
       return boost::leaf::success();
     },
-    make_handlers(std::ref(logger_thread.printer)));
+    make_handlers([&](auto ...&&args) noexcept {
+        logger_thread.printer(logger::critical, std::forward<decltype(args)>(args)...);
+        std::abort();
+    });
 
   return 0;
 }

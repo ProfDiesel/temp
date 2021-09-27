@@ -44,7 +44,7 @@ public:
     if(!input)
       return std::error_code(errno, std::generic_category());
 
-    //                          begin-addr  end-addr    permissions      offset      dev                     inode   path
+    //                          begin-addr  end-addr    permissions      offset      dev                     inode  path
     static std::regex const re("([0-9a-f]+)-([0-9a-f]+) [-r][-w][-x][-p] [0-9a-f]{8} [0-9a-f]{2}:[0-9a-f]{2} [0-9]+ +/.*");
     for(std::array<char, 1024> line; input.getline(line.data(), sizeof(line)); )
     {

@@ -17,7 +17,6 @@
 #include <fmt/ostream.h>
 #include <fmt/ranges.h>
 
-#include <memory>
 #include <numeric>
 #include <string>
 #include <thread>
@@ -107,7 +106,7 @@ struct printer
 
 #endif // defined(LOGGER_SYSLOG_FORMAT)
 
-#if defined(LOGGER_FMT_COMPILE)
+#if !defined(LOGGER_NO_FMT_COMPILE)
   template<typename>
   static constexpr auto bracket()
   {
@@ -123,9 +122,9 @@ struct printer
       std::array<char, 4'096> line {};
       using namespace literals;
 #if defined(LOGGER_SYSLOG_FORMAT)
-      const auto [out, size] = fmt::format_to_n(line.data(), sizeof(line) - 1, FMT_COMPILE(("<{}> {:016x} "_format + first_arg_type {} + "\n"_format).buffer), level_to_priority(level), tsc, args...);
+      auto &&[out, size] = fmt::format_to_n(line.data(), line.size() - 1, FMT_COMPILE(("<{}> {:016x} "_format + first_arg_type {} + "\n"_format).buffer), level_to_priority(level), tsc, args...);
 #else // defined(LOGGER_SYSLOG_FORMAT)
-      const auto [out, size] = fmt::format_to_n(line.data(), sizeof(line) - 1, FMT_COMPILE(("{:016x} {}"_format + first_arg_type {} + "\n"_format).buffer), tsc, level_to_string(level), args...);
+      auto &&[out, size] = fmt::format_to_n(line.data(), line.size() - 1, FMT_COMPILE(("{:016x} {}"_format + first_arg_type {} + "\n"_format).buffer), tsc, level_to_string(level), args...);
 #endif // defined(LOGGER_SYSLOG_FORMAT)
       *out = '\0';
       std::fwrite(line.data(), 1, size, stderr);
@@ -142,12 +141,12 @@ struct printer
       (*this)(tsc, level, brackets, first_arg, args...);
     }
   }
-#else  // defined(LOGGER_FMT_COMPILE)
+#else  // !defined(LOGGER_NO_FMT_COMPILE)
   void operator()(uint64_t tsc, level level, const auto &...args) noexcept
   {
     fmt::print(stderr, /*FMT_COMPILE*/ ("{:016x} {} {}\n"), tsc, level_to_string(level), fmt::join(std::tuple(args...), ""));
   }
-#endif // defined(LOGGER_FMT_COMPILE)
+#endif // !defined(LOGGER_NO_FMT_COMPILE)
 
   void operator()(level level, const auto &...args) noexcept { (*this)(__rdtsc(), level, args...); }
 };
@@ -164,17 +163,9 @@ struct alignas(sizeof(void *)) payload
 
   const std::tuple<std::decay_t<args_types>...> args;
 
-  explicit payload(args_types &&...args) noexcept: args(std::forward<args_types>(args)...)
+  [[using gnu: always_inline, flatten, hot]] explicit payload(args_types &&...args) noexcept: args(std::forward<args_types>(args)...)
   {
-    /*
-    auto assert_is_trivial = [](auto a) {
-      static_assert(std::is_trivially_default_constructible_v<decltype(a)>);
-      static_assert(std::is_trivially_constructible_v<decltype(a)>);
-      static_assert(std::is_trivially_destructible_v<decltype(a)>);
-    };
-    std::apply([assert_is_trivial](auto &&...args) { ((assert_is_trivial(args), ...)); }, this->args);
-    */
-#if defined(DEBUG)
+#if! defined(NDEBUG)
     std::apply([](auto &&...args) { ((proc_maps::instance().check(std::forward<decltype(args)>(args)), ...)); }, this->args);
 #endif
   }
@@ -201,34 +192,14 @@ public:
   {
   }
 
-  template<typename level_type, typename... args_types>
-  void log(level_type level, args_types &&...args) noexcept /*requires std::is_same_v<typename level_type::value_type, enum level>*/
+  [[using gnu: always_inline, flatten, hot]] void log(auto level, auto &&...args) noexcept requires boilerplate::is_integral_constant_v<decltype(level), enum level>
   {
-    if constexpr(level() == level::DEBUG_)
-    {
-#if defined(DEBUG) || defined(BOILERPLATE_LOGGER_DEBUG)
-      if(!debug_)
-#endif // defined(DEBUG) || defined(BOILERPLATE_LOGGER_DEBUG)
-        return;
-    }
-    using payload_t = detail::payload<printer_type, level(), args_types...>;
-    static constexpr auto payload_size = sizeof(payload_t);
+    _log(std::false_type(), level, std::forward<decltype(args)>(args)...);
+  }
 
-    payload_t *address = nullptr;
-    do
-    {
-      address = reinterpret_cast<payload_t *>(queue_.producer_allocate(payload_size));
-    } while(!address && on_full_(payload_size));
-
-    if(UNLIKELY(!address))
-      return;
-
-#if defined(has_construct_at)
-    std::construct_at(address, std::forward<args_types>(args)...);
-#else
-    new(address) payload_t(std::forward<args_types>(args)...);
-#endif
-    queue_.producer_commit(payload_size);
+  [[using gnu: always_inline, flatten, hot]] void log_non_trivial(auto level, auto &&...args) noexcept requires boilerplate::is_integral_constant_v<decltype(level), enum level>
+  {
+    _log(std::true_type(), level, std::forward<decltype(args)>(args)...);
   }
 
   void flush() noexcept { queue_.producer_flush(); }
@@ -263,6 +234,40 @@ private:
   spsc_ring_buffer queue_;
   boilerplate::not_null_observer_ptr<printer_type> printer_;
   on_full_type on_full_ = {};
+
+  template<typename non_trivial_type, typename level_type, typename... args_types>
+  [[using gnu: always_inline, flatten, hot]] void _log(non_trivial_type non_trivial, level_type level, args_types &&...args) noexcept /*requires std::is_same_v<typename level_type::value_type, enum level>*/
+  {
+    auto assert_is_trivial = [](auto a) {
+      static_assert(std::is_trivially_default_constructible_v<decltype(a)>);
+      static_assert(std::is_trivially_constructible_v<decltype(a)>);
+      static_assert(std::is_trivially_destructible_v<decltype(a)>);
+    };
+    if constexpr(!non_trivial())
+      (assert_is_trivial(args), ...);
+
+    if constexpr(level() == level::DEBUG_)
+    {
+#if defined(DEBUG) || defined(BOILERPLATE_LOGGER_DEBUG)
+      if(!debug_)
+#endif // defined(DEBUG) || defined(BOILERPLATE_LOGGER_DEBUG)
+        return;
+    }
+    using payload_t = detail::payload<printer_type, level(), args_types...>;
+    static constexpr auto payload_size = sizeof(payload_t);
+
+    payload_t *address = nullptr;
+    do
+    {
+      address = reinterpret_cast<payload_t *>(queue_.producer_allocate(payload_size));
+    } while(UNLIKELY(!address && on_full_(payload_size)));
+
+    if(UNLIKELY(!address))
+      return;
+
+    std::construct_at(address, std::forward<args_types>(args)...);
+    queue_.producer_commit(payload_size);
+  }
 };
 
 struct do_nothing

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/type_index.hpp>
 
 #include <fmt/chrono.h>
@@ -88,3 +89,4 @@ struct default_formatter : fmt::formatter<const char *, char_type_>
     return fmt::format_to(context.out(), /*FMT_COMPILE*/ ("{} at {0x%016x}"), boost::typeindex::type_id<value_type>().pretty_name(), static_cast<const void*>(std::addressof(value)));
   }
 };
+
