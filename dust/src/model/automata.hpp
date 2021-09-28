@@ -168,11 +168,10 @@ struct automata final
 {
   using namespace config::literals;
 
-  const auto with_fixed_automata = [&](auto subscription, auto handle_packet_loss, auto send_datagram) noexcept
+  const auto with_fixed_automata = [=](auto subscription, auto handle_packet_loss, auto send_datagram) noexcept
   {
-    const auto trigger = subscription["trigger"_hs];
-    return with_trigger(trigger, logger_ptr, [&](auto &&trigger_dispatcher) -> std::invoke_result_t<decltype(continuation), automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>> {
-      const auto instrument_id = trigger["instrument"_hs];
+    return with_trigger(subscription["trigger"_hs], logger_ptr, [=](auto &&trigger_dispatcher) -> std::invoke_result_t<decltype(continuation), automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>> {
+      const auto instrument_id = subscription["trigger"_hs]["instrument"_hs];
       auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription["payload"_hs]));
       using automaton_type = automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>;
       return continuation(automata<automaton_type, false>(automaton_type {.instrument_id = instrument_id, .trigger = std::move(trigger_dispatcher), .payload = std::move(payload)}));
@@ -183,24 +182,24 @@ struct automata final
   return with_fixed_automata(config["subscription"_hs], std::true_type(), std::true_type());
 #else  // defined(LEAN_AND_MEAN)
 
-  const auto handle_packet_loss_test = [&](auto continuation, auto &&...tags) noexcept
+  const auto handle_packet_loss_test = [=](auto continuation, auto &&...tags) noexcept
   {
     return config["feed"_hs]["handle_packet_loss"_hs] ? continuation(std::forward<decltype(tags)>(tags)..., std::true_type())
                                                       : continuation(std::forward<decltype(tags)>(tags)..., std::false_type());
   };
 
-  const auto send_datagram_test = [&](auto continuation, auto &&...tags) noexcept
+  const auto send_datagram_test = [=](auto continuation, auto &&...tags) noexcept
   {
     return config["send"_hs]["datagram"_hs] ? continuation(std::forward<decltype(tags)>(tags)..., std::true_type())
                                             : continuation(std::forward<decltype(tags)>(tags)..., std::false_type());
   };
 
-  const auto with_dynamic_automata = [&](auto handle_packet_loss, auto send_datagram) noexcept
+  const auto with_dynamic_automata = [=](auto handle_packet_loss, auto send_datagram) noexcept
   {
      return hof::partial(continuation)(automata<automaton<handle_packet_loss(), polymorphic_trigger_dispatcher, send_datagram()>, true>());
   };
 
-  const auto with_automata_selector = [&](auto handle_packet_loss, auto send_datagram) noexcept
+  const auto with_automata_selector = [=](auto handle_packet_loss, auto send_datagram) noexcept
   {
     const auto subscription = config["subscription"_hs];
     const auto trigger = subscription["trigger"_hs];

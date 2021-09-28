@@ -201,7 +201,7 @@ auto main() -> int
             logger_ptr->log_non_trivial(logger::debug, "coroutine=\"{}\" exited"_format, name);
       	    co_return boost::leaf::success();
           },
-          [&](const std::error_code &error_code, const boost::leaf::e_source_location location, const std::string &statement) noexcept
+          [&](const std::error_code &error_code, const boost::leaf::e_source_location location, std::string_view statement) noexcept
           {
             logger_ptr->log_non_trivial(logger::critical, "coroutine=\"{}\" error_code={} error=\"{}\" file=\"{}\" line={} statement=\"{}\" exited"_format, name,
                         error_code.value(), error_code.message(), location.file, location.line, statement);
@@ -344,7 +344,7 @@ auto main() -> int
       // send
 
       const auto [send_host, send_port] = (config::address)*properties["send"_hs]["datagram"_hs];
-      auto send_datagram_socket = *properties["send"_hs] ? std::make_optional(BOOST_LEAF_TRYX(udp_writer::create(service, send_host, send_port))) : std::nullopt;
+      auto send_datagram_socket = *properties["send"_hs]["datagram"_hs] ? std::make_optional(BOOST_LEAF_TRYX(udp_writer::create(service, send_host, send_port))) : std::nullopt;
 
 #if defined(BACKTEST_HARNESS)
       auto stream_send = backtest::make_stream_send();
