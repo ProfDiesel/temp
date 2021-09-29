@@ -69,10 +69,10 @@ inline auto make_handlers(auto &&printer) noexcept
                        return printer("location=\"{}:{} {}\" field={} Missing field"_format, location.file, location.line, location.function,
                                missing_field.field.data());
                      },
-                     [printer](const std::error_code &error_code, const boost::leaf::e_source_location &location, std::string_view statement) noexcept
+                     [printer](const std::error_code &error_code, const boost::leaf::e_source_location &location, boilerplate::statement statement) noexcept
                      {
                        return printer("location=\"{}:{} {}\" statement=\"{}\", code={} {}"_format, location.file, location.line, location.function, 
-                               escape_double_quotes(statement), error_code.value(), error_code.message());
+                               escape_double_quotes(static_cast<std::string_view>(statement)), error_code.value(), error_code.message());
                      },
                      [printer](const std::error_code &error_code, const boost::leaf::e_source_location &location) noexcept
                      {

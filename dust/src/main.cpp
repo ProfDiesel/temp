@@ -111,7 +111,7 @@ struct logger_thread : boost::noncopyable
 };
 
 
-auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &command_input, auto &automata, auto co_request_snapshot, boilerplate::not_null_observer_ptr<logger::logger> logger_ptr) noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
+auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &&command_input, auto &automata, auto co_request_snapshot, boilerplate::not_null_observer_ptr<logger::logger> logger_ptr) noexcept -> boost::leaf::awaitable<boost::leaf::result<void>>
 {
   using automata_type = typename std::decay_t<decltype(automata)>;
 
@@ -201,17 +201,10 @@ auto main() -> int
             logger_ptr->log_non_trivial(logger::debug, "coroutine=\"{}\" exited"_format, name);
       	    co_return boost::leaf::success();
           },
-          [&](const std::error_code &error_code, const boost::leaf::e_source_location location, std::string_view statement) noexcept
-          {
-            logger_ptr->log_non_trivial(logger::critical, "coroutine=\"{}\" error_code={} error=\"{}\" file=\"{}\" line={} statement=\"{}\" exited"_format, name,
-                        error_code.value(), error_code.message(), location.file, location.line, statement);
+          make_handlers([&service, logger_ptr, name](auto format, auto &&...args) noexcept { 
+            logger_ptr->log_non_trivial(logger::critical, "coroutine=\"{}\" "_format + format, name, std::forward<decltype(args)>(args)...);
             service.stop();
-          },
-          [&](const boost::leaf::error_info &ei) noexcept
-          {
-            logger_ptr->log_non_trivial(logger::critical, "coroutine=\"{}\" leaf_error_id={} exited"_format, name, ei.error());
-            service.stop();
-          });
+          }));
       },
       asio::detached);
   };
@@ -415,7 +408,7 @@ auto main() -> int
           });
         }
 
-        spawn([&]() noexcept { return co_commands(service, command_input, automata, std::ref(co_request_snapshot), logger_ptr); }, "commands"s);
+        spawn([&]() noexcept { return co_commands(service, std::move(command_input), automata, std::ref(co_request_snapshot), logger_ptr); }, "commands"s);
 
         using namespace piped_continuation;
         auto send_ = send(automata);

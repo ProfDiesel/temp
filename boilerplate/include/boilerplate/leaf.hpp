@@ -4,6 +4,15 @@
 
 #include <asio/redirect_error.hpp>
 
+namespace boilerplate
+{
+
+struct statement: std::string_view
+{
+};
+
+}
+
 // clang-format off
 #define BOOST_LEAF_TRYV(...)                                                                                                                                   \
   {                                                                                                                                                            \
@@ -57,7 +66,7 @@
     std::error_code _;                                                                                                                                         \
     (__VA_ARGS__);                                                                                                                                             \
     if(_) [[unlikely]]                                                                                                                                         \
-      return BOOST_LEAF_NEW_ERROR(_).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                    \
+      return BOOST_LEAF_NEW_ERROR(_, ::boilerplate::statement {BOOST_PP_STRINGIZE(__VA_ARGS__)});                                                                             \
   }
 // clang-format on
 
@@ -67,7 +76,7 @@
     std::error_code _;                                                                                                                                         \
     auto &&result = (__VA_ARGS__);                                                                                                                             \
     if(_) [[unlikely]]                                                                                                                                         \
-      return BOOST_LEAF_NEW_ERROR(_).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                    \
+      return BOOST_LEAF_NEW_ERROR(_, ::boilerplate::statement {BOOST_PP_STRINGIZE(__VA_ARGS__)});                                                                             \
     std::move(result);                                                                                                                                         \
   })
 // clang-format on
@@ -79,7 +88,7 @@
     auto _ = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                             \
     (__VA_ARGS__);                                                                                                                                             \
     if(ec) [[unlikely]]                                                                                                                                        \
-      co_return BOOST_LEAF_NEW_ERROR(ec).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                \
+      co_return BOOST_LEAF_NEW_ERROR(ec, ::boilerplate::statement {BOOST_PP_STRINGIZE(__VA_ARGS__)});                                                                         \
   }
 // clang-format on
 
@@ -91,7 +100,7 @@
   auto TOKEN_NAME = asio::redirect_error(boost::leaf::use_awaitable, BOOST_LEAF_EC);                                                                           \
   auto &&BOOST_LEAF_TMP =  (__VA_ARGS__);                                                                                                                      \
   if(BOOST_LEAF_EC) [[unlikely]]                                                                                                                               \
-    co_return BOOST_LEAF_NEW_ERROR(BOOST_LEAF_EC).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                       \
+    co_return BOOST_LEAF_NEW_ERROR(BOOST_LEAF_EC, ::boilerplate::statement {BOOST_PP_STRINGIZE(__VA_ARGS__)});                                                                \
   V = std::forward<decltype(BOOST_LEAF_TMP)>(BOOST_LEAF_TMP);
 // clang-format on
 
@@ -104,7 +113,7 @@
     auto _ = asio::redirect_error(boost::leaf::use_awaitable, ec);                                                                                             \
     auto &&result = (__VA_ARGS__);                                                                                                                             \
     if(ec) [[unlikely]]                                                                                                                                        \
-      co_return BOOST_LEAF_NEW_ERROR(ec).load(BOOST_PP_STRINGIZE(__VA_ARGS__));                                                                                \
+      co_return BOOST_LEAF_NEW_ERROR(ec, ::boilerplate::statement {BOOST_PP_STRINGIZE(__VA_ARGS__)});                                                                         \
     std::move(result);                                                                                                                                         \
   })
 // clang-format on
@@ -114,7 +123,7 @@
   ({                                                                                                                                                           \
     auto &&_ = (EXPRESSION);                                                                                                                                   \
     if(!(CONDITION)) [[unlikely]]                                                                                                                              \
-      return BOOST_LEAF_NEW_ERROR().load(BOOST_PP_STRINGIZE(EXPRESSION));                                                                                      \
+      return BOOST_LEAF_NEW_ERROR(BOOST_PP_STRINGIZE(EXPRESSION));                                                                                             \
     std::move(_);                                                                                                                                              \
   })
 // clang-format on
