@@ -13,7 +13,7 @@ struct hash
   //#define HANDLE_STRING(r, data, elem) BOOST_PP_TUPLE_ELEM(0, elem),
   //  static constexpr frozen::unordered_set<frozen::string, strings.size()> known_values {{BOOST_PP_SEQ_FOR_EACH(HANDLE_STRING, _, ENTRY_TYPES)}};
   //#undef HANDLE_STRING
-  static constexpr frozen::unordered_set<frozen::string, 4> known_values {"payload", "subscribe", "unsubscribe", "quit", "detach"};
+  static constexpr frozen::unordered_set<frozen::string, 5> known_values {"payload", "subscribe", "unsubscribe", "quit", "detach"};
 
   static constexpr std::size_t UNKNOWN = known_values.size();
 

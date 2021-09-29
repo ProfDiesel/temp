@@ -119,7 +119,6 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &&com
   constexpr bool dynamic_subscription = automata_type::dynamic_subscription;
 
   std::string command_buffer;
-  command_buffer.clear();
 
   for(;;)
   {
@@ -162,7 +161,7 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &&com
         automata.erase(entrypoint["instrument"_hs]);
       break;
     case "quit"_h: service.stop(); break;
-    case "detach"_h: co_return boost::leaf::result();
+    case "detach"_h: co_return boost::leaf::success();
     }
   }
 };
