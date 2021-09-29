@@ -162,6 +162,7 @@ auto co_commands(asio::io_context &service, asio::posix::stream_descriptor &&com
         automata.erase(entrypoint["instrument"_hs]);
       break;
     case "quit"_h: service.stop(); break;
+    case "detach"_h: co_return boost::leaf::result();
     }
   }
 };
