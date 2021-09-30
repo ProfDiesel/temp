@@ -24,13 +24,13 @@ struct fmt::formatter<std::reference_wrapper<const value_type>, char_type> : fmt
   }
 };
 
-template<typename char_type_>
-struct fmt::formatter<std::thread::id, char_type_> : fmt::formatter<const char *, char_type_>
+template<typename char_type>
+struct fmt::formatter<std::thread::id, char_type> : fmt::formatter<const char *, char_type>
 {
   template<typename context_type>
   auto format(const std::thread::id &id, context_type &context) requires std::is_same_v<std::thread::native_handle_type, pthread_t>
   {
-    fmt::basic_memory_buffer<char_type_> buffer;
+    fmt::basic_memory_buffer<char_type> buffer;
     fmt::detail::format_value(buffer, id, context.locale());
 
     std::array<char, 16> thread_name {};
@@ -39,8 +39,8 @@ struct fmt::formatter<std::thread::id, char_type_> : fmt::formatter<const char *
   }
 };
 
-template<typename char_type_>
-struct fmt::formatter<::timespec, char_type_> : fmt::formatter<const char *, char_type_>
+template<typename char_type>
+struct fmt::formatter<::timespec, char_type> : fmt::formatter<const char *, char_type>
 {
   template<typename context_type>
   auto format(const ::timespec &ts, context_type &context)
@@ -80,8 +80,8 @@ struct fmt::formatter<variant_type, char_type, std::variant_alternative_t<0, var
   }
 };
 
-template<typename value_type, typename char_type_>
-struct default_formatter : fmt::formatter<const char *, char_type_>
+template<typename value_type, typename char_type>
+struct default_formatter : fmt::formatter<const char *, char_type>
 {
   template<typename context_type>
   auto format(const value_type &value, context_type &context)

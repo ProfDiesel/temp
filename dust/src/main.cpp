@@ -260,7 +260,7 @@ auto main() -> int
 #if defined(BACKTEST_HARNESS)
       auto stream_send = backtest::make_stream_send();
 #else  // defined(BACKTEST_HARNESS)
-      auto send_stream = asio::posix::stream_descriptor(service, ::dup(properties["send"_hs]["fd"_hs]));
+      auto send_stream = asio::posix::stream_descriptor(service, ::dup(*properties["send"_hs]["fd"_hs]));
       auto stream_send = [send_stream = std::move(send_stream)](auto buffer) mutable noexcept -> boost::leaf::result<bool> { return BOOST_LEAF_EC_TRYX(asio::write(send_stream, buffer, _)) == buffer.size(); };
 #endif // defined(BACKTEST_HARNESS)
 
@@ -371,6 +371,9 @@ auto main() -> int
           });
         }
 
+        //
+        // commands
+
         spawn([&]() noexcept -> boost::leaf::awaitable<boost::leaf::result<void>> {
           using namespace dispatch::literals;
   
@@ -388,16 +391,16 @@ auto main() -> int
             const auto properties = BOOST_LEAF_CO_TRYX(config::properties::create(boost::make_iterator_range(command_input_buffer.begin(), command_input_buffer.begin() + command_size)));
             const auto entrypoint = properties["entrypoint"_hs];
             logger_ptr->log_non_trivial(logger::debug, "command=\"{}\" command recieved"_format, entrypoint["type"_hs]);
-            switch(dispatch_hash(entrypoint["type"_hs])) // TODO
+            switch(dispatch_hash(*entrypoint["type"_hs])) // TODO
             {
             case "payload"_h:
-              if(auto *automaton_ptr = automata.at(entrypoint["instrument"_hs]); automaton_ptr)
+              if(auto *automaton_ptr = automata.at(*entrypoint["instrument"_hs]); automaton_ptr)
                 automaton_ptr->payload = BOOST_LEAF_CO_TRYX(decode_payload<send_datagram>(entrypoint));
               break;
             case "subscribe"_h:
               if constexpr(dynamic_subscription)
               {
-                const auto instrument_id = entrypoint["instrument"_hs];
+                const feed::instrument_id instrument_id = *entrypoint["instrument"_hs];
                 auto state = BOOST_LEAF_CO_TRYX(co_await co_request_snapshot(instrument_id));
                 BOOST_LEAF_CO_TRYV(with_trigger(entrypoint, logger_ptr, [&](auto &&upstream_dispatcher) noexcept -> boost::leaf::result<void> {
                   auto poly_dispatcher = polymorphic_trigger_dispatcher::make<std::decay_t<decltype(upstream_dispatcher)>>(std::move(upstream_dispatcher));
@@ -410,7 +413,7 @@ auto main() -> int
               break;
             case "unsubscribe"_h:
               if constexpr(dynamic_subscription)
-                automata.erase(entrypoint["instrument"_hs]);
+                automata.erase(*entrypoint["instrument"_hs]);
               break;
             case "quit"_h: service.stop(); break;
             case "detach"_h: co_return boost::leaf::success();

@@ -280,7 +280,7 @@ struct walker final
     return LIKELY(!!object);
   }
 
-  operator bool() const noexcept { return has_value(); }
+  explicit operator bool() const noexcept { return has_value(); }
   auto operator*() const noexcept { return get(); }
   walker operator[](auto index) const noexcept { return get(index); }
 
@@ -288,6 +288,7 @@ struct walker final
   value_type value {};
   mutable boilerplate::maybe_null_observer_ptr<const detail::object_type> object {};
 };
+
 
 template<>
 struct from_walker_impl<value_type>
@@ -392,6 +393,17 @@ struct properties final
 };
 
 } // namespace config
+
+template<typename char_type>
+struct fmt::formatter<config::walker, char_type> : fmt::formatter<config::value_type, char_type>
+{
+  template<typename format_context_type>
+  auto format(const config::walker &walker, format_context_type &ctx)
+  {
+    return formatter<config::value_type, char_type>::format(walker.value, ctx);
+  }
+};
+
 
 #if defined(DOCTEST_LIBRARY_INCLUDED)
 // GCOVR_EXCL_START

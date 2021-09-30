@@ -171,7 +171,7 @@ struct automata final
   const auto with_fixed_automata = [=](auto subscription, auto handle_packet_loss, auto send_datagram) noexcept
   {
     return with_trigger(subscription["trigger"_hs], logger_ptr, [=](auto &&trigger_dispatcher) -> std::invoke_result_t<decltype(continuation), automata<automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>, false>> {
-      const auto instrument_id = subscription["trigger"_hs]["instrument"_hs];
+      const feed::instrument_id instrument_id = *subscription["trigger"_hs]["instrument"_hs];
       auto payload = BOOST_LEAF_TRYX(decode_payload<send_datagram()>(subscription["payload"_hs]));
       using automaton_type = automaton<handle_packet_loss(), std::decay_t<decltype(trigger_dispatcher)>, send_datagram()>;
       return continuation(automata<automaton_type, false>(automaton_type {.instrument_id = instrument_id, .trigger = std::move(trigger_dispatcher), .payload = std::move(payload)}));
